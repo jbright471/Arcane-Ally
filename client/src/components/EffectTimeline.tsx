@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Clock, Trash2, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { Clock, Trash2, ChevronDown, ChevronUp, Zap, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { useGame } from '../context/GameContext';
 import socket from '../socket';
 
 interface EffectEvent {
@@ -19,8 +20,14 @@ interface EffectEvent {
   payload_json: string;
   parent_event_id: number | null;
   source_preset_id: number | null;
+  request_id: string | null;
+  description: string | null;
+  is_reversed: number;
+  reversed_by_event_id: number | null;
   created_at: string;
 }
+
+const REVERSIBLE_TYPES = new Set(['damage', 'heal', 'condition_applied', 'condition_removed']);
 
 const EVENT_META: Record<string, { label: string; color: string; bg: string }> = {
   damage:                { label: 'DMG',   color: 'text-red-400',     bg: 'bg-red-950/40 border-red-800/40' },
@@ -32,6 +39,7 @@ const EVENT_META: Record<string, { label: string; color: string; bg: string }> =
   automation_trigger:    { label: 'AUTO',  color: 'text-orange-400',  bg: 'bg-orange-950/40 border-orange-800/40' },
   concentration_check:   { label: 'CON✓', color: 'text-violet-400',  bg: 'bg-violet-950/40 border-violet-800/40' },
   concentration_broken:  { label: 'CONC!', color: 'text-rose-300',   bg: 'bg-rose-950/60 border-rose-600/60' },
+  undo:                  { label: 'UNDO',  color: 'text-slate-300',   bg: 'bg-slate-900/60 border-slate-600/40' },
   unknown:               { label: '???',   color: 'text-muted-foreground', bg: 'bg-secondary/20 border-border/40' },
 };
 
@@ -74,9 +82,13 @@ function groupByRound(events: EffectEvent[]): Map<number, EffectEvent[]> {
 }
 
 export function EffectTimeline() {
+  const { state } = useGame();
+  const isDm = state.isDm;
+
   const [events, setEvents] = useState<EffectEvent[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [filter, setFilter] = useState('');
+  const [undoError, setUndoError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,7 +98,14 @@ export function EffectTimeline() {
       .catch(() => {});
 
     socket.on('timeline_update', (data: EffectEvent[]) => setEvents(data));
-    return () => { socket.off('timeline_update'); };
+    socket.on('rules_error', ({ message }: { message: string }) => {
+      setUndoError(message);
+      setTimeout(() => setUndoError(null), 3000);
+    });
+    return () => {
+      socket.off('timeline_update');
+      socket.off('rules_error');
+    };
   }, []);
 
   // Auto-scroll to bottom when new events arrive and panel is open
@@ -146,6 +165,11 @@ export function EffectTimeline() {
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
+          {undoError && (
+            <div className="px-2 py-1 rounded border border-destructive/40 bg-destructive/10 text-[10px] text-destructive">
+              {undoError}
+            </div>
+          )}
 
           {/* Legend */}
           <div className="flex flex-wrap gap-1.5">
@@ -187,29 +211,48 @@ export function EffectTimeline() {
                     {/* Events in this round */}
                     <div className="space-y-0.5">
                       {grouped.get(round)!.map(event => {
-                        const meta = EVENT_META[event.event_type] || EVENT_META.unknown;
+                        const isUndo = event.phase === 'undo';
+                        const effectiveMeta = isUndo
+                          ? EVENT_META.undo
+                          : (EVENT_META[event.event_type] || EVENT_META.unknown);
                         const isChild = event.parent_event_id !== null;
                         const isAuto = event.source_preset_id !== null || event.event_type === 'automation_trigger';
+                        const isReversed = event.is_reversed === 1;
+                        const canUndo = isDm && !isReversed && !isUndo && REVERSIBLE_TYPES.has(event.event_type);
 
                         return (
                           <div
                             key={event.id}
-                            className={`flex items-start gap-1.5 px-2 py-1 rounded border text-[10px] ${meta.bg} ${isChild ? 'ml-3' : ''}`}
+                            className={`flex items-start gap-1.5 px-2 py-1 rounded border text-[10px] ${effectiveMeta.bg} ${isChild ? 'ml-3' : ''} ${isReversed ? 'opacity-40' : ''}`}
                           >
                             {isChild && (
                               <span className="text-muted-foreground/30 mt-0.5 shrink-0">↳</span>
                             )}
-                            <span className={`font-bold shrink-0 uppercase tracking-wide ${meta.color}`}>
-                              {meta.label}
+                            <span className={`font-bold shrink-0 uppercase tracking-wide ${effectiveMeta.color}`}>
+                              {effectiveMeta.label}
                             </span>
-                            <span className="text-foreground/70 flex-1 leading-tight">{getEventSummary(event)}</span>
+                            <span className={`text-foreground/70 flex-1 leading-tight ${isReversed ? 'line-through' : ''}`}>
+                              {getEventSummary(event)}
+                            </span>
                             <div className="flex items-center gap-1 shrink-0">
-                              {isAuto && (
+                              {isReversed && (
+                                <RotateCcw className="h-2.5 w-2.5 text-slate-500" title="Undone" />
+                              )}
+                              {isAuto && !isReversed && (
                                 <Zap className="h-2.5 w-2.5 text-orange-400" title="Automation" />
                               )}
                               <span className="text-muted-foreground/40 font-mono text-[8px]">
                                 T{event.turn_index}
                               </span>
+                              {canUndo && (
+                                <button
+                                  className="ml-1 text-muted-foreground/50 hover:text-amber-400 transition-colors"
+                                  title="Undo this effect"
+                                  onClick={() => socket.emit('reverse_event', { eventId: event.id })}
+                                >
+                                  <RotateCcw className="h-2.5 w-2.5" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
