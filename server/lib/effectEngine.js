@@ -99,7 +99,7 @@ function applyToMonster(db, trackerId, effect) {
     }
 }
 
-function writeEventRecord(db, { sessionRound, turnIndex, phase, eventType, actor, target, payloadJson, parentEventId, sourcePresetId, requestId, description }) {
+function writeEventRecord(db, { sessionRound, turnIndex, phase, eventType, actor, target, payloadJson, parentEventId, sourcePresetId, requestId, description, groupId }) {
     // Idempotency guard: reject duplicate request IDs
     if (requestId) {
         const exists = db.prepare('SELECT 1 FROM effect_events WHERE request_id = ?').get(requestId);
@@ -108,15 +108,16 @@ function writeEventRecord(db, { sessionRound, turnIndex, phase, eventType, actor
 
     return db.prepare(`
         INSERT INTO effect_events
-            (session_round, turn_index, phase, event_type, actor, target_id, target_type, target_name, payload_json, parent_event_id, source_preset_id, request_id, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (session_round, turn_index, phase, event_type, actor, target_id, target_type, target_name, payload_json, parent_event_id, source_preset_id, request_id, description, group_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
         sessionRound || 0, turnIndex || 0, phase || 'action',
         eventType, actor,
         target.id, target.type, target.name,
         payloadJson,
         parentEventId || null, sourcePresetId || null,
-        requestId || null, description || null
+        requestId || null, description || null,
+        groupId || null
     ).lastInsertRowid;
 }
 
@@ -124,7 +125,7 @@ function writeEventRecord(db, { sessionRound, turnIndex, phase, eventType, actor
  * Write an audit event from a manual socket handler (not effectEngine automation).
  * Returns the event ID, or null if the requestId was already processed (idempotent skip).
  */
-function writeAuditEvent(db, { sessionRound, turnIndex, eventType, actor, targetId, targetName, payload, requestId, description }) {
+function writeAuditEvent(db, { sessionRound, turnIndex, eventType, actor, targetId, targetName, payload, requestId, description, groupId }) {
     return writeEventRecord(db, {
         sessionRound: sessionRound || 0,
         turnIndex: turnIndex || 0,
@@ -137,6 +138,7 @@ function writeAuditEvent(db, { sessionRound, turnIndex, eventType, actor, target
         sourcePresetId: null,
         requestId,
         description,
+        groupId,
     });
 }
 
@@ -204,7 +206,7 @@ function reverseEvent(db, eventId, actor, applyDamageEvent, applyHealEvent, appl
  * Apply an array of effects to an array of resolved targets, inside a transaction.
  * Returns an array of { targetId, targetName, eventType, logMessage, success } records.
  */
-function applyPartyEffect(db, effects, targetsSpec, actor, sessionRound, turnIndex, phase, sourcePresetId) {
+function applyPartyEffect(db, effects, targetsSpec, actor, sessionRound, turnIndex, phase, sourcePresetId, groupId) {
     const targets = resolveTargets(db, targetsSpec);
     const records = [];
 
@@ -228,6 +230,7 @@ function applyPartyEffect(db, effects, targetsSpec, actor, sessionRound, turnInd
                         payloadJson: JSON.stringify(effect),
                         parentEventId: null,
                         sourcePresetId,
+                        groupId: groupId || null,
                     });
                 }
 
@@ -359,12 +362,12 @@ function getFilteredTimeline(db, { limit = 200, round, eventType, targetId } = {
 
 module.exports = {
     applyPartyEffect,
+    resolveTargets,
     processTurnTriggers,
     processAurasForTurn,
     getCombatTimeline,
     getFilteredTimeline,
     clearTimeline,
-    resolveTargets,
     writeConcentrationCheckEvent,
     writeAuditEvent,
     reverseEvent,

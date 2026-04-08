@@ -341,6 +341,9 @@ function runMigrations() {
   // ---- Phase 15.1: Compendium — store full stats on spawned monsters ----
   addColumnSafe('initiative_tracker', 'stats_json', "TEXT DEFAULT NULL");
 
+  // ---- Phase 16.0: AoE group tracking ----
+  addColumnSafe('effect_events', 'group_id', 'TEXT DEFAULT NULL');
+
   console.log('[DB] Migrations complete.');
 }
 
