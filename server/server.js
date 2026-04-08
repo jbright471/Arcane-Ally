@@ -24,6 +24,7 @@ const automationRouter = require('./routes/automation');
 const dmNotesRouter = require('./routes/dmNotes');
 const {
     applyPartyEffect,
+    resolveTargets,
     processTurnTriggers,
     processAurasForTurn,
     getCombatTimeline,
@@ -1548,6 +1549,95 @@ io.on('connection', (socket) => {
         } else {
             socket.emit('rules_error', { message: result.error });
         }
+    });
+
+    // ── AoE / Multi-target Effect ──────────────────────────────────────────────
+    // targets: Array<{ id: string|number, type: 'character'|'monster' }>
+    // effects: Array<{ type: 'damage'|'heal'|'condition'|'remove_condition', value?: number, damageType?: string, condition?: string }>
+    // requestId is used as group_id so all child events can be correlated in the Combat Log.
+    socket.on('apply_aoe_effect', ({ requestId, targets, effects, actor }) => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        if (!Array.isArray(targets) || targets.length === 0) { socket.emit('rules_error', { message: 'No targets specified' }); return; }
+        if (!Array.isArray(effects) || effects.length === 0) { socket.emit('rules_error', { message: 'No effects specified' }); return; }
+
+        // Resolve targets via effectEngine (handles both characters and monsters)
+        const resolved = resolveTargets(db, targets.map(t => ({ id: Number(t.id), type: t.type })));
+        if (resolved.length === 0) { socket.emit('rules_error', { message: 'No valid targets found' }); return; }
+
+        // Use requestId as both idempotency base and group_id for batch correlation.
+        // Per-target requestId suffix prevents cross-target dedup collisions.
+        const groupId = requestId;
+        const records = [];
+
+        const db_tx = db.transaction(() => {
+            for (const target of resolved) {
+                for (const effect of effects) {
+                    const perTargetRequestId = requestId ? `${requestId}-${target.id}-${effect.type}` : undefined;
+
+                    // Idempotency check per sub-event
+                    if (perTargetRequestId) {
+                        const exists = db.prepare('SELECT 1 FROM effect_events WHERE request_id = ?').get(perTargetRequestId);
+                        if (exists) { records.push({ targetId: target.id, targetName: target.name, eventType: effect.type, logMessage: 'duplicate skipped', success: false }); continue; }
+                    }
+
+                    let result, eventType;
+                    if (target.type === 'character') {
+                        ({ result, eventType } = (() => {
+                            switch (effect.type) {
+                                case 'damage': return { result: applyDamageEvent(db, target.id, effect.value || 0, effect.damageType || 'untyped'), eventType: 'damage' };
+                                case 'heal':   return { result: applyHealEvent(db, target.id, effect.value || 0), eventType: 'heal' };
+                                case 'condition': return { result: applyConditionEvent(db, target.id, effect.condition), eventType: 'condition_applied' };
+                                case 'remove_condition': return { result: removeConditionEvent(db, target.id, effect.condition), eventType: 'condition_removed' };
+                                default: return { result: { success: false, error: `Unknown effect: ${effect.type}` }, eventType: 'unknown' };
+                            }
+                        })());
+                    } else {
+                        // Monster — damage/heal only (conditions noted but not stored in schema)
+                        const entity = db.prepare('SELECT * FROM initiative_tracker WHERE id = ?').get(target.id);
+                        if (!entity) { records.push({ targetId: target.id, targetName: target.name, eventType: effect.type, logMessage: 'Monster not found', success: false }); continue; }
+                        if (effect.type === 'damage') {
+                            const dmg = Math.max(0, effect.value || 0);
+                            const newHp = Math.max(0, entity.current_hp - dmg);
+                            db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
+                            result = { success: true, logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)` };
+                            eventType = 'damage';
+                        } else if (effect.type === 'heal') {
+                            const heal = Math.max(0, effect.value || 0);
+                            const newHp = Math.min(entity.max_hp, entity.current_hp + heal);
+                            db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
+                            result = { success: true, logMessage: `${entity.entity_name} healed ${heal} HP (${newHp}/${entity.max_hp} HP)` };
+                            eventType = 'heal';
+                        } else {
+                            result = { success: true, logMessage: `${target.name}: ${effect.condition || effect.type} (noted)` };
+                            eventType = effect.type === 'condition' ? 'condition_applied' : 'condition_removed';
+                        }
+                    }
+
+                    if (result.success) {
+                        writeAuditEvent(db, {
+                            sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
+                            eventType,
+                            actor: actor || 'DM',
+                            targetId: target.id,
+                            targetName: target.name,
+                            payload: { ...effect },
+                            requestId: perTargetRequestId,
+                            description: result.logMessage,
+                            groupId,
+                        });
+                    }
+
+                    records.push({ targetId: target.id, targetName: target.name, eventType, logMessage: result.logMessage || result.error, success: result.success });
+                }
+            }
+        });
+
+        db_tx();
+
+        broadcastPartyState();
+        broadcastTimelineImmediate();
+        socket.emit('aoe_effect_result', { groupId, records });
+        logAction(actor || 'DM', `AoE [${effects.map(e => e.type).join('+')}] → ${resolved.map(t => t.name).join(', ')}`);
     });
 
     socket.on('disconnect', () => {
