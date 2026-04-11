@@ -5,13 +5,15 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import {
   Swords, SkipForward, SkipBack, StopCircle, Shield, Skull,
-  Plus, ChevronUp, ChevronDown, Eye, EyeOff, Zap, Loader2,
+  Plus, ChevronUp, ChevronDown, Eye, EyeOff, Zap, Loader2, Settings2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import socket from '../socket';
 import { CombatReportModal } from './CombatReportModal';
+import { AoEEffectModal, type AoETarget } from './AoEEffectModal';
 
 // ─── Sorting Utility ─────────────────────────────────────────────────────────
 
@@ -120,8 +122,12 @@ export function InitiativeTracker() {
   const tracker = (state.initiativeState || []) as Combatant[];
   const members = state.characters || [];
   const roundNumber = state.roundNumber || 1;
+  const isDm = state.isDm;
   const [showSpawner, setShowSpawner] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showQuickActions, setShowQuickActions] = useState(false);
+  const [showAoE, setShowAoE] = useState(false);
   const [reportData, setReportData] = useState<{
     report: string | null;
     events: Array<{ round: number; actor: string; action: string; target: string; detail: string }>;
@@ -171,9 +177,53 @@ export function InitiativeTracker() {
     socket.emit('spawn_monster', data);
   };
 
+  const handleAutoRoll = () => {
+    socket.emit('auto_roll_initiative');
+  };
+
+  const handleDismissDead = () => {
+    socket.emit('dismiss_dead');
+    socket.once('dismiss_dead_result', ({ dismissed }: { dismissed: number }) => {
+      toast.success(dismissed > 0 ? `Dismissed ${dismissed} dead combatant${dismissed !== 1 ? 's' : ''}.` : 'No dead combatants to dismiss.');
+    });
+  };
+
+  const handleClearConditions = () => {
+    socket.emit('clear_all_conditions');
+    socket.once('clear_conditions_result', ({ cleared }: { cleared: number }) => {
+      toast.success(cleared > 0 ? `Cleared conditions from ${cleared} character${cleared !== 1 ? 's' : ''}.` : 'No conditions to clear.');
+    });
+  };
+
+  useEffect(() => {
+    const handler = ({ rolls }: { rolls: Array<{ name: string; initiative: number }> }) => {
+      const summary = rolls.map(r => `${r.name}: ${r.initiative}`).join(', ');
+      toast.success(`Initiative rolled — ${summary}`);
+    };
+    socket.on('auto_roll_result', handler);
+    return () => { socket.off('auto_roll_result', handler); };
+  }, []);
+
   const handleHpDelta = (trackerId: number, delta: number) => {
     socket.emit('update_initiative_hp', { trackerId, delta });
   };
+
+  const toggleSelected = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const selectedAoETargets: AoETarget[] = tracker
+    .filter(ent => selectedIds.has(ent.id))
+    .map(ent => ({
+      trackerId: ent.id,
+      name: ent.entity_name,
+      entityType: ent.entity_type,
+      characterId: ent.character_id,
+    }));
 
   // ── Empty State ──
   if (!isCombatActive) {
@@ -207,6 +257,11 @@ export function InitiativeTracker() {
         onClose={() => setShowReport(false)}
         data={reportData}
       />
+      <AoEEffectModal
+        open={showAoE}
+        onClose={() => { setShowAoE(false); setSelectedIds(new Set()); }}
+        targets={selectedAoETargets}
+      />
       </>
     );
   }
@@ -234,6 +289,76 @@ export function InitiativeTracker() {
             >
               <Plus className="h-3 w-3" />
             </Button>
+            {isDm && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleAutoRoll}
+                    className="h-7 px-2 text-[10px] text-muted-foreground hover:text-primary"
+                    title="Auto-roll initiative for all combatants"
+                  >
+                    <Swords className="h-3 w-3 mr-1" />
+                    Roll
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-[10px]">
+                  Re-roll initiative for all combatants (d20 + DEX mod)
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {isDm && (
+              <Popover open={showQuickActions} onOpenChange={setShowQuickActions}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[10px] text-muted-foreground hover:text-primary"
+                    title="Quick combat actions"
+                  >
+                    <Settings2 className="h-3 w-3" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent side="bottom" align="end" className="w-44 p-1.5 space-y-0.5">
+                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/50 font-bold px-2 pb-1">Quick Actions</p>
+                  <button
+                    onClick={() => { handleDismissDead(); setShowQuickActions(false); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-secondary/50 text-left transition-colors"
+                  >
+                    <Skull className="h-3 w-3 text-muted-foreground/60" />
+                    Dismiss Dead
+                  </button>
+                  <button
+                    onClick={() => { handleClearConditions(); setShowQuickActions(false); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-secondary/50 text-left transition-colors"
+                  >
+                    <Shield className="h-3 w-3 text-muted-foreground/60" />
+                    Clear All Conditions
+                  </button>
+                </PopoverContent>
+              </Popover>
+            )}
+            {isDm && selectedIds.size > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowAoE(true)}
+                    className="h-7 px-2 text-[10px] bg-orange-600/80 hover:bg-orange-600 text-white border-orange-500/40 uppercase tracking-wider"
+                  >
+                    <Zap className="h-3 w-3 mr-1" />
+                    AoE
+                    <Badge className="ml-1 h-3.5 min-w-[1rem] px-1 text-[8px] bg-white/20 text-white">
+                      {selectedIds.size}
+                    </Badge>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-[10px]">
+                  Apply area effect to {selectedIds.size} selected target{selectedIds.size !== 1 ? 's' : ''}
+                </TooltipContent>
+              </Tooltip>
+            )}
             <Button
               variant="destructive"
               size="sm"
@@ -296,6 +421,23 @@ export function InitiativeTracker() {
 
                 {/* Top row: position, initiative, name, badges, HP, AC */}
                 <div className="flex items-center gap-2 relative z-10">
+                  {/* DM target checkbox */}
+                  {isDm && (
+                    <button
+                      onClick={() => toggleSelected(ent.id)}
+                      className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors ${
+                        selectedIds.has(ent.id)
+                          ? 'bg-orange-500/80 border-orange-400 text-white'
+                          : 'bg-secondary/20 border-border/40 text-transparent hover:border-orange-500/50'
+                      }`}
+                      title={selectedIds.has(ent.id) ? 'Deselect target' : 'Select for AoE'}
+                    >
+                      <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
+                        <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
+
                   {/* Turn number */}
                   <div className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors ${
                     isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-secondary text-muted-foreground'
@@ -460,6 +602,11 @@ export function InitiativeTracker() {
           open={showReport}
           onClose={() => setShowReport(false)}
           data={reportData}
+        />
+        <AoEEffectModal
+          open={showAoE}
+          onClose={() => { setShowAoE(false); setSelectedIds(new Set()); }}
+          targets={selectedAoETargets}
         />
       </CardContent>
     </Card>

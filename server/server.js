@@ -8,7 +8,7 @@ const path = require('path');
 const { runMigrations } = require('./schema');
 const { router: characterRouter, getAllCharacters } = require('./routes/characters');
 const importerRouter = require('./routes/importer');
-const { router: initiativeRouter, startEncounter, getTrackerState, advanceTurn, previousTurn, endEncounter, resortTracker, reorderEntry, spawnMonster } = require('./routes/initiative');
+const { router: initiativeRouter, startEncounter, getTrackerState, advanceTurn, previousTurn, endEncounter, resortTracker, reorderEntry, spawnMonster, rollAllInitiative } = require('./routes/initiative');
 const mapsRouter = require('./routes/maps');
 const npcsRouter = require('./routes/npcs');
 const lootRouter = require('./routes/loot');
@@ -285,9 +285,10 @@ function broadcastPartyLoot() {
         description: r.description,
         category: r.category,
         rarity: r.rarity,
-        stats: JSON.parse(r.stats_json || '{}'),
-        droppedBy: r.dropped_by,
-        createdAt: r.created_at,
+        stats_json: r.stats_json,
+        dropped_by: r.dropped_by,
+        created_at: r.created_at,
+        vote_state_json: r.vote_state_json || null,
     }));
     io.emit('party_loot_state', items);
 }
@@ -367,6 +368,51 @@ function logAction(actor, description, status = 'applied', effectsJson = null) {
         "INSERT INTO action_log (timestamp, actor, action_description, status, effects_json) VALUES (datetime('now'), ?, ?, ?, ?)"
     ).run(actor, description, status, effectsJson);
     broadcastLogs();
+}
+
+function resolveLootVote(db, lootId, io, broadcastPartyLoot, broadcastPartyState, logAction) {
+    const item = db.prepare('SELECT * FROM shared_loot WHERE id = ?').get(lootId);
+    if (!item || !item.vote_state_json) return;
+    const voteState = JSON.parse(item.vote_state_json);
+    const voteEntries = Object.entries(voteState.votes);
+    const needers  = voteEntries.filter(([, v]) => v.vote === 'need' ).map(([id, v]) => ({ id, name: v.characterName }));
+    const greeders = voteEntries.filter(([, v]) => v.vote === 'greed').map(([id, v]) => ({ id, name: v.characterName }));
+
+    let winner = null;
+    let winType = 'none';
+    if (needers.length > 0) {
+        winner = needers[Math.floor(Math.random() * needers.length)];
+        winType = 'need';
+    } else if (greeders.length > 0) {
+        winner = greeders[Math.floor(Math.random() * greeders.length)];
+        winType = 'greed';
+    }
+
+    if (winner) {
+        const char = db.prepare('SELECT homebrew_inventory FROM characters WHERE id = ?').get(parseInt(winner.id));
+        if (char) {
+            const inv = JSON.parse(char.homebrew_inventory || '[]');
+            const stats = JSON.parse(item.stats_json || '{}');
+            inv.push({ id: `loot-${item.id}-${Date.now()}`, name: item.name, description: item.description, stats, equipped: false });
+            db.prepare('UPDATE characters SET homebrew_inventory = ? WHERE id = ?').run(JSON.stringify(inv), parseInt(winner.id));
+        }
+        db.prepare('DELETE FROM shared_loot WHERE id = ?').run(lootId);
+        broadcastPartyState();
+    } else {
+        // No winner — close the vote without awarding
+        voteState.status = 'closed';
+        db.prepare('UPDATE shared_loot SET vote_state_json = ? WHERE id = ?').run(JSON.stringify(voteState), lootId);
+    }
+
+    broadcastPartyLoot();
+    io.emit('loot_vote_result', {
+        lootId,
+        winner: winner ? { id: winner.id, name: winner.name } : null,
+        winType,
+        votes: voteState.votes,
+        itemName: item.name,
+    });
+    logAction('System', `Loot vote resolved: ${item.name} → ${winner ? winner.name + ' (' + winType + ')' : 'No winner (all passed)'}`);
 }
 
 // --- Socket.io ---
@@ -1166,6 +1212,41 @@ io.on('connection', (socket) => {
         broadcastInitiative();
     });
 
+    socket.on('auto_roll_initiative', () => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        const tracker = rollAllInitiative();
+        broadcastInitiative();
+        logAction('DM', 'Rolled initiative for all combatants.');
+        socket.emit('auto_roll_result', { rolls: tracker.map(e => ({ name: e.entity_name, initiative: e.initiative })) });
+    });
+
+    socket.on('dismiss_dead', () => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        const result = db.prepare("DELETE FROM initiative_tracker WHERE entity_type IN ('monster', 'npc') AND current_hp <= 0").run();
+        broadcastInitiative();
+        logAction('DM', `Dismissed ${result.changes} dead combatant(s) from tracker.`);
+        socket.emit('dismiss_dead_result', { dismissed: result.changes });
+    });
+
+    socket.on('clear_all_conditions', () => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        const pcEntries = db.prepare("SELECT character_id FROM initiative_tracker WHERE entity_type = 'pc' AND character_id IS NOT NULL").all();
+        let cleared = 0;
+        for (const entry of pcEntries) {
+            const state = getSessionState(db, entry.character_id);
+            if (state && state.activeConditions.length > 0) {
+                state.activeConditions = [];
+                state.conditionDurations = {};
+                saveSessionState(db, state);
+                cleared++;
+            }
+        }
+        broadcastPartyState();
+        broadcastInitiative();
+        logAction('DM', `Cleared conditions from ${cleared} character(s).`);
+        socket.emit('clear_conditions_result', { cleared });
+    });
+
     socket.on('add_marker', ({ mapId, name, type, x, y, linkedMapId, description }) => {
         db.prepare(`
             INSERT INTO map_markers (parent_map_id, linked_map_id, name, type, x, y, description)
@@ -1512,6 +1593,44 @@ io.on('connection', (socket) => {
     socket.on('remove_loot', ({ lootId }) => {
         db.prepare('DELETE FROM shared_loot WHERE id = ?').run(lootId);
         broadcastPartyLoot();
+    });
+
+    socket.on('loot_vote_open', ({ lootId }) => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        const item = db.prepare('SELECT * FROM shared_loot WHERE id = ?').get(lootId);
+        if (!item) return;
+        const voteState = { status: 'open', votes: {} };
+        db.prepare('UPDATE shared_loot SET vote_state_json = ? WHERE id = ?').run(JSON.stringify(voteState), lootId);
+        broadcastPartyLoot();
+        io.emit('loot_vote_opened', { lootId, itemName: item.name });
+    });
+
+    socket.on('loot_vote_cast', ({ lootId, vote, characterId, characterName }) => {
+        const item = db.prepare('SELECT * FROM shared_loot WHERE id = ?').get(lootId);
+        if (!item || !item.vote_state_json) return;
+        const voteState = JSON.parse(item.vote_state_json);
+        if (voteState.status !== 'open') return;
+        if (!['need', 'greed', 'pass'].includes(vote)) return;
+        voteState.votes[String(characterId)] = { vote, characterName: characterName || 'Player' };
+        db.prepare('UPDATE shared_loot SET vote_state_json = ? WHERE id = ?').run(JSON.stringify(voteState), lootId);
+        broadcastPartyLoot();
+        // Check if all connected players have voted
+        const connectedCharIds = [...playerSocketMap.values()]
+            .filter(p => p.characterId)
+            .map(p => String(p.characterId));
+        const allVoted = connectedCharIds.length > 0 && connectedCharIds.every(id => voteState.votes[id]);
+        if (allVoted) resolveLootVote(db, lootId, io, broadcastPartyLoot, broadcastPartyState, logAction);
+    });
+
+    socket.on('loot_vote_cancel', ({ lootId }) => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        db.prepare('UPDATE shared_loot SET vote_state_json = NULL WHERE id = ?').run(lootId);
+        broadcastPartyLoot();
+    });
+
+    socket.on('loot_vote_force_resolve', ({ lootId }) => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        resolveLootVote(db, lootId, io, broadcastPartyLoot, broadcastPartyState, logAction);
     });
 
     socket.on('delete_character', ({ characterId }) => {

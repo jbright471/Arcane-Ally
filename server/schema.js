@@ -344,6 +344,14 @@ function runMigrations() {
   // ---- Phase 16.0: AoE group tracking ----
   addColumnSafe('effect_events', 'group_id', 'TEXT DEFAULT NULL');
 
+  // ---- Phase 17.0: Per-skill proficiency + weapon attacks ----
+  addColumnSafe('characters', 'skill_proficiencies', "TEXT DEFAULT '{}'");
+  addColumnSafe('characters', 'save_proficiencies', "TEXT DEFAULT '{}'");
+  addColumnSafe('characters', 'attacks', "TEXT DEFAULT '[]'");
+
+  // ---- Phase 18.0: Loot auction / Need-vs-Greed voting ----
+  addColumnSafe('shared_loot', 'vote_state_json', "TEXT DEFAULT NULL");
+
   console.log('[DB] Migrations complete.');
 }
 

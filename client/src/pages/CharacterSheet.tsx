@@ -7,8 +7,9 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import {
   Heart, Shield, Footprints, Trash2, ArrowLeft, Swords,
-  Sparkles, RefreshCw, Brain, Zap,
+  Sparkles, RefreshCw, Brain, Zap, Dices, ChevronDown, ChevronUp,
 } from 'lucide-react';
+import { type RollFeedEvent, getRollTypeMeta } from '../types/effects';
 import { DiceRoller } from '../components/DiceRoller';
 import { RollableStat } from '../components/RollableStat';
 import { StatChecks } from '../components/StatChecks';
@@ -42,6 +43,8 @@ export default function CharacterSheet() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [parsingItem, setIsParsingItem] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [rollHistory, setRollHistory] = useState<RollFeedEvent[]>([]);
+  const [showRollHistory, setShowRollHistory] = useState(false);
 
   // ── Listen for condition tick events on this character's turn ──
   useEffect(() => {
@@ -68,6 +71,18 @@ export default function CharacterSheet() {
     socket.on('tick_conditions', handleTick);
     return () => { socket.off('tick_conditions', handleTick); };
   }, [id]);
+
+  // ── Accumulate this character's own roll history ──
+  useEffect(() => {
+    const charIdNum = parseInt(id || '');
+    const handler = (event: RollFeedEvent) => {
+      if (event.characterId !== charIdNum) return;
+      setRollHistory(prev => [...prev.slice(-29), event]); // keep last 30
+    };
+    socket.on('roll_feed_event', handler);
+    return () => { socket.off('roll_feed_event', handler); };
+  }, [id]);
+
 
   if (!character) {
     return (
@@ -341,6 +356,46 @@ export default function CharacterSheet() {
             <CardContent className="px-4 pb-4">
               <DiceRoller characterName={character.name} compact />
             </CardContent>
+          </Card>
+
+          {/* My Roll History */}
+          <Card className="border-border/20 bg-secondary/5">
+            <button
+              className="w-full flex items-center justify-between px-4 py-3 text-left"
+              onClick={() => setShowRollHistory(v => !v)}
+            >
+              <span className="font-display flex items-center gap-2 text-sm">
+                <Dices className="h-4 w-4 text-primary/70" />
+                Roll History
+                {rollHistory.length > 0 && (
+                  <span className="text-[10px] font-mono text-muted-foreground/60">({rollHistory.length})</span>
+                )}
+              </span>
+              {showRollHistory
+                ? <ChevronUp className="h-4 w-4 text-muted-foreground/50" />
+                : <ChevronDown className="h-4 w-4 text-muted-foreground/50" />
+              }
+            </button>
+            {showRollHistory && (
+              <CardContent className="pt-0 pb-3 px-3">
+                {rollHistory.length === 0 ? (
+                  <p className="text-xs text-muted-foreground/50 italic text-center py-2">No rolls yet this session.</p>
+                ) : (
+                  <div className="space-y-0.5 max-h-56 overflow-y-auto">
+                    {[...rollHistory].reverse().map((roll, i) => {
+                      const meta = getRollTypeMeta(roll.rollType);
+                      return (
+                        <div key={roll.id ?? i} className={`flex items-center gap-2 rounded px-2 py-1 text-xs border ${meta.bg} ${meta.border}`}>
+                          <span className={`text-[9px] font-bold w-9 shrink-0 text-center ${meta.color}`}>{meta.label}</span>
+                          <span className="flex-1 truncate text-foreground/80">{roll.label}</span>
+                          <span className={`font-bold tabular-nums shrink-0 ${meta.color}`}>{roll.total}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            )}
           </Card>
 
           {/* Attack Actions */}

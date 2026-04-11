@@ -199,6 +199,47 @@ function endEncounter() {
     db.prepare('DELETE FROM initiative_tracker').run();
 }
 
+/**
+ * Roll d20 + DEX modifier for every combatant in the tracker.
+ * PCs: DEX from character data_json / stats column.
+ * Monsters: DEX from stats_json if available, otherwise mod = 0.
+ * Returns the re-sorted tracker state.
+ */
+function rollAllInitiative() {
+    const entries = db.prepare('SELECT * FROM initiative_tracker').all();
+    const updateStmt = db.prepare('UPDATE initiative_tracker SET initiative = ? WHERE id = ?');
+
+    for (const entry of entries) {
+        let dexMod = 0;
+        if (entry.character_id) {
+            const char = db.prepare('SELECT stats, data_json FROM characters WHERE id = ?').get(entry.character_id);
+            if (char) {
+                let abilityScores = {};
+                if (char.data_json) {
+                    try { abilityScores = JSON.parse(char.data_json).abilityScores || {}; } catch (_) {}
+                }
+                if (!abilityScores.DEX && char.stats) {
+                    try { abilityScores = JSON.parse(char.stats); } catch (_) {}
+                }
+                const dex = Number(abilityScores.DEX) || 10;
+                dexMod = Math.floor((dex - 10) / 2);
+            }
+        } else if (entry.stats_json) {
+            try {
+                const stats = JSON.parse(entry.stats_json);
+                // open5e uses 'dexterity'; internally we use 'DEX'
+                const dex = Number(stats.dexterity || stats.DEX) || 10;
+                dexMod = Math.floor((dex - 10) / 2);
+            } catch (_) {}
+        }
+        const roll = Math.floor(Math.random() * 20) + 1 + dexMod;
+        updateStmt.run(roll, entry.id);
+    }
+
+    resortTracker();
+    return getTrackerState();
+}
+
 module.exports = {
     router,
     startEncounter,
@@ -208,5 +249,6 @@ module.exports = {
     endEncounter,
     resortTracker,
     reorderEntry,
-    spawnMonster
+    spawnMonster,
+    rollAllInitiative,
 };

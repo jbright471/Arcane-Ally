@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import socket from '../socket';
-import { Character, Party, ActionLogEntry, SharedLootItem, SpellSlots } from '../types/character';
+import { Character, Party, ActionLogEntry, SharedLootItem, SpellSlots, LootVoteState } from '../types/character';
 import { EffectEvent } from '../types/effects';
 
 interface Note {
@@ -58,15 +58,24 @@ function normaliseCharacter(raw: any): Character {
     ac: raw.ac || 10,
     acBreakdown: raw.acBreakdown || [],
     abilityScores: raw.abilityScores || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
-    // Server stores conditions lowercase; normalise to Title Case to match DND_CONDITIONS
-    conditions: (raw.conditions || []).map((c: string) => c.charAt(0).toUpperCase() + c.slice(1)),
-    conditionDurations: raw.conditionDurations || {},
+    // Server stores conditions lowercase; normalise to Title Case to match DND_CONDITIONS.
+    // Lowercase first so any mixed-case leakage (e.g. "PRONE") is correctly capitalised.
+    conditions: (raw.conditions || []).map((c: string) => {
+      const lower = (c || '').toLowerCase().trim();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    }),
+    // Duration keys are lowercase on the server — keep them lowercase so ConditionBadges lookup stays consistent.
+    conditionDurations: Object.fromEntries(
+      Object.entries(raw.conditionDurations || {}).map(([k, v]) => [k.toLowerCase().trim(), v as number])
+    ),
     equipment: raw.inventory || [],
     homebrewInventory: raw.homebrewInventory || [],
     spellSlots: mergeSpellSlots(raw.spellSlotsMax, raw.spellSlotsUsed),
     spells: raw.spells || [],
     abilities: raw.features || [],
-    proficiencyBonus: raw.proficiencyBonus || 2,
+    skillProficiencies: raw.skillProficiencies || {},
+    saveProficiencies: raw.saveProficiencies || {},
+    proficiencyBonus: raw.proficiencyBonus ?? (Math.floor(((raw.level || 1) - 1) / 4) + 2),
     speed: raw.speed || 30,
     initiative: raw.initiativeBonus || 0,
     activeBuffs: raw.buffs || [],
@@ -158,8 +167,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setEffectEvents(data);
     });
 
-    socket.on('party_loot_state', (data: SharedLootItem[]) => {
-      setSharedLoot(data);
+    socket.on('party_loot_state', (data: any[]) => {
+      setSharedLoot(data.map(item => ({
+        ...item,
+        stats: typeof item.stats_json === 'string' ? JSON.parse(item.stats_json || '{}') : (item.stats || {}),
+        droppedBy: item.dropped_by || item.droppedBy || 'DM',
+        createdAt: item.created_at || item.createdAt || '',
+        voteState: item.vote_state_json
+          ? (typeof item.vote_state_json === 'string' ? JSON.parse(item.vote_state_json) : item.vote_state_json) as LootVoteState
+          : null,
+      })));
     });
 
     socket.on('permissions_state', (data: ResourcePermissions) => {

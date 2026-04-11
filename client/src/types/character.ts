@@ -29,6 +29,13 @@ export interface Equipment {
   isHomebrew?: boolean;
 }
 
+export type LootVote = 'need' | 'greed' | 'pass';
+
+export interface LootVoteState {
+  status: 'open' | 'closed';
+  votes: Record<string, { vote: LootVote; characterName: string }>;
+}
+
 /** An item sitting in the shared party loot pool, waiting to be claimed. */
 export interface SharedLootItem {
   id: number;
@@ -39,6 +46,7 @@ export interface SharedLootItem {
   stats: Record<string, unknown>;
   droppedBy: string;
   createdAt: string;
+  voteState?: LootVoteState | null;
 }
 
 export type DndClass = 'Barbarian' | 'Bard' | 'Cleric' | 'Druid' | 'Fighter' | 'Monk' | 'Paladin' | 'Ranger' | 'Rogue' | 'Sorcerer' | 'Warlock' | 'Wizard';
@@ -236,6 +244,8 @@ export const DND_CONDITIONS = [
 
 export type DndCondition = typeof DND_CONDITIONS[number];
 
+export type ProficiencyLevel = 'proficiency' | 'expertise' | 'half';
+
 export interface Character {
   id: string;
   name: string;
@@ -248,6 +258,10 @@ export interface Character {
   conditions: string[];
   /** Maps lowercase condition name → remaining rounds. Missing = permanent. */
   conditionDurations: Record<string, number>;
+  /** Maps skill label (e.g. "Stealth") → proficiency level. Missing = not proficient. */
+  skillProficiencies: Record<string, ProficiencyLevel>;
+  /** Maps ability score key (e.g. "DEX") → true if proficient in that save. */
+  saveProficiencies: Partial<Record<AbilityScore, true>>;
   equipment: Equipment[];
   homebrewInventory: Equipment[];
   spellSlots: SpellSlots;
