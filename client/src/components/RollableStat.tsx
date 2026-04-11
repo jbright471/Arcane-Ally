@@ -1,4 +1,4 @@
-import { rollDice, type AbilityScore } from '../types/character';
+import { rollDice, type AbilityScore, type ProficiencyLevel } from '../types/character';
 import socket from '../socket';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
@@ -31,8 +31,10 @@ interface RollableStatProps {
   sublabel?: string;
   /** Raw ability score rendered inside card variant */
   score?: number;
-  /** Filled dot = proficient */
+  /** Filled dot = proficient (legacy — prefer proficiencyLevel) */
   proficient?: boolean;
+  /** Full proficiency level; overrides proficient when set */
+  proficiencyLevel?: ProficiencyLevel | 'none';
   /** card = large ability-score block, row = compact skill/save row */
   variant?: 'card' | 'row';
   className?: string;
@@ -60,12 +62,16 @@ export function RollableStat({
   sublabel,
   score,
   proficient = false,
+  proficiencyLevel,
   variant = 'card',
   className,
   onRoll,
   conditions = [],
   ability,
 }: RollableStatProps) {
+  // Resolve effective proficiency from either prop
+  const effectiveProfLevel: ProficiencyLevel | 'none' =
+    proficiencyLevel ?? (proficient ? 'proficiency' : 'none');
   const actionType = toActionType(rollType);
   const indicator = conditions.length > 0
     ? getRollIndicator(conditions, actionType, ability)
@@ -171,8 +177,12 @@ export function RollableStat({
         <span
           className={cn(
             'w-2 h-2 rounded-full border shrink-0',
-            proficient ? 'bg-primary border-primary' : 'border-muted-foreground/50',
+            effectiveProfLevel === 'expertise'   && 'bg-amber-400 border-amber-400',
+            effectiveProfLevel === 'proficiency' && 'bg-primary border-primary',
+            effectiveProfLevel === 'half'        && 'bg-primary/40 border-primary/60',
+            effectiveProfLevel === 'none'        && 'border-muted-foreground/50',
           )}
+          title={effectiveProfLevel === 'expertise' ? 'Expertise' : effectiveProfLevel === 'proficiency' ? 'Proficient' : effectiveProfLevel === 'half' ? 'Half Proficiency' : undefined}
         />
         {/* Ability abbreviation */}
         {sublabel && (

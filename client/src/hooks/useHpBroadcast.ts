@@ -1,10 +1,12 @@
 import { useCallback } from 'react';
-import socket from '../socket';
 import { toast } from 'sonner';
+import { useHpWriteQueue } from './useHpWriteQueue';
 
 /**
  * useHpBroadcast — player-side hook that broadcasts an HP change to the server
  * and shows optimistic local feedback.
+ *
+ * Internally uses useHpWriteQueue to queue HP changes offline and drain on reconnect.
  *
  * Usage:
  *   const { broadcast } = useHpBroadcast(character.id, character.name);
@@ -12,13 +14,11 @@ import { toast } from 'sonner';
  *   broadcast(10);           // heal
  */
 export function useHpBroadcast(characterId: string, characterName: string) {
+  const { emitHp } = useHpWriteQueue();
+
   const broadcast = useCallback(
     (delta: number, damageType?: string) => {
       if (!delta) return;
-      if (!navigator.onLine) {
-        toast.warning('Offline — HP changes cannot be saved.');
-        return;
-      }
 
       const absDelta = Math.abs(delta);
       const type = delta < 0 ? 'damage' : 'heal';
@@ -30,14 +30,14 @@ export function useHpBroadcast(characterId: string, characterName: string) {
         toast.success(`${characterName} healed for ${absDelta} HP`);
       }
 
-      socket.emit('update_hp', {
-        characterId: parseInt(characterId),
+      emitHp(
+        parseInt(characterId),
         delta,
-        actor: characterName,
-        damageType: type === 'damage' ? (damageType || 'untyped') : undefined,
-      });
+        type === 'damage' ? (damageType || 'untyped') : null,
+        characterName,
+      );
     },
-    [characterId, characterName],
+    [characterId, characterName, emitHp],
   );
 
   return { broadcast };

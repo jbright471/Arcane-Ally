@@ -144,6 +144,9 @@ function getCharacterData(db, characterId) {
   const spells = charData.spells ?? (char.spells ? JSON.parse(char.spells) : []);
   const features = charData.features ?? (char.features ? JSON.parse(char.features) : []);
   const skills = charData.skills ?? (char.skills ? JSON.parse(char.skills) : []);
+  const skillProficiencies = char.skill_proficiencies ? (() => { try { return JSON.parse(char.skill_proficiencies); } catch { return {}; } })() : {};
+  const saveProficiencies  = char.save_proficiencies  ? (() => { try { return JSON.parse(char.save_proficiencies);  } catch { return {}; } })() : {};
+  const attacks = char.attacks ? (() => { try { return JSON.parse(char.attacks); } catch { return []; } })() : [];
 
   return {
     id: char.id,
@@ -157,6 +160,9 @@ function getCharacterData(db, characterId) {
     spells,
     features,
     skills,
+    skillProficiencies,
+    saveProficiencies,
+    attacks,
     inventory,
     homebrewInventory,
     tokenImage: char.token_image,
@@ -164,6 +170,10 @@ function getCharacterData(db, characterId) {
     raw_dndbeyond_json: char.raw_dndbeyond_json,
     ...charData,
     id: char.id, // Explicitly override id to prevent charData (like DDB JSON) from replacing the SQLite ID
+    // Override charData spreads with our parsed values so they're always in the right shape
+    skillProficiencies,
+    saveProficiencies,
+    attacks,
   };
 }
 
@@ -474,9 +484,14 @@ function getResolvedCharacterState(db, characterId) {
   const currentAC = resolveCurrentAC(char, state.activeBuffs, state.activeConditions, [...char.inventory, ...char.homebrewInventory]);
   const finalScores = resolveFinalAbilityScores(char, [...char.inventory, ...char.homebrewInventory]);
 
+  const proficiencyBonus = Math.floor((char.level - 1) / 4) + 2;
+
   return {
     id: char.id,
     name: char.name,
+    class: char.class,
+    level: char.level,
+    proficiencyBonus,
     classes: char.classes || [{ name: char.class, level: char.level }],
     currentHp: state.currentHp,
     maxHp: char.baseMaxHp,
@@ -485,6 +500,8 @@ function getResolvedCharacterState(db, characterId) {
     acBreakdown: currentAC.breakdown,
     abilityScores: finalScores,
     skills: char.skills,
+    skillProficiencies: char.skillProficiencies || {},
+    saveProficiencies:  char.saveProficiencies  || {},
     conditions: state.activeConditions,
     conditionDurations: state.conditionDurations || {},
     buffs: state.activeBuffs,

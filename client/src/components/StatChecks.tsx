@@ -41,15 +41,23 @@ interface StatChecksProps {
   character: Character;
 }
 
-/**
- * Renders clickable Saving Throw and Skill Check rows.
- *
- * Modifiers are computed from base ability scores (ability modifier only).
- * Per-skill proficiency is not yet tracked in the Character schema; the
- * proficiency dot is reserved for a future enhancement.
- */
 export function StatChecks({ character }: StatChecksProps) {
-  const { abilityScores, conditions, name } = character;
+  const { abilityScores, conditions, name, skillProficiencies, saveProficiencies, proficiencyBonus } = character;
+
+  /** Compute total modifier: ability mod + proficiency contribution. */
+  const skillModifier = (label: string, ability: keyof typeof abilityScores): number => {
+    const base = getAbilityModifier(abilityScores[ability]);
+    const prof = skillProficiencies[label];
+    if (prof === 'expertise')   return base + proficiencyBonus * 2;
+    if (prof === 'proficiency') return base + proficiencyBonus;
+    if (prof === 'half')        return base + Math.floor(proficiencyBonus / 2);
+    return base;
+  };
+
+  const saveModifier = (ability: keyof typeof abilityScores): number => {
+    const base = getAbilityModifier(abilityScores[ability]);
+    return saveProficiencies[ability] ? base + proficiencyBonus : base;
+  };
 
   return (
     <div className="space-y-4">
@@ -67,12 +75,13 @@ export function StatChecks({ character }: StatChecksProps) {
               key={ability}
               label={label}
               sublabel={ability}
-              modifier={getAbilityModifier(abilityScores[ability])}
+              modifier={saveModifier(ability)}
               rollType="Saving Throw"
               characterName={name}
               variant="row"
               conditions={conditions}
               ability={ability}
+              proficiencyLevel={saveProficiencies[ability] ? 'proficiency' : 'none'}
             />
           ))}
         </CardContent>
@@ -92,12 +101,13 @@ export function StatChecks({ character }: StatChecksProps) {
               key={label}
               label={label}
               sublabel={ability}
-              modifier={getAbilityModifier(abilityScores[ability])}
+              modifier={skillModifier(label, ability)}
               rollType="Skill Check"
               characterName={name}
               variant="row"
               conditions={conditions}
               ability={ability}
+              proficiencyLevel={skillProficiencies[label] ?? 'none'}
             />
           ))}
         </CardContent>

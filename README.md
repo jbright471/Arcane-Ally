@@ -28,10 +28,13 @@ HP changes flash red (damage) or green (healing) on character cards. Latency is 
 
 ### Interactive Character Sheets
 - **Clickable Ability Scores** — click any stat to roll d20 + modifier, broadcast to the DM's Roll Feed
-- **Weapon Actions** — click to roll attack (d20 + proficiency + ability mod) and damage simultaneously
+- **Skill & Save Proficiency Dots** — per-skill and per-save proficiency imported from D&D Beyond; dots show none / half / proficient / expertise with amber highlight for expertise
+- **Weapon Actions** — click to roll attack (d20 + proficiency + ability mod) and damage simultaneously; weapon stats imported from D&D Beyond
 - **Spell Casting** — one-click casting with automatic slot consumption, concentration tracking, and upcasting support
-- **Condition Badges** — real-time condition display with DM-applied/removed states
+- **Dice Roll History** — collapsible per-character roll history card (last 30 rolls) showing type badge, label, and total
+- **Condition Badges** — real-time condition display with DM-applied/removed states and duration countdown
 - **Rest Management** — Short Rest (hit dice spending dialog) and Long Rest (full HP/slot/feature restoration)
+- **Offline HP Queue** — HP changes made while offline are queued in IndexedDB and replayed automatically on reconnect
 
 ### Compendium & Homebrew Manager
 - **Split-pane layout** with searchable entity index (left) and stat block inspector/editor (right)
@@ -46,7 +49,10 @@ HP changes flash red (damage) or green (healing) on character cards. Latency is 
 
 **God-Eye View** — compact cards for every party member showing HP bars, AC, conditions, and quick +/-5 HP buttons.
 
-**Initiative Tracker** — automatic initiative rolling, turn advancement, visibility toggles, HP tracking, and manual reordering. Three spawn methods: Quick Spawn, Compendium, and AI Lore Console.
+**Initiative Tracker** — automatic initiative rolling (auto-roll d20 + DEX mod for all combatants), turn advancement, visibility toggles, HP tracking, and manual reordering. Three spawn methods: Quick Spawn, Compendium, and AI Lore Console.
+
+- **AoE Multi-Target Effects** — select multiple combatants with checkboxes, then click the AoE button to open a multi-row effect builder (damage, heal, add/remove condition). All targets are resolved in a single DB transaction with a shared group ID for timeline correlation.
+- **Quick Encounter Automations** — one-click "Dismiss Dead" removes all dead tracker entries; "Clear All Conditions" wipes conditions from every PC. Both accessible from the DM-only Quick Actions popover.
 
 **AI Lore Console** — creative AI assistant with preset prompts (Room Desc, NPC Idea, Loot Drop, Combat). Generates atmospheric D&D content with **actionable response cards**:
 - **Items** — "Send to Party Loot" instantly drops the item into the shared loot pool
@@ -63,7 +69,7 @@ Buttons disable after use to prevent duplicate spawns.
 
 ### Party Loot Pool
 - DM drops items from homebrew library, custom creation, or AI generation
-- Players see the shared pool and click "Claim" to transfer to personal inventory
+- **Need / Greed / Pass voting** — DM can open a vote on any item; players vote and the server auto-resolves when all connected players have voted (need beats greed; random tiebreak within tier); DM can also force-resolve at any time
 - Configurable permission modes: Open, DM Approval, Owner Only
 - Real-time sync across all clients
 
@@ -72,6 +78,11 @@ Buttons disable after use to prevent duplicate spawns.
 - **Audit Log** — human-readable descriptions of every mutation with DM-accessible undo (event reversal)
 - **Idempotency Guards** — every mutation carries a unique request ID; duplicate events from websocket reconnects are automatically deduplicated
 - **Permission System** — configurable rules for loot claiming, cross-player effects, and inventory transfers
+
+### Battlemap
+- **Token Drag** — tokens represent PCs, monsters, and NPCs as percentage-positioned circles on the map; drag-and-drop with pointer capture API; positions sync to all clients via `move_token` socket
+- **HP Overlays** — each token shows a live HP bar correlated from initiative state (green/amber/red)
+- **DM Tools** — show/hide hidden tokens; "Sync from Initiative" spawns tokens for all active combatants
 
 ### World & Discovery
 - **Interactive World Map** — shared overworld with DM-controlled markers and discovery points
@@ -151,4 +162,4 @@ The project runs entirely on local hardware with no external cloud dependencies.
 | `/api/lore` | 1 | AI lore generation |
 | `/api/chat` | 1 | Rules assistant |
 
-**60 Socket.io real-time events** covering character state, combat, dice, loot, world, voice, effects, automation, and permissions.
+**70+ Socket.io real-time events** covering character state, combat, dice, loot, voting, world, voice, effects, automation, permissions, and battlemap tokens.
