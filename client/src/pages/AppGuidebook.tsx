@@ -13,7 +13,7 @@ import { cn } from '../lib/utils';
 import {
   BookOpen, Search, Scroll, Swords, Eye, Shield, Heart, Sparkles,
   Dices, Moon, Sun, Gem, Users, Zap, Map, HelpCircle, ChevronRight,
-  Mic, Globe, Package, ClipboardList, Compass, ArrowLeft,
+  Mic, Globe, Package, ClipboardList, Compass, ArrowLeft, Smartphone,
 } from 'lucide-react';
 
 // ── Guide content data ───────────────────────────────────────────────────
@@ -103,7 +103,7 @@ Already imported but leveled up on D&D Beyond? Open your character sheet and cli
 
 The collapsible sidebar on the left provides navigation to every major feature. It has two groups:
 
-- **Navigation** — Dashboard, New Character, Import, Party Lobby, Equipment, Compendium, World Map, Guide
+- **Navigation** — Dashboard, New Character, Import DDB, Party Lobby, Equipment, Compendium, World Map, Battlemap, Guide
 - **DM Tools** — DM Dashboard, Party Notes, Session Archive
 
 ## The Character Sheet
@@ -412,41 +412,59 @@ Every lore response has a **Send to Notes** button that saves the narrative text
 
 The **Initiative Tracker** is your combat command center. It supports:
 
-- **Automatic initiative rolling** — monsters roll d20 + DEX modifier when spawned
+- **Automatic initiative rolling** — click **Roll** in the header to roll d20 + DEX mod for every combatant at once
 - **Turn management** — Advance/Reverse buttons step through the turn order
 - **HP tracking** — inline +/- buttons on each combatant
 - **Visibility toggle** — hide monsters from players until they're revealed
-- **Reordering** — drag combatants to adjust the order manually
+- **Reordering** — use the chevron buttons on hover to adjust tie-break order
+
+## Combatant Sidecar
+
+Click any combatant's **name** to open the sidecar panel on the right. It shows:
+
+- Live HP bar and conditions
+- Full stat block (ability scores, saving throws, resistances, immunities, traits, and actions) — available for monsters spawned from the Compendium
+- **Effect History** — the last 8 events targeting that combatant, updating in real time
+
+Click the same name again (or press Escape) to close it. This lets you reference a monster's stat block mid-combat without leaving the tracker.
+
+## AoE / Multi-Target Effects
+
+To apply an effect to multiple combatants at once:
+
+1. Click the **checkbox** (⬜) next to each target in the tracker — the checkbox turns orange when selected
+2. Once ≥1 target is selected, an orange **AoE** button appears in the tracker header
+3. Click **AoE** to open the effect builder modal
+4. Add one or more effect rows: **Damage** (value + type), **Heal**, or **Condition**
+5. Click **Apply** — all effects are applied atomically in a single database transaction
+
+Results appear per-target in the modal summary. All events from the same AoE share a **group ID** in the Effect Timeline.
+
+## Quick Actions (DM)
+
+The ⚙ (Settings) button in the tracker header opens Quick Actions:
+
+- **Dismiss Dead** — instantly removes all combatants with HP ≤ 0
+- **Clear All Conditions** — wipes every condition from all player characters (useful after a long rest in camp)
 
 ## Spawning Monsters
 
-There are three ways to add monsters to combat:
-
 ### 1. Quick Spawn
-Click **Spawn Monster** in the combat controls. Enter a name, HP, AC, and initiative modifier. The monster is added with auto-rolled initiative.
+Click **+** in the tracker header. Enter a name, HP, AC, and initiative modifier.
 
 ### 2. From the Compendium
-Open the **Compendium** and find a monster (either homebrew or from the 5e SRD). Click **Add to Combat** on the stat block. The monster's full stats are preserved in the tracker.
+Open the **Compendium**, find a monster (SRD or homebrew), and click **Add to Combat**. The monster's full stat block is preserved in the tracker and available in the sidecar.
 
 ### 3. From the AI Lore Console
-Ask the AI to generate a monster. Click the **Add to Combat Tracker** button on the actionable response card.
+Ask the AI to generate a monster. Click **Add to Combat Tracker** on the response card.
 
 ## Encounter Builder
 
-For pre-planned encounters, use the **Encounter Builder**:
+For pre-planned encounters:
 
 1. Click **Encounters** in the combat controls
 2. Create a named encounter with a list of monsters (name, HP, AC, count)
 3. Click **Start Encounter** to clear the tracker and spawn all monsters + party PCs at once
-
-## During Combat
-
-Each round, the Initiative Tracker highlights the active combatant. The DM should:
-
-1. **Advance Turn** to move to the next combatant
-2. Apply damage/healing via the God-Eye View or inline tracker buttons
-3. Apply/remove conditions as needed
-4. The **Effect Timeline** automatically logs everything
 
 > **Tip:** The automation system can auto-apply aura effects and process turn-start/turn-end triggers if you've configured them in the Automation panel.`,
   },
@@ -507,22 +525,31 @@ Click **Automation** in the DM Dashboard header to open the automation configura
 - **Effect Processing** — Configure automatic aura effects, turn triggers, and condition duration tracking
 - **Broadcast Throttling** — The timeline broadcast is debounced to 100ms to prevent spam during rapid multi-target effects
 
-## Permission Configuration
+## Access Control Matrix
 
-The **Permission Config** card in the right column controls three permission categories:
+The **Access Control** card in the right column of the DM Dashboard is a visual permission matrix with three columns — **Open**, **Approval**, **DM/Owner Only** — and six configurable categories:
 
-### Loot Claim
-- **Open** — Anyone can claim loot freely
-- **DM Approval** — Claims go to a queue for your approval
-- **Owner Only** — Players can only claim for their own characters
+### Combat
+| Permission | What it controls |
+|---|---|
+| **Apply Effects to Others** | Can players cast heals, damage, or conditions on another player's character? |
+| **Self-Apply Conditions** | Can players toggle conditions (e.g. Prone) on their own character? |
+| **Monster HP Visibility** | Can players see exact HP numbers on enemy tokens? |
 
-### Cross-Player Effects
-- **Open** — Players can heal, buff, or apply effects to each other
-- **DM Approval** — Cross-player effects require DM confirmation
+### Loot & Items
+| Permission | What it controls |
+|---|---|
+| **Loot Claims** | Who can take items from the shared loot pool — Open, DM Approval, or Owner Only |
+| **Item Transfer** | Can players trade items between themselves without DM involvement? |
 
-### Inventory Transfer
-- **Open** — Players can freely move items
-- **DM Approval** — Transfers require approval
+### World
+| Permission | What it controls |
+|---|---|
+| **Party Notes** | Can players add or edit shared party notes, or is that DM-only? |
+
+Click any cell to activate it. Unavailable combinations (e.g. "Approval" for a binary permission) are shown as **—**. Hover any row to see a description of what the permission controls.
+
+> **DM actions always bypass all restrictions.** Permission checks only apply to player-initiated socket events.
 
 ## Idempotency Guards
 
@@ -630,6 +657,65 @@ Voice uses WebRTC with the server acting as a signaling relay:
 > **Note:** Voice quality depends on your local network. For best results, ensure all players are on the same LAN or have a stable connection to the host machine.`,
   },
   {
+    id: 'companion-view',
+    title: 'Player Companion View',
+    category: 'player',
+    icon: Smartphone,
+    content: `# Player Companion View
+
+The **Companion View** is a streamlined, mobile-optimized page designed to stay open on your phone while the full app runs on a laptop or tablet. It shows everything you need during your turn — HP, conditions, attacks, spell slots, and dice — without any navigation overhead.
+
+## Opening the Companion View
+
+Ask your DM to share the companion URL for your character. They can generate it instantly:
+
+1. DM opens your character sheet
+2. Clicks the **📱 phone icon** in the sheet header
+3. The URL is copied to clipboard — they send it to you
+
+The URL looks like: \`http://[server-address]/companion/3\`
+
+Open it on your phone. It connects to the same live session — no login required.
+
+## What You See
+
+### HP at a Glance
+Your current and maximum HP are displayed in large, color-coded numbers at the top:
+- **Green** — Healthy (above 50% HP)
+- **Amber** — Bloodied (25–50% HP)
+- **Red** — Critical (below 25% HP)
+- **Grey** — Dead or unconscious
+
+The HP bar updates in real time whenever the DM changes your HP.
+
+### Conditions
+Active conditions appear as orange badges below the HP bar. If the DM set a duration, you'll see the remaining rounds (e.g. **Prone (2r)**).
+
+### Ability Scores
+All six ability scores with their modifiers are displayed in a compact grid for quick reference.
+
+### Quick Attacks
+
+Tap any weapon in the **Quick Attacks** panel to instantly roll both attack and damage:
+
+1. The app rolls **d20 + your attack bonus** for the to-hit roll
+2. Rolls your **damage dice + modifier** automatically
+3. Both rolls are broadcast to the DM's Roll Feed in real time
+4. Criticals show a special toast notification
+
+### Spell Slot Tracker
+Spell slot pips show how many slots remain at each level. These update live when the DM processes spells or when you take a rest.
+
+### Dice Roller
+Tap **Dice Roller** at the bottom to expand a full dice roller. Supports all die types with a **Private/Public** toggle — private rolls appear only in the DM's feed, not the party stream.
+
+## Live Sync
+
+The companion view connects to the same server socket as the main app. All changes made by the DM (HP, conditions, buffs) appear on your companion screen within milliseconds.
+
+> **Note:** The companion view is read-optimized. For deeper sheet interaction — managing inventory, editing spells, viewing feats — use the full character sheet at \`/character/:id\`.`,
+  },
+  {
     id: 'world-quests',
     title: 'World Map & Quests',
     category: 'player',
@@ -729,50 +815,54 @@ Arcane Ally maintains a comprehensive, immutable record of every game event. Thi
 
 The **Effect Timeline** card in the DM Dashboard's right column shows events grouped by combat round:
 
-- **Damage** events (red) — who dealt how much of what type to whom
-- **Healing** events (green) — restoration amounts
-- **Conditions** (orange) — applied/removed with timestamps
-- **Buffs** (blue) — buff applications and removals
-- **Concentration** (violet) — start/drop events
-- **Spell Slots** (purple) — consumption tracking
-- **Loot** (gold) — claims and drops
-- **Rests** (teal) — short and long rest events
+- **DMG** (red) — who dealt how much of what damage type to whom
+- **HEAL** (green) — restoration amounts
+- **COND** (orange) — conditions applied/removed with timestamps
+- **BUFF** (blue) — buff applications and removals
+- **CON✓ / CONC!** (violet/rose) — concentration check results
+- **AUTO** (orange) — automated aura or turn-trigger effects
+- **UNDO** (slate) — reversal records
 
-Each event type has a distinct color matching the dark-fantasy theme.
+Each event type has a distinct color badge. Use the legend at the top to filter by type — click a badge to show only those events.
+
+## AoE Group Events
+
+When the DM applies an **Area of Effect** (multi-target) effect, all events from that action are grouped together in the timeline with an orange ⚡ **AoE** header row showing:
+
+- Number of targets hit
+- Total damage dealt (if applicable)
+- An expand/collapse chevron to show/hide the individual per-target events
+
+The DM can **undo the entire group at once** using the ↩ button on the group header. This reverses all events in the batch atomically — no need to undo each target one by one.
+
+## Per-Event Undo (DM only)
+
+Individual events also have a per-event ↩ undo button. Clicking it:
+1. Applies the inverse operation (damage → heals the target; condition applied → removes it)
+2. Creates a new **UNDO** record in the timeline
+3. Marks the original event as reversed (shown with strikethrough + 40% opacity)
+
+> **Tip:** Reversal is for correcting mistakes, not time travel. The original event stays in the log, marked as reversed, preserving the full audit trail.
+
+## Exporting the Combat Log
+
+Click the **↓ download** button (next to the filter bar) to export the full timeline as a **Markdown file**. The file is named \`combat-log-YYYY-MM-DD.md\` and contains:
+
+- A header with the date and total event count
+- One section per round with a formatted table of events
+- Reversed events shown with ~~strikethrough~~ so they're clearly visible
+
+This is ideal for session notes, Discord recaps, or archiving what actually happened in a dramatic encounter.
+
+## Filtering the Timeline
+
+- **Text filter** — type a character name, event type, or keyword to narrow down events
+- **Type badges** — click any badge (DMG, HEAL, COND, etc.) in the legend to filter to that type
+- Click the same badge again to clear the filter
 
 ## Audit Log
 
-The **Audit Log** sits below the Effect Timeline and provides human-readable descriptions:
-
-> "DM dealt 8 fire damage to Goblin Scout"
-> "Elara healed Thorin for 12 HP"
-> "DM applied Frightened to Dire Wolf"
-
-### Filtering
-
-Filter audit entries by category:
-- **Combat** — damage, healing
-- **Status** — conditions, buffs
-- **Conc.** — concentration events
-- **Resources** — spell slots, hit dice, rests
-- **Auto** — automated effects from the rules engine
-
-### Event Reversal
-
-Each event in the Audit Log has an **undo button** (DM only). Clicking it:
-1. Applies the inverse operation (damage → heal, condition applied → removed)
-2. Creates a new "reversal" event in the timeline
-3. Marks the original event as reversed
-
-> **Tip:** Reversal is for correcting mistakes, not time travel. The original event remains in the log, marked as reversed, preserving the full audit trail.
-
-## Effect Diff Engine
-
-The **Effect Diff Engine** tracks state changes between broadcasts, highlighting what changed since the last update. Useful for debugging complex multi-target effects.
-
-## Sync Audit View
-
-The **Sync Audit View** shows the raw synchronization state, helping diagnose any discrepancies between client and server state.`,
+The **Audit Log** (in the DM Dashboard) provides human-readable descriptions of every mutation. Filter by category: **Combat**, **Status**, **Conc.**, **Resources**, **Auto**.`,
   },
   {
     id: 'ai-features',

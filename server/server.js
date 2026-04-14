@@ -447,6 +447,17 @@ io.on('connection', (socket) => {
     socket.emit('timeline_update', getCombatTimeline(db));
     socket.emit('permissions_state', getPermissions(db));
 
+    // ── Companion view pull ───────────────────────────────────────────────────
+    // Emits party_state only to the requesting socket (used by /companion/:id)
+    socket.on('request_party_state', () => {
+        const characters = getAllCharacters();
+        const resolved = characters.map(char => {
+            const resolvedState = getResolvedCharacterState(db, char.id);
+            return resolvedState || { ...char, currentHp: char.current_hp, maxHp: char.max_hp };
+        });
+        socket.emit('party_state', resolved);
+    });
+
     socket.on('log_action', async ({ actor, description, useLlm }, callback) => {
         if (!actor || !description) return callback?.({ success: false });
         if (!useLlm) {
@@ -1668,6 +1679,34 @@ io.on('connection', (socket) => {
         } else {
             socket.emit('rules_error', { message: result.error });
         }
+    });
+
+    // ── Group Undo ────────────────────────────────────────────────────────────
+    socket.on('reverse_group', ({ groupId }) => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        if (!groupId) { socket.emit('rules_error', { message: 'groupId required' }); return; }
+
+        const REVERSIBLE = ['damage', 'heal', 'condition_applied', 'condition_removed'];
+        const groupEvents = db.prepare(
+            `SELECT * FROM effect_events WHERE group_id = ? AND is_reversed = 0 AND event_type IN (${REVERSIBLE.map(() => '?').join(',')})`
+        ).all(groupId, ...REVERSIBLE);
+
+        if (groupEvents.length === 0) {
+            socket.emit('rules_error', { message: 'No reversible events in this group (already undone?)' });
+            return;
+        }
+
+        let reversed = 0;
+        db.transaction(() => {
+            for (const ev of groupEvents) {
+                const result = reverseEvent(db, ev.id, 'DM', applyDamageEvent, applyHealEvent, applyConditionEvent, removeConditionEvent);
+                if (result.success) reversed++;
+            }
+        })();
+
+        broadcastPartyState();
+        broadcastTimelineImmediate();
+        logAction('DM', `Group undo — reversed ${reversed} event(s) from AoE group ${groupId}`);
     });
 
     // ── AoE / Multi-target Effect ──────────────────────────────────────────────

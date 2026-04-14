@@ -12,6 +12,9 @@ const DEFAULTS = {
     loot_claim: 'open',
     cross_player_effects: 'open',
     inventory_transfer: 'open',
+    view_monster_hp: 'open',
+    edit_party_notes: 'open',
+    condition_self_apply: 'open',
 };
 
 function getPermissions(db) {

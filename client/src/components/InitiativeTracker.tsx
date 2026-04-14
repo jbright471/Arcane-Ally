@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import socket from '../socket';
 import { CombatReportModal } from './CombatReportModal';
 import { AoEEffectModal, type AoETarget } from './AoEEffectModal';
+import { CombatantSidebar } from './CombatantSidebar';
 
 // ─── Sorting Utility ─────────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ interface Combatant {
   conditions: string[];
   concentrating_on: string | null;
   hp_status: string;
+  stats_json: Record<string, any> | null;
 }
 
 /**
@@ -128,6 +130,7 @@ export function InitiativeTracker() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showAoE, setShowAoE] = useState(false);
+  const [sidebarCombatant, setSidebarCombatant] = useState<Combatant | null>(null);
   const [reportData, setReportData] = useState<{
     report: string | null;
     events: Array<{ round: number; actor: string; action: string; target: string; detail: string }>;
@@ -460,9 +463,13 @@ export function InitiativeTracker() {
 
                   {/* Name + type badge + conditions */}
                   <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
-                    <span className={`font-display text-sm truncate transition-colors ${
-                      isActive ? 'text-primary font-semibold' : isDead ? 'line-through text-muted-foreground/50' : ''
-                    }`}>
+                    <span
+                      className={`font-display text-sm truncate transition-colors cursor-pointer hover:underline decoration-primary/40 underline-offset-2 ${
+                        isActive ? 'text-primary font-semibold' : isDead ? 'line-through text-muted-foreground/50' : ''
+                      }`}
+                      onClick={() => setSidebarCombatant(prev => prev?.id === ent.id ? null : ent)}
+                      title="View stat block"
+                    >
                       {ent.entity_name}
                     </span>
                     {!isPC && (
@@ -607,6 +614,10 @@ export function InitiativeTracker() {
           open={showAoE}
           onClose={() => { setShowAoE(false); setSelectedIds(new Set()); }}
           targets={selectedAoETargets}
+        />
+        <CombatantSidebar
+          combatant={sidebarCombatant}
+          onClose={() => setSidebarCombatant(null)}
         />
       </CardContent>
     </Card>

@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import {
   Heart, Shield, Footprints, Trash2, ArrowLeft, Swords,
-  Sparkles, RefreshCw, Brain, Zap, Dices, ChevronDown, ChevronUp,
+  Sparkles, RefreshCw, Brain, Zap, Dices, ChevronDown, ChevronUp, Smartphone,
 } from 'lucide-react';
 import { type RollFeedEvent, getRollTypeMeta } from '../types/effects';
 import { DiceRoller } from '../components/DiceRoller';
@@ -197,6 +197,20 @@ export default function CharacterSheet() {
           </div>
           <div className="flex gap-2 shrink-0">
             <RestManager character={character} />
+            <Button
+              variant="outline"
+              size="sm"
+              title="Copy companion view URL for player"
+              onClick={() => {
+                const url = `${window.location.origin}/companion/${character.id}`;
+                navigator.clipboard.writeText(url).then(
+                  () => toast.success('Companion URL copied!', { description: url, duration: 4000 }),
+                  () => toast.error('Could not copy — ' + url),
+                );
+              }}
+            >
+              <Smartphone className="h-4 w-4" />
+            </Button>
             <Button variant="outline" size="sm" onClick={handleSync} disabled={isSyncing}>
               <RefreshCw className={`h-4 w-4 mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
               Sync DDB
