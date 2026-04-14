@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Clock, Trash2, ChevronDown, ChevronUp, Zap, RotateCcw } from 'lucide-react';
+import { Clock, Trash2, Download, ChevronDown, ChevronUp, Zap, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { useGame } from '../context/GameContext';
 import socket from '../socket';
 
-interface EffectEvent {
+export interface EffectEvent {
   id: number;
   session_round: number;
   turn_index: number;
@@ -24,6 +24,7 @@ interface EffectEvent {
   description: string | null;
   is_reversed: number;
   reversed_by_event_id: number | null;
+  group_id: string | null;
   created_at: string;
 }
 
@@ -81,6 +82,154 @@ function groupByRound(events: EffectEvent[]): Map<number, EffectEvent[]> {
   return map;
 }
 
+// ─── Display sequence builder ─────────────────────────────────────────────────
+// Collapses events sharing a group_id into a single group entry (at first occurrence position).
+
+type DisplayItem =
+  | { kind: 'solo'; event: EffectEvent }
+  | { kind: 'group'; groupId: string; events: EffectEvent[] };
+
+function buildDisplaySequence(events: EffectEvent[]): DisplayItem[] {
+  const groupMap = new Map<string, EffectEvent[]>();
+  for (const e of events) {
+    if (e.group_id) {
+      if (!groupMap.has(e.group_id)) groupMap.set(e.group_id, []);
+      groupMap.get(e.group_id)!.push(e);
+    }
+  }
+
+  const items: DisplayItem[] = [];
+  const seenGroups = new Set<string>();
+  for (const e of events) {
+    if (!e.group_id) {
+      items.push({ kind: 'solo', event: e });
+    } else if (!seenGroups.has(e.group_id)) {
+      seenGroups.add(e.group_id);
+      items.push({ kind: 'group', groupId: e.group_id, events: groupMap.get(e.group_id)! });
+    }
+  }
+  return items;
+}
+
+function AoEGroupSummary({ events }: { events: EffectEvent[] }) {
+  const uniqueTargets = new Set(events.map(e => e.target_name).filter(Boolean)).size;
+  const types = [...new Set(events.map(e => e.event_type))];
+  const dmgTotal = events
+    .filter(e => e.event_type === 'damage' && !e.is_reversed)
+    .reduce((sum, e) => {
+      try { return sum + (JSON.parse(e.payload_json)?.value || 0); } catch { return sum; }
+    }, 0);
+
+  const parts: string[] = [`${uniqueTargets} target${uniqueTargets !== 1 ? 's' : ''}`];
+  if (dmgTotal > 0) parts.push(`${dmgTotal} dmg`);
+  if (types.includes('condition_applied')) parts.push('conditions');
+
+  return (
+    <span className="text-foreground/70 flex-1 text-[10px]">
+      {parts.join(' · ')}
+    </span>
+  );
+}
+
+// ─── Single event row ─────────────────────────────────────────────────────────
+
+function EventRow({ event, isDm, indented = false }: { event: EffectEvent; isDm: boolean; indented?: boolean }) {
+  const isUndo = event.phase === 'undo';
+  const effectiveMeta = isUndo ? EVENT_META.undo : (EVENT_META[event.event_type] || EVENT_META.unknown);
+  const isChild = event.parent_event_id !== null;
+  const isAuto = event.source_preset_id !== null || event.event_type === 'automation_trigger';
+  const isReversed = event.is_reversed === 1;
+  const canUndo = isDm && !isReversed && !isUndo && REVERSIBLE_TYPES.has(event.event_type);
+
+  return (
+    <div
+      className={`flex items-start gap-1.5 px-2 py-1 rounded border text-[10px] ${effectiveMeta.bg} ${(isChild || indented) ? 'ml-3' : ''} ${isReversed ? 'opacity-40' : ''}`}
+    >
+      {(isChild || indented) && (
+        <span className="text-muted-foreground/30 mt-0.5 shrink-0">↳</span>
+      )}
+      <span className={`font-bold shrink-0 uppercase tracking-wide ${effectiveMeta.color}`}>
+        {effectiveMeta.label}
+      </span>
+      <span className={`text-foreground/70 flex-1 leading-tight ${isReversed ? 'line-through' : ''}`}>
+        {getEventSummary(event)}
+      </span>
+      <div className="flex items-center gap-1 shrink-0">
+        {isReversed && (
+          <RotateCcw className="h-2.5 w-2.5 text-slate-500" title="Undone" />
+        )}
+        {isAuto && !isReversed && (
+          <Zap className="h-2.5 w-2.5 text-orange-400" title="Automation" />
+        )}
+        <span className="text-muted-foreground/40 font-mono text-[8px]">
+          T{event.turn_index}
+        </span>
+        {canUndo && (
+          <button
+            className="ml-1 text-muted-foreground/50 hover:text-amber-400 transition-colors"
+            title="Undo this effect"
+            onClick={() => socket.emit('reverse_event', { eventId: event.id })}
+          >
+            <RotateCcw className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── AoE group row ────────────────────────────────────────────────────────────
+
+function AoEGroupRow({ groupId, events, isDm, isExpanded, onToggle }: {
+  groupId: string;
+  events: EffectEvent[];
+  isDm: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const hasReversible = events.some(e => !e.is_reversed && REVERSIBLE_TYPES.has(e.event_type));
+  const allReversed = events.every(e => e.is_reversed === 1);
+
+  return (
+    <div className="space-y-0.5">
+      {/* Group header */}
+      <div
+        className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] bg-orange-950/30 border-orange-700/30 cursor-pointer select-none ${allReversed ? 'opacity-40' : ''}`}
+        onClick={onToggle}
+      >
+        <Zap className="h-2.5 w-2.5 text-orange-400 shrink-0" />
+        <span className="font-bold text-orange-400 uppercase tracking-wide shrink-0">AoE</span>
+        <AoEGroupSummary events={events} />
+        <div className="flex items-center gap-1 shrink-0">
+          {isDm && hasReversible && (
+            <button
+              className="text-muted-foreground/50 hover:text-amber-400 transition-colors"
+              title="Undo all events in this group"
+              onClick={e => { e.stopPropagation(); socket.emit('reverse_group', { groupId }); }}
+            >
+              <RotateCcw className="h-2.5 w-2.5" />
+            </button>
+          )}
+          {isExpanded
+            ? <ChevronUp className="h-2.5 w-2.5 text-muted-foreground/40" />
+            : <ChevronDown className="h-2.5 w-2.5 text-muted-foreground/40" />
+          }
+        </div>
+      </div>
+      {/* Individual events when expanded */}
+      {isExpanded && (
+        <div className="space-y-0.5">
+          {events.map(ev => (
+            <EventRow key={ev.id} event={ev} isDm={isDm} indented />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export function EffectTimeline() {
   const { state } = useGame();
   const isDm = state.isDm;
@@ -89,6 +238,7 @@ export function EffectTimeline() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [filter, setFilter] = useState('');
   const [undoError, setUndoError] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -126,7 +276,62 @@ export function EffectTimeline() {
   const grouped = groupByRound(filtered);
   const rounds = [...grouped.keys()].sort((a, b) => a - b);
 
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      next.has(groupId) ? next.delete(groupId) : next.add(groupId);
+      return next;
+    });
+  };
+
   const handleClear = () => socket.emit('clear_effect_timeline');
+
+  const handleExport = async () => {
+    let allEvents: EffectEvent[] = events;
+    try {
+      const res = await fetch('/api/effect-timeline');
+      allEvents = await res.json();
+    } catch { /* use in-state events */ }
+
+    const date = new Date().toISOString().slice(0, 10);
+    const reversedCount = allEvents.filter(e => e.is_reversed).length;
+    const lines: string[] = [
+      `# Arcane Ally — Combat Log`,
+      `**Exported:** ${date}  `,
+      `**Total Events:** ${allEvents.length}${reversedCount > 0 ? ` (${reversedCount} reversed)` : ''}`,
+      ``,
+      `---`,
+    ];
+
+    const byRound = groupByRound(allEvents);
+    const rounds = [...byRound.keys()].sort((a, b) => a - b);
+    for (const round of rounds) {
+      lines.push(``, `## ${round === 0 ? 'Pre-Combat' : `Round ${round}`}`, ``);
+      lines.push(`| Turn | Actor | Type | Target | Detail |`);
+      lines.push(`|------|-------|------|--------|--------|`);
+      for (const ev of byRound.get(round)!) {
+        const type = ev.phase === 'undo' ? 'UNDO' : (EVENT_META[ev.event_type]?.label ?? ev.event_type.toUpperCase());
+        const summary = getEventSummary(ev);
+        const target = ev.target_name ?? '—';
+        const actor = ev.actor;
+        const turn = `T${ev.turn_index}`;
+        if (ev.is_reversed) {
+          lines.push(`| ${turn} | ~~${actor}~~ | ~~${type}~~ | ~~${target}~~ | ~~${summary}~~ _(undone)_ |`);
+        } else {
+          lines.push(`| ${turn} | ${actor} | ${type} | ${target} | ${summary} |`);
+        }
+      }
+    }
+    lines.push(``, `---`, `_Generated by Arcane Ally_`);
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `combat-log-${date}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Card className="border-primary/20 bg-secondary/5">
@@ -155,6 +360,15 @@ export function EffectTimeline() {
               placeholder="Filter by character or type..."
               className="flex-1 h-7 rounded-md border border-input bg-background/50 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
             />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-[10px] text-muted-foreground hover:text-primary"
+              onClick={handleExport}
+              title="Export as markdown"
+            >
+              <Download className="h-3 w-3" />
+            </Button>
             <Button
               size="sm"
               variant="ghost"
@@ -197,69 +411,39 @@ export function EffectTimeline() {
               </div>
             ) : (
               <div className="space-y-3 pr-2">
-                {rounds.map(round => (
-                  <div key={round}>
-                    {/* Round header */}
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="text-[9px] font-bold text-primary/60 uppercase tracking-widest">
-                        {round === 0 ? 'Pre-Combat' : `Round ${round}`}
+                {rounds.map(round => {
+                  const sequence = buildDisplaySequence(grouped.get(round)!);
+                  return (
+                    <div key={round}>
+                      {/* Round header */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="text-[9px] font-bold text-primary/60 uppercase tracking-widest">
+                          {round === 0 ? 'Pre-Combat' : `Round ${round}`}
+                        </div>
+                        <div className="flex-1 h-px bg-primary/10" />
+                        <span className="text-[8px] text-muted-foreground/40">{grouped.get(round)!.length} events</span>
                       </div>
-                      <div className="flex-1 h-px bg-primary/10" />
-                      <span className="text-[8px] text-muted-foreground/40">{grouped.get(round)!.length} events</span>
-                    </div>
 
-                    {/* Events in this round */}
-                    <div className="space-y-0.5">
-                      {grouped.get(round)!.map(event => {
-                        const isUndo = event.phase === 'undo';
-                        const effectiveMeta = isUndo
-                          ? EVENT_META.undo
-                          : (EVENT_META[event.event_type] || EVENT_META.unknown);
-                        const isChild = event.parent_event_id !== null;
-                        const isAuto = event.source_preset_id !== null || event.event_type === 'automation_trigger';
-                        const isReversed = event.is_reversed === 1;
-                        const canUndo = isDm && !isReversed && !isUndo && REVERSIBLE_TYPES.has(event.event_type);
-
-                        return (
-                          <div
-                            key={event.id}
-                            className={`flex items-start gap-1.5 px-2 py-1 rounded border text-[10px] ${effectiveMeta.bg} ${isChild ? 'ml-3' : ''} ${isReversed ? 'opacity-40' : ''}`}
-                          >
-                            {isChild && (
-                              <span className="text-muted-foreground/30 mt-0.5 shrink-0">↳</span>
-                            )}
-                            <span className={`font-bold shrink-0 uppercase tracking-wide ${effectiveMeta.color}`}>
-                              {effectiveMeta.label}
-                            </span>
-                            <span className={`text-foreground/70 flex-1 leading-tight ${isReversed ? 'line-through' : ''}`}>
-                              {getEventSummary(event)}
-                            </span>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {isReversed && (
-                                <RotateCcw className="h-2.5 w-2.5 text-slate-500" title="Undone" />
-                              )}
-                              {isAuto && !isReversed && (
-                                <Zap className="h-2.5 w-2.5 text-orange-400" title="Automation" />
-                              )}
-                              <span className="text-muted-foreground/40 font-mono text-[8px]">
-                                T{event.turn_index}
-                              </span>
-                              {canUndo && (
-                                <button
-                                  className="ml-1 text-muted-foreground/50 hover:text-amber-400 transition-colors"
-                                  title="Undo this effect"
-                                  onClick={() => socket.emit('reverse_event', { eventId: event.id })}
-                                >
-                                  <RotateCcw className="h-2.5 w-2.5" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                      {/* Display items */}
+                      <div className="space-y-0.5">
+                        {sequence.map((item, idx) =>
+                          item.kind === 'solo' ? (
+                            <EventRow key={item.event.id} event={item.event} isDm={isDm} />
+                          ) : (
+                            <AoEGroupRow
+                              key={`group-${item.groupId}-${idx}`}
+                              groupId={item.groupId}
+                              events={item.events}
+                              isDm={isDm}
+                              isExpanded={expandedGroups.has(item.groupId)}
+                              onToggle={() => toggleGroup(item.groupId)}
+                            />
+                          )
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </ScrollArea>

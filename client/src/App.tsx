@@ -24,6 +24,7 @@ import SessionArchive from "./pages/SessionArchive";
 import WorldMap from "./pages/WorldMap";
 import AppGuidebook from "./pages/AppGuidebook";
 import BattleMap from "./pages/BattleMap";
+import CompanionPage from "./pages/CompanionPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -107,27 +108,37 @@ const App = () => (
         <ConcentrationAlerts />
         <SavingThrowAlerts />
         <BrowserRouter>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/character/new" element={<CharacterCreate />} />
-              <Route path="/character/import" element={<CharacterImport />} />
-              <Route path="/character/:id" element={<CharacterSheet />} />
-              <Route path="/party" element={<PartyLobby />} />
-              <Route path="/equipment" element={<EquipmentManager />} />
-              <Route path="/compendium" element={<Compendium />} />
-              <Route path="/dm" element={<DmDashboard />} />
-              <Route path="/notes" element={<PartyNotesPage />} />
-              <Route path="/archive" element={<SessionArchive />} />
-              <Route path="/worldmap" element={<WorldMap />} />
-              <Route path="/battlemap" element={<BattleMap />} />
-              <Route path="/guide" element={<AppGuidebook />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Layout>
-          <RulesAssistant />
-          <VoiceChat />
-          <EffectStream />
+          <Routes>
+            {/* Standalone — no sidebar/header */}
+            <Route path="/companion/:characterId" element={<CompanionPage />} />
+
+            {/* Main app shell */}
+            <Route path="/*" element={
+              <>
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/character/new" element={<CharacterCreate />} />
+                    <Route path="/character/import" element={<CharacterImport />} />
+                    <Route path="/character/:id" element={<CharacterSheet />} />
+                    <Route path="/party" element={<PartyLobby />} />
+                    <Route path="/equipment" element={<EquipmentManager />} />
+                    <Route path="/compendium" element={<Compendium />} />
+                    <Route path="/dm" element={<DmDashboard />} />
+                    <Route path="/notes" element={<PartyNotesPage />} />
+                    <Route path="/archive" element={<SessionArchive />} />
+                    <Route path="/worldmap" element={<WorldMap />} />
+                    <Route path="/battlemap" element={<BattleMap />} />
+                    <Route path="/guide" element={<AppGuidebook />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Layout>
+                <RulesAssistant />
+                <VoiceChat />
+                <EffectStream />
+              </>
+            } />
+          </Routes>
         </BrowserRouter>
       </GameProvider>
     </TooltipProvider>

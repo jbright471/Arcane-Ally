@@ -16,6 +16,9 @@ export interface ResourcePermissions {
   loot_claim: 'open' | 'dm_approval' | 'owner_only';
   cross_player_effects: 'open' | 'dm_approval';
   inventory_transfer: 'open' | 'dm_approval';
+  view_monster_hp: 'open' | 'dm_only';
+  edit_party_notes: 'open' | 'dm_only';
+  condition_self_apply: 'open' | 'dm_approval';
 }
 
 interface GameState {
@@ -105,7 +108,7 @@ const GameContext = createContext<{
     sharedLoot: [],
     isDm: false,
     dmToken: null,
-    permissions: { loot_claim: 'open', cross_player_effects: 'open', inventory_transfer: 'open' },
+    permissions: { loot_claim: 'open', cross_player_effects: 'open', inventory_transfer: 'open', view_monster_hp: 'open', edit_party_notes: 'open', condition_self_apply: 'open' },
   },
   socket: null,
   setDmAuth: () => {},
@@ -121,7 +124,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [isApprovalMode, setIsApprovalMode] = useState(false);
   const [effectEvents, setEffectEvents] = useState<EffectEvent[]>([]);
   const [sharedLoot, setSharedLoot] = useState<SharedLootItem[]>([]);
-  const [permissions, setPermissions] = useState<ResourcePermissions>({ loot_claim: 'open', cross_player_effects: 'open', inventory_transfer: 'open' });
+  const [permissions, setPermissions] = useState<ResourcePermissions>({ loot_claim: 'open', cross_player_effects: 'open', inventory_transfer: 'open', view_monster_hp: 'open', edit_party_notes: 'open', condition_self_apply: 'open' });
   const [isDm, setIsDm] = useState<boolean>(() => {
     return !!localStorage.getItem('dm_token');
   });
