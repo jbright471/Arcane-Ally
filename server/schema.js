@@ -352,6 +352,12 @@ function runMigrations() {
   // ---- Phase 18.0: Loot auction / Need-vs-Greed voting ----
   addColumnSafe('shared_loot', 'vote_state_json', "TEXT DEFAULT NULL");
 
+  // ---- Phase 19.0: DM Prep Packs (Encounter Staging) ----
+  addColumnSafe('encounters', 'maps_json', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'notes_json', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'automation_presets_json', "TEXT DEFAULT '[]'");
+  addColumnSafe('automation_presets', 'encounter_id', "INTEGER DEFAULT NULL");
+
   console.log('[DB] Migrations complete.');
 }
 

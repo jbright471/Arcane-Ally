@@ -249,6 +249,52 @@ function applyPartyEffect(db, effects, targetsSpec, actor, sessionRound, turnInd
 }
 
 /**
+ * Preview an array of effects against an array of resolved targets, inside a rolled-back transaction.
+ * Returns an array of { targetId, targetName, targetType, eventType, logMessage, success, effect } records, representing
+ * what would happen without actually committing it to the database.
+ */
+function previewPartyEffect(db, effects, targetsSpec) {
+    const targets = resolveTargets(db, targetsSpec);
+    let records = [];
+
+    try {
+        db.transaction(() => {
+            for (const target of targets) {
+                // Skip entities that are already at 0 HP (Dead) for damage effects
+                if (target.type === 'monster') {
+                    const entity = db.prepare('SELECT current_hp FROM initiative_tracker WHERE id = ?').get(target.id);
+                    if (entity && entity.current_hp <= 0 && effects.every(e => e.type === 'damage')) continue;
+                }
+
+                for (const effect of effects) {
+                    const { result, eventType } = target.type === 'character'
+                        ? applyToCharacter(db, target.id, effect)
+                        : applyToMonster(db, target.id, effect);
+
+                    records.push({
+                        targetId: target.id,
+                        targetName: target.name,
+                        targetType: target.type,
+                        eventType,
+                        logMessage: result.logMessage || result.error,
+                        success: result.success,
+                        effect: effect,
+                        result: result, // Contains diffs like newHp
+                    });
+                }
+            }
+            throw new Error('ROLLBACK_PREVIEW');
+        })();
+    } catch (err) {
+        if (err.message !== 'ROLLBACK_PREVIEW') {
+            throw err;
+        }
+    }
+
+    return records;
+}
+
+/**
  * Process turn-trigger presets that match the given phase and active entity.
  * Called from server.js on the `next_turn` socket event.
  */
@@ -362,6 +408,7 @@ function getFilteredTimeline(db, { limit = 200, round, eventType, targetId } = {
 
 module.exports = {
     applyPartyEffect,
+    previewPartyEffect,
     resolveTargets,
     processTurnTriggers,
     processAurasForTurn,

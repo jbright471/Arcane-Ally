@@ -84,11 +84,25 @@ export function EncounterBuilderModal({ open, onClose, onStartEncounter }: Encou
       const text = await navigator.clipboard.readText();
       const data = JSON.parse(text);
       if (!data.name || !Array.isArray(data.monsters)) throw new Error();
+
+      // If it's a full Prep Pack with advanced fields, import it directly
+      if (data.maps || data.notes || data.automation_presets) {
+        const res = await fetch('/api/prep-packs/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: text
+        });
+        if (!res.ok) throw new Error();
+        toast.success('Prep Pack imported successfully!');
+        fetchEncounters();
+        return;
+      }
+
       setNewEncounter({ name: data.name, monsters: data.monsters });
       setIsCreating(true);
       toast.success('Encounter pasted — review and save.');
     } catch {
-      toast.error('Clipboard does not contain a valid encounter.');
+      toast.error('Clipboard does not contain a valid encounter or prep pack.');
     }
   };
 
@@ -176,10 +190,10 @@ export function EncounterBuilderModal({ open, onClose, onStartEncounter }: Encou
                   </button>
                   <button
                     onClick={handlePaste}
-                    title="Paste encounter from clipboard"
+                    title="Paste encounter or prep pack from clipboard"
                     className="border-2 border-dashed border-border rounded-lg px-4 text-muted-foreground hover:text-primary hover:border-primary/50 transition-all flex items-center gap-1.5 text-xs font-bold"
                   >
-                    <ClipboardPaste className="h-4 w-4" /> Paste
+                    <ClipboardPaste className="h-4 w-4" /> Import Pack
                   </button>
                 </div>
 

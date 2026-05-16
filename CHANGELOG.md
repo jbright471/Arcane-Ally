@@ -4,6 +4,12 @@ All notable changes to the **DnD Party Sync** project will be documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## [1.12.0] - 2026-05-15
+
+### Added
+- **👀 Effect Preview & Consent Log**: DMs can now preview the exact outcome of AoE and party effects (damage, healing, conditions) before they hit the database. Players receive a sticky toast to securely **[Accept]** or **[Reject]** the incoming effect in real-time, preventing silent data mutations.
+- **📦 DM Prep Pack Import & Encounter Staging**: Added support for bundling encounters with maps, notes, and specific automation presets into a single JSON "Prep Pack." Pasting a Prep Pack into the Encounter Builder now natively unpacks and sandboxes the encounter, keeping global automation presets clean.
+
 ## [1.11.0] - 2026-03-23
 
 ### Added
