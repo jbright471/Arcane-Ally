@@ -16,6 +16,7 @@ const questsRouter = require('./routes/quests');
 const worldRouter = require('./routes/world');
 const notesRouter = require('./routes/notes');
 const homebrewRouter = require('./routes/homebrew');
+const prepPacksRouter = require('./routes/prepPacks');
 const db = require('./db');
 const { askRulesAssistant, resolveActionLLM, generateSessionRecap, generateCombatReport, generateLoreLLM } = require('./ollama');
 const { backupDatabase } = require('./backup');
@@ -24,6 +25,7 @@ const automationRouter = require('./routes/automation');
 const dmNotesRouter = require('./routes/dmNotes');
 const {
     applyPartyEffect,
+    previewPartyEffect,
     resolveTargets,
     processTurnTriggers,
     processAurasForTurn,
@@ -126,6 +128,7 @@ app.use('/api/notes', notesRouter);
 app.use('/api/homebrew', homebrewRouter);
 app.use('/api/automation', automationRouter);
 app.use('/api/dm-notes', dmNotesRouter);
+app.use('/api/prep-packs', prepPacksRouter);
 
 // DM Auth — validates PIN and returns a session token stored in campaign_state
 const { randomUUID } = require('crypto');
@@ -243,8 +246,9 @@ app.post('/api/recaps/combat', (req, res) => {
 
 // --- Global State ---
 let isApprovalMode = false;
-const playerSocketMap = new Map();
-const voiceRoom = new Map(); // socketId -> { characterId, playerName }
+const playerSocketMap = new Map(); // socket.id -> { characterId, playerName }
+const voiceRoom = new Map(); // socket.id -> { characterId, playerName }
+const pendingEffects = new Map(); // pending_id -> { timeout, payload }
 
 // Combat round/turn tracking (reset on start/end encounter)
 let currentCombatRound = 0;
@@ -1406,6 +1410,55 @@ io.on('connection', (socket) => {
     });
 
     // ── Party Effect Engine ──────────────────────────────────────────────────
+    socket.on('request_effect', ({ effects, targets, actor }) => {
+        if (!effects || !Array.isArray(effects) || effects.length === 0) return;
+        const records = previewPartyEffect(db, effects, targets || 'party');
+        if (!records || records.length === 0 || !records.some(r => r.success)) {
+            socket.emit('rules_error', { message: 'Effect preview yielded no valid targets or all failed.' });
+            return;
+        }
+
+        const pendingId = randomUUID();
+        const timeout = setTimeout(() => {
+            pendingEffects.delete(pendingId);
+            io.emit('effect_preview_expired', { pendingId });
+            logAction(actor || 'System', `Pending effect request expired.`);
+        }, 60000); // 60 seconds
+
+        pendingEffects.set(pendingId, { timeout, payload: { effects, targets, actor }, records });
+        io.emit('incoming_effect_preview', { pendingId, actor, records });
+    });
+
+    socket.on('resolve_pending_effect', ({ pendingId, action }) => {
+        const pending = pendingEffects.get(pendingId);
+        if (!pending) {
+            socket.emit('rules_error', { message: 'Pending effect not found or expired.' });
+            return;
+        }
+
+        clearTimeout(pending.timeout);
+        pendingEffects.delete(pendingId);
+
+        if (action === 'accept') {
+            const { effects, targets, actor } = pending.payload;
+            const results = applyPartyEffect(
+                db, effects, targets || 'party',
+                actor || 'DM', currentCombatRound, currentTurnIndex, 'action', null
+            );
+            if (results.some(r => r.success)) {
+                broadcastPartyState();
+                broadcastInitiative();
+                broadcastTimeline();
+                const summary = results.filter(r => r.success).map(r => r.logMessage).join(' | ');
+                logAction(actor || 'DM', `Party effect applied — ${summary}`);
+            }
+            io.emit('effect_preview_resolved', { pendingId, action });
+        } else {
+            io.emit('effect_preview_resolved', { pendingId, action: 'reject' });
+            logAction(pending.payload.actor || 'DM', `Effect request rejected.`);
+        }
+    });
+
     socket.on('apply_party_effect', ({ effects, targets, actor }) => {
         if (!effects || !Array.isArray(effects) || effects.length === 0) return;
         const results = applyPartyEffect(

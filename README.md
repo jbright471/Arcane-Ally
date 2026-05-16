@@ -63,7 +63,7 @@ Buttons disable after use to prevent duplicate spawns.
 
 **DMRollFeed** — aggregated live feed of all player dice rolls with filter toggles (ATK / DMG / SKILL / SAVE / INIT / HP / LOOT / PRIV).
 
-**Encounter Builder** — pre-plan encounters with named monster groups, then start an encounter to spawn all monsters + PCs into the tracker at once.
+**Encounter Builder & Prep Packs** — pre-plan encounters with named monster groups. DMs can now import complete "Prep Packs" (JSON bundles containing monsters, maps, notes, and sandboxed automation triggers) by pasting them directly into the Encounter Library.
 
 **DM Prep Panel** — per-character and per-encounter sticky notes accessible from the God-Eye View.
 
@@ -74,6 +74,7 @@ Buttons disable after use to prevent duplicate spawns.
 - Real-time sync across all clients
 
 ### Audit Log & Event System
+- **Effect Preview & Consent** — DMs can dry-run effects before committing. Players get a real-time toast to **[Accept]** or **[Reject]** incoming state mutations.
 - **Effect Timeline** — immutable event store grouped by combat round, tracking damage, healing, conditions, buffs, rests, spell slots, and loot claims
 - **Audit Log** — human-readable descriptions of every mutation with DM-accessible undo (event reversal)
 - **Idempotency Guards** — every mutation carries a unique request ID; duplicate events from websocket reconnects are automatically deduplicated

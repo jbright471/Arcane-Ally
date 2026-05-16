@@ -99,6 +99,53 @@ function SavingThrowAlerts() {
   return null;
 }
 
+function EffectConsentAlerts() {
+  const { state } = useGame();
+
+  useEffect(() => {
+    const onIncomingPreview = ({ pendingId, actor, records }: { pendingId: string; actor: string; records: any[] }) => {
+      const summary = records.map(r => `${r.targetName}: ${r.logMessage}`).join(' | ');
+
+      toast.message(`Incoming Effect from ${actor}`, {
+        id: pendingId,
+        description: summary,
+        duration: 60000,
+        action: {
+          label: 'Accept',
+          onClick: () => socket.emit('resolve_pending_effect', { pendingId, action: 'accept' }),
+        },
+        cancel: {
+          label: 'Reject',
+          onClick: () => socket.emit('resolve_pending_effect', { pendingId, action: 'reject' }),
+        },
+      });
+    };
+
+    const onPreviewResolved = ({ pendingId, action }: { pendingId: string, action: string }) => {
+      toast.dismiss(pendingId);
+      if (action === 'reject') {
+        toast.error('Effect was rejected.');
+      }
+    };
+
+    const onPreviewExpired = ({ pendingId }: { pendingId: string }) => {
+      toast.dismiss(pendingId);
+      toast.error('Effect request expired.');
+    };
+
+    socket.on('incoming_effect_preview', onIncomingPreview);
+    socket.on('effect_preview_resolved', onPreviewResolved);
+    socket.on('effect_preview_expired', onPreviewExpired);
+
+    return () => {
+      socket.off('incoming_effect_preview', onIncomingPreview);
+      socket.off('effect_preview_resolved', onPreviewResolved);
+      socket.off('effect_preview_expired', onPreviewExpired);
+    };
+  }, [state.isDm]);
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -107,6 +154,7 @@ const App = () => (
         <Sonner />
         <ConcentrationAlerts />
         <SavingThrowAlerts />
+        <EffectConsentAlerts />
         <BrowserRouter>
           <Routes>
             {/* Standalone — no sidebar/header */}

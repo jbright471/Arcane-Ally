@@ -112,6 +112,27 @@ function startEncounter(encounterId, partyCharacters) {
         );
     }
 
+    // Load Sandboxed Automation Presets
+    let presets = [];
+    try { presets = JSON.parse(encounter.automation_presets_json || '[]'); } catch { presets = []; }
+    if (presets.length > 0) {
+        const insertPreset = db.prepare(`
+            INSERT INTO automation_presets (name, preset_type, trigger_phase, effects_json, targets_json, description, encounter_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const preset of presets) {
+            insertPreset.run(
+                preset.name,
+                preset.preset_type || 'turn_trigger',
+                preset.trigger_phase || null,
+                typeof preset.effects_json === 'string' ? preset.effects_json : JSON.stringify(preset.effects_json || []),
+                typeof preset.targets_json === 'string' ? preset.targets_json : JSON.stringify(preset.targets_json || '"party"'),
+                preset.description || '',
+                encounterId
+            );
+        }
+    }
+
     resortTracker();
     return getTrackerState();
 }
@@ -197,6 +218,7 @@ function reorderEntry(trackerId, direction) {
 function endEncounter() {
     db.prepare('UPDATE initiative_tracker SET is_active = 0').run();
     db.prepare('DELETE FROM initiative_tracker').run();
+    db.prepare('DELETE FROM automation_presets WHERE encounter_id IS NOT NULL').run();
 }
 
 /**
