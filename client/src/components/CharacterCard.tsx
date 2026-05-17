@@ -2,10 +2,13 @@ import { Character, getAbilityModifier } from '../types/character';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Heart, Shield, Footprints, AlertTriangle, MoreVertical, Wind } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Heart, Shield, Footprints, AlertTriangle, MoreVertical, Wind, Clock, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import socket from '../socket';
+import { CombatStateInspectorModal } from './CombatStateInspectorModal';
 
 interface CharacterCardProps {
   character: Character;
@@ -20,6 +23,28 @@ export function CharacterCard({ character, onClick, selected, compact }: Charact
   const { isDm } = state;
   const hpPercent = (character.hp.current / character.hp.max) * 100;
   const hpColor = hpPercent > 50 ? 'bg-health' : hpPercent > 25 ? 'bg-gold' : 'bg-destructive';
+
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyEvents, setHistoryEvents] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+
+  const loadHistory = async () => {
+    if (!historyOpen) {
+      setIsLoadingHistory(true);
+      try {
+        const res = await fetch(`/api/effect-timeline/character/${character.id}?limit=5`);
+        if (res.ok) {
+          setHistoryEvents(await res.json());
+        }
+      } catch (err) {
+        console.error('Failed to load character history', err);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    }
+    setHistoryOpen(!historyOpen);
+  };
 
   const handleClick = () => {
     if (onClick) onClick();
@@ -49,32 +74,77 @@ export function CharacterCard({ character, onClick, selected, compact }: Charact
               Lv.{character.level} {character.class}
             </span>
             {isDm && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                  <button
-                    className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-colors"
-                    aria-label="Character options"
-                  >
-                    <MoreVertical className="h-3 w-3" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44" onClick={e => e.stopPropagation()}>
-                  {character.concentratingOn && (
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive cursor-pointer text-xs"
-                      onSelect={handleBreakConcentration}
+              <div className="flex items-center">
+                <button
+                  className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-colors mr-1"
+                  onClick={(e) => { e.stopPropagation(); setInspectorOpen(true); }}
+                  aria-label="Combat State Inspector"
+                >
+                  <Eye className="h-3 w-3" />
+                </button>
+                <Popover open={historyOpen} onOpenChange={setHistoryOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-colors mr-1"
+                      onClick={(e) => { e.stopPropagation(); loadHistory(); }}
+                      aria-label="Effect History"
                     >
-                      <Wind className="h-3 w-3 mr-2" />
-                      Break Concentration
-                    </DropdownMenuItem>
-                  )}
-                  {!character.concentratingOn && (
-                    <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-                      Not concentrating
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                      <Clock className="h-3 w-3" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-3" align="end" onClick={e => e.stopPropagation()}>
+                    <div className="space-y-2">
+                      <h4 className="font-display text-xs text-muted-foreground border-b border-border pb-1 mb-2">Recent Effects</h4>
+                      {isLoadingHistory ? (
+                        <div className="text-center text-xs text-muted-foreground py-2">Loading...</div>
+                      ) : historyEvents.length === 0 ? (
+                        <div className="text-center text-xs text-muted-foreground py-2 italic">No recent effects</div>
+                      ) : (
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                          {historyEvents.map(ev => {
+                            let payload: any = {};
+                            try { payload = JSON.parse(ev.payload_json || '{}'); } catch {}
+                            const hpDelta = (payload.pre_hp != null && payload.post_hp != null) ? ` (${payload.pre_hp}→${payload.post_hp})` : '';
+                            return (
+                              <div key={ev.id} className="text-[10px] leading-tight border-l-2 border-primary/30 pl-2 py-0.5">
+                                <div className="text-muted-foreground/70">{ev.event_type} • Round {ev.session_round}</div>
+                                <div>{payload.damageType ? `${payload.value} ${payload.damageType} dmg` : (payload.condition || payload.buffData?.name || ev.actor)}{hpDelta}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                    <button
+                      className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary/50 transition-colors"
+                      aria-label="Character options"
+                    >
+                      <MoreVertical className="h-3 w-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44" onClick={e => e.stopPropagation()}>
+                    {character.concentratingOn && (
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive cursor-pointer text-xs"
+                        onSelect={handleBreakConcentration}
+                      >
+                        <Wind className="h-3 w-3 mr-2" />
+                        Break Concentration
+                      </DropdownMenuItem>
+                    )}
+                    {!character.concentratingOn && (
+                      <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+                        Not concentrating
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             )}
           </div>
         </div>
@@ -153,6 +223,14 @@ export function CharacterCard({ character, onClick, selected, compact }: Charact
           </div>
         )}
       </CardContent>
+      {isDm && (
+        <CombatStateInspectorModal
+          characterId={character.id!}
+          characterName={character.name}
+          open={inspectorOpen}
+          onOpenChange={setInspectorOpen}
+        />
+      )}
     </Card>
   );
 }

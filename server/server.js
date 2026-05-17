@@ -35,6 +35,7 @@ const {
     writeConcentrationCheckEvent,
     writeAuditEvent,
     reverseEvent,
+    getCharacterProvenance,
 } = require('./lib/effectEngine');
 const { getPermissions, setPermissions, checkPermission } = require('./lib/permissions');
 
@@ -198,6 +199,17 @@ app.get('/api/effect-timeline', (req, res) => {
     }
 });
 
+app.get('/api/effect-timeline/character/:id', (req, res) => {
+    try {
+        const charId = parseInt(req.params.id);
+        const limit = parseInt(req.query.limit) || 100;
+        if (isNaN(charId)) return res.status(400).json({ error: 'Invalid character ID' });
+        res.json(getCharacterProvenance(db, charId, limit));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/sync-audit', (req, res) => {
     try {
         const connectedPlayers = [...playerSocketMap.values()];
@@ -253,6 +265,28 @@ const pendingEffects = new Map(); // pending_id -> { timeout, payload }
 // Combat round/turn tracking (reset on start/end encounter)
 let currentCombatRound = 0;
 let currentTurnIndex = 0;
+
+function loadCombatState() {
+    try {
+        const roundRow = db.prepare("SELECT value FROM campaign_state WHERE key = 'combat_round'").get();
+        const turnRow = db.prepare("SELECT value FROM campaign_state WHERE key = 'combat_turn_index'").get();
+        if (roundRow) currentCombatRound = parseInt(roundRow.value, 10) || 0;
+        if (turnRow) currentTurnIndex = parseInt(turnRow.value, 10) || 0;
+    } catch(e) { console.error("[DB] Error loading combat state", e); }
+}
+
+function saveCombatState() {
+    try {
+        db.prepare("INSERT OR REPLACE INTO campaign_state (key, value) VALUES ('combat_round', ?)").run(currentCombatRound.toString());
+        db.prepare("INSERT OR REPLACE INTO campaign_state (key, value) VALUES ('combat_turn_index', ?)").run(currentTurnIndex.toString());
+    } catch(e) { console.error("[DB] Error saving combat state", e); }
+}
+
+function broadcastCombatState() {
+    io.emit('combat_state_sync', { round: currentCombatRound, turnIndex: currentTurnIndex });
+}
+
+loadCombatState();
 
 // --- Helpers ---
 function broadcastPartyState() {
@@ -450,6 +484,7 @@ io.on('connection', (socket) => {
     socket.emit('voice_room_state', [...voiceRoom.entries()].map(([id, info]) => ({ socketId: id, ...info })));
     socket.emit('timeline_update', getCombatTimeline(db));
     socket.emit('permissions_state', getPermissions(db));
+    socket.emit('combat_state_sync', { round: currentCombatRound, turnIndex: currentTurnIndex });
 
     // ── Companion view pull ───────────────────────────────────────────────────
     // Emits party_state only to the requesting socket (used by /companion/:id)
@@ -1114,6 +1149,8 @@ io.on('connection', (socket) => {
         if (tracker) {
             currentCombatRound = 1;
             currentTurnIndex = 0;
+            saveCombatState();
+            broadcastCombatState();
             clearTimeline(db);
             logAction('DM', '⚔️ Combat has begun!');
             broadcastInitiative();
@@ -1134,6 +1171,8 @@ io.on('connection', (socket) => {
             currentCombatRound++;
         }
         currentTurnIndex = newActiveIdx;
+        saveCombatState();
+        broadcastCombatState();
 
         const activeEntity = tracker[newActiveIdx];
         if (activeEntity && currentCombatRound > 0) {
@@ -1212,6 +1251,8 @@ io.on('connection', (socket) => {
             currentCombatRound--;
         }
         currentTurnIndex = newActiveIdx;
+        saveCombatState();
+        broadcastCombatState();
 
         io.emit('initiative_state', tracker);
     });
@@ -1387,6 +1428,8 @@ io.on('connection', (socket) => {
             endEncounter();
             currentCombatRound = 0;
             currentTurnIndex = 0;
+            saveCombatState();
+            broadcastCombatState();
             logAction('DM', '🏁 Combat has ended.');
             broadcastInitiative();
 
@@ -1404,7 +1447,7 @@ io.on('connection', (socket) => {
         } catch (err) {
             console.error('[Combat] Error ending encounter:', err.message);
             // Still clear combat even if report fails
-            try { endEncounter(); currentCombatRound = 0; currentTurnIndex = 0; broadcastInitiative(); } catch (_) {}
+            try { endEncounter(); currentCombatRound = 0; currentTurnIndex = 0; saveCombatState(); broadcastCombatState(); broadcastInitiative(); } catch (_) {}
             callback?.({ success: false, error: err.message });
         }
     });
@@ -1480,6 +1523,58 @@ io.on('connection', (socket) => {
         let effects, targetsSpec;
         try { effects = JSON.parse(preset.effects_json); } catch { effects = []; }
         try { targetsSpec = JSON.parse(preset.targets_json); } catch { targetsSpec = 'party'; }
+
+        // ── If preset requires a saving throw, insert pending_saves instead of applying immediately ──
+        if (preset.save_dc) {
+            const targets = resolveTargets(db, targetsSpec);
+            const normAbility = (preset.save_ability || 'wis').toLowerCase();
+            let onPassEffects;
+            try { onPassEffects = JSON.parse(preset.save_on_pass_json || '[]'); } catch { onPassEffects = []; }
+
+            const insertPending = db.prepare(
+                `INSERT INTO pending_saves (character_id, dc, ability, on_fail_json, on_pass_json, source) VALUES (?, ?, ?, ?, ?, ?)`
+            );
+            let saveCount = 0;
+
+            for (const target of targets) {
+                if (target.type === 'character') {
+                    // Characters get pending saves — they must roll
+                    insertPending.run(
+                        target.id, preset.save_dc, normAbility,
+                        JSON.stringify(effects), JSON.stringify(onPassEffects),
+                        `Macro: ${preset.name}`
+                    );
+                    // Notify the player's socket
+                    for (const [socketId, info] of playerSocketMap.entries()) {
+                        if (info.characterId === target.id) {
+                            io.to(socketId).emit('pending_save_request', {
+                                dc: preset.save_dc,
+                                ability: normAbility,
+                                source: `Macro: ${preset.name}`,
+                                timestamp: new Date().toISOString(),
+                            });
+                        }
+                    }
+                    saveCount++;
+                } else {
+                    // Monsters don't roll — apply effects immediately
+                    applyPartyEffect(
+                        db, effects, [{ id: target.id, type: 'monster' }],
+                        `Macro: ${preset.name}`, currentCombatRound, currentTurnIndex, 'action', preset.id
+                    );
+                }
+            }
+
+            if (saveCount > 0) {
+                logAction(actor || 'DM', `Fired macro "${preset.name}" — DC ${preset.save_dc} ${normAbility.toUpperCase()} save requested from ${saveCount} character(s).`);
+            }
+            broadcastPartyState();
+            broadcastInitiative();
+            broadcastTimeline();
+            return;
+        }
+
+        // ── No save required — apply effects immediately (original behavior) ──
         const results = applyPartyEffect(
             db, effects, targetsSpec,
             `Macro: ${preset.name}`, currentCombatRound, currentTurnIndex, 'action', preset.id

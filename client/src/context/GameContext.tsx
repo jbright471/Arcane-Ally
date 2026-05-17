@@ -186,6 +186,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setPermissions(data);
     });
 
+    socket.on('combat_state_sync', (data: { round: number; turnIndex: number }) => {
+      setRoundNumber(data.round);
+    });
+
     // Re-join DM room on reconnect
     socket.on('connect', () => {
       const token = localStorage.getItem('dm_token');
@@ -220,6 +224,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('timeline_update');
       socket.off('party_loot_state');
       socket.off('permissions_state');
+      socket.off('combat_state_sync');
       socket.off('connect');
     };
   }, []);
