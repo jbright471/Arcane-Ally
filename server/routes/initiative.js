@@ -8,23 +8,50 @@ const crypto = require('crypto');
 router.get('/', (req, res) => {
     try {
         const encounters = db.prepare('SELECT * FROM encounters ORDER BY created_at DESC').all();
-        res.json(encounters.map(e => ({ ...e, monsters: JSON.parse(e.monsters) })));
+        res.json(encounters.map(e => ({ 
+            ...e, 
+            monsters: JSON.parse(e.monsters || '[]'),
+            tags: JSON.parse(e.tags || '[]'),
+            environment_json: JSON.parse(e.environment_json || '[]'),
+            maps_json: JSON.parse(e.maps_json || '[]'),
+            notes_json: JSON.parse(e.notes_json || '[]'),
+            automation_presets_json: JSON.parse(e.automation_presets_json || '[]')
+        })));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
 router.post('/', (req, res) => {
-    const { name, monsters } = req.body;
+    const { name, monsters, difficulty, tags, environment_json, maps_json, notes_json, automation_presets_json } = req.body;
     if (!name || !monsters || !Array.isArray(monsters)) {
         return res.status(400).json({ error: 'name and monsters[] required' });
     }
     try {
-        const result = db.prepare(
-            'INSERT INTO encounters (name, monsters) VALUES (?, ?)'
-        ).run(name, JSON.stringify(monsters));
+        const result = db.prepare(`
+            INSERT INTO encounters (
+                name, monsters, difficulty, tags, environment_json, maps_json, notes_json, automation_presets_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            name, 
+            JSON.stringify(monsters),
+            difficulty || null,
+            JSON.stringify(tags || []),
+            JSON.stringify(environment_json || []),
+            JSON.stringify(maps_json || []),
+            JSON.stringify(notes_json || []),
+            JSON.stringify(automation_presets_json || [])
+        );
         const enc = db.prepare('SELECT * FROM encounters WHERE id = ?').get(result.lastInsertRowid);
-        res.status(201).json({ ...enc, monsters: JSON.parse(enc.monsters) });
+        res.status(201).json({ 
+            ...enc, 
+            monsters: JSON.parse(enc.monsters || '[]'),
+            tags: JSON.parse(enc.tags || '[]'),
+            environment_json: JSON.parse(enc.environment_json || '[]'),
+            maps_json: JSON.parse(enc.maps_json || '[]'),
+            notes_json: JSON.parse(enc.notes_json || '[]'),
+            automation_presets_json: JSON.parse(enc.automation_presets_json || '[]')
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -34,6 +61,64 @@ router.delete('/:id', (req, res) => {
     try {
         db.prepare('DELETE FROM encounters WHERE id = ?').run(req.params.id);
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/:id/export', (req, res) => {
+    try {
+        const enc = db.prepare('SELECT * FROM encounters WHERE id = ?').get(req.params.id);
+        if (!enc) return res.status(404).json({ error: 'Encounter not found' });
+        
+        const exportData = {
+            ...enc,
+            monsters: JSON.parse(enc.monsters || '[]'),
+            tags: JSON.parse(enc.tags || '[]'),
+            environment_json: JSON.parse(enc.environment_json || '[]'),
+            maps_json: JSON.parse(enc.maps_json || '[]'),
+            notes_json: JSON.parse(enc.notes_json || '[]'),
+            automation_presets_json: JSON.parse(enc.automation_presets_json || '[]')
+        };
+        
+        res.setHeader('Content-disposition', `attachment; filename=encounter_${enc.id}.json`);
+        res.setHeader('Content-type', 'application/json');
+        res.send(JSON.stringify(exportData, null, 2));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/:id/duplicate', (req, res) => {
+    try {
+        const enc = db.prepare('SELECT * FROM encounters WHERE id = ?').get(req.params.id);
+        if (!enc) return res.status(404).json({ error: 'Encounter not found' });
+        
+        const result = db.prepare(`
+            INSERT INTO encounters (
+                name, monsters, difficulty, tags, environment_json, maps_json, notes_json, automation_presets_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            enc.name + ' (Copy)', 
+            enc.monsters,
+            enc.difficulty,
+            enc.tags,
+            enc.environment_json,
+            enc.maps_json,
+            enc.notes_json,
+            enc.automation_presets_json
+        );
+        
+        const newEnc = db.prepare('SELECT * FROM encounters WHERE id = ?').get(result.lastInsertRowid);
+        res.status(201).json({ 
+            ...newEnc, 
+            monsters: JSON.parse(newEnc.monsters || '[]'),
+            tags: JSON.parse(newEnc.tags || '[]'),
+            environment_json: JSON.parse(newEnc.environment_json || '[]'),
+            maps_json: JSON.parse(newEnc.maps_json || '[]'),
+            notes_json: JSON.parse(newEnc.notes_json || '[]'),
+            automation_presets_json: JSON.parse(newEnc.automation_presets_json || '[]')
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

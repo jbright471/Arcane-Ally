@@ -4,6 +4,12 @@ All notable changes to the **DnD Party Sync** project will be documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## [1.13.0] - 2026-05-17
+
+### Added
+- **👁️ Combat State Inspector (Phase 13.0)**: DMs now have access to a real-time, transparent breakdown of a character's state. A new "Eye" icon on the Character Card opens a glassmorphism modal revealing the exact mathematical breakdown of Armor Class (base, dexterity with armor caps, shield), Ability Scores (base + equipment bonuses), and currently Active Conditions.
+- **🔄 Smart Encounter Recovery**: Total persistence for encounter flow. The active combat round and turn index are now continuously synced to the SQLite `campaign_state` table. If the server restarts or a client reconnects, the game context instantly resynchronizes, ensuring the initiative sequence automatically resumes exactly where it left off.
+
 ## [1.12.0] - 2026-05-15
 
 ### Added

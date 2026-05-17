@@ -19,6 +19,12 @@ interface Encounter {
   id: number;
   name: string;
   monsters: Monster[];
+  difficulty?: string;
+  tags?: string[];
+  environment_json?: any[];
+  maps_json?: any[];
+  notes_json?: any[];
+  automation_presets_json?: any[];
 }
 
 const EMPTY_MONSTER: Monster = { name: '', hp: 20, ac: 12, initiative_mod: 0, count: 1 };
@@ -32,7 +38,12 @@ interface EncounterBuilderProps {
 export function EncounterBuilderModal({ open, onClose, onStartEncounter }: EncounterBuilderProps) {
   const [encounters, setEncounters] = useState<Encounter[]>([]);
   const [isCreating, setIsCreating] = useState(false);
-  const [newEncounter, setNewEncounter] = useState<{ name: string; monsters: Monster[] }>({ name: '', monsters: [] });
+  const [newEncounter, setNewEncounter] = useState<{ 
+    name: string; 
+    monsters: Monster[]; 
+    difficulty: string; 
+    environment_json: any[] 
+  }>({ name: '', monsters: [], difficulty: '', environment_json: [] });
   const [monsterForm, setMonsterForm] = useState<Monster>(EMPTY_MONSTER);
 
   useEffect(() => {
@@ -64,9 +75,26 @@ export function EncounterBuilderModal({ open, onClose, onStartEncounter }: Encou
     });
     if (res.ok) {
       setIsCreating(false);
-      setNewEncounter({ name: '', monsters: [] });
+      setNewEncounter({ name: '', monsters: [], difficulty: '', environment_json: [] });
       fetchEncounters();
+      toast.success('Encounter saved');
     }
+  };
+
+  const handleDuplicate = async (id: number) => {
+    try {
+      const res = await fetch(`/api/encounters/${id}/duplicate`, { method: 'POST' });
+      if (res.ok) {
+        toast.success('Encounter duplicated');
+        fetchEncounters();
+      }
+    } catch (err) {
+      toast.error('Failed to duplicate encounter');
+    }
+  };
+
+  const handleExport = (enc: Encounter) => {
+    window.open(`/api/encounters/${enc.id}/export`, '_blank');
   };
 
   const handleDelete = async (id: number) => {
@@ -127,6 +155,30 @@ export function EncounterBuilderModal({ open, onClose, onStartEncounter }: Encou
                     placeholder="e.g. Ambush at the Old Oak"
                     className="text-sm"
                   />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Difficulty</Label>
+                    <Input
+                      value={newEncounter.difficulty}
+                      onChange={e => setNewEncounter({ ...newEncounter, difficulty: e.target.value })}
+                      placeholder="e.g. Deadly, Hard"
+                      className="text-xs h-8"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Environment / Hazards</Label>
+                    <Input
+                      value={newEncounter.environment_json.map((h: any) => h.name).join(', ')}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const hazards = val ? val.split(',').map(n => ({ name: n.trim(), type: 'hazard' })) : [];
+                        setNewEncounter({ ...newEncounter, environment_json: hazards });
+                      }}
+                      placeholder="e.g. Poison Gas, Spikes"
+                      className="text-xs h-8"
+                    />
+                  </div>
                 </div>
 
                 <div className="bg-secondary/20 border border-border/60 p-4 rounded-lg space-y-3">
@@ -221,10 +273,16 @@ export function EncounterBuilderModal({ open, onClose, onStartEncounter }: Encou
                         >
                           <Play className="h-3 w-3 mr-1" /> Start
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground" onClick={() => handleCopy(enc)} title="Copy encounter">
+                        <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground" onClick={() => handleCopy(enc)} title="Copy JSON text">
                           <Copy className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive" onClick={() => handleDelete(enc.id)}>
+                        <Button size="sm" variant="ghost" className="h-9 text-xs text-muted-foreground px-2" onClick={() => handleDuplicate(enc.id)} title="Duplicate">
+                          Dup
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-9 text-xs text-muted-foreground px-2" onClick={() => handleExport(enc)} title="Download JSON">
+                          Export
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive" onClick={() => handleDelete(enc.id)} title="Delete">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>

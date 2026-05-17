@@ -270,9 +270,33 @@ function runMigrations() {
   // ---- Phase 14.0: Effect Locking ----
   addColumnSafe('automation_presets', 'is_locked', 'INTEGER DEFAULT 0');
 
+  // ---- Phase 12.1: Saving Throw on Automation Presets ----
+  addColumnSafe('automation_presets', 'save_dc', 'INTEGER DEFAULT NULL');
+  addColumnSafe('automation_presets', 'save_ability', 'TEXT DEFAULT NULL');
+  addColumnSafe('automation_presets', 'save_on_pass_json', "TEXT DEFAULT NULL");
+
   // ---- Phase 14.0: Pending Saves (Sync-Linked Dice Rolls) ----
   db.exec(`
     CREATE TABLE IF NOT EXISTS pending_saves (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      character_id    INTEGER NOT NULL,
+      save_dc         INTEGER NOT NULL,
+      save_ability    TEXT NOT NULL,
+      on_pass_json    TEXT DEFAULT NULL,
+      on_fail_json    TEXT DEFAULT NULL,
+      source_name     TEXT DEFAULT NULL,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+    );
+  `);
+
+  // ---- Phase 12.2: Encounter Templates ----
+  addColumnSafe('encounters', 'maps_json', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'notes_json', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'automation_presets_json', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'difficulty', "TEXT DEFAULT NULL");
+  addColumnSafe('encounters', 'tags', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'environment_json', "TEXT DEFAULT '[]'");
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
       dc           INTEGER NOT NULL DEFAULT 15,
