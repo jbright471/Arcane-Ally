@@ -82,6 +82,7 @@ export function StatChecks({ character }: StatChecksProps) {
               conditions={conditions}
               ability={ability}
               proficiencyLevel={saveProficiencies[ability] ? 'proficiency' : 'none'}
+              breakdown={character.provenance?.saves?.[ability]}
             />
           ))}
         </CardContent>
@@ -108,6 +109,7 @@ export function StatChecks({ character }: StatChecksProps) {
               conditions={conditions}
               ability={ability}
               proficiencyLevel={skillProficiencies[label] ?? 'none'}
+              breakdown={character.provenance?.skills?.[label]}
             />
           ))}
         </CardContent>

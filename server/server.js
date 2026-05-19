@@ -286,6 +286,86 @@ function broadcastCombatState() {
     io.emit('combat_state_sync', { round: currentCombatRound, turnIndex: currentTurnIndex });
 }
 
+function createCombatSnapshot(db, description) {
+    try {
+        const trackerState = getTrackerState();
+        const characters = getAllCharacters();
+        const sessionStates = [];
+        for (const char of characters) {
+            const state = getSessionState(db, char.id);
+            if (state) {
+                sessionStates.push(state);
+            }
+        }
+
+        db.prepare(`
+            INSERT INTO combat_snapshots (description, combat_round, combat_turn_index, tracker_state_json, session_states_json)
+            VALUES (?, ?, ?, ?, ?)
+        `).run(
+            description,
+            currentCombatRound || 0,
+            currentTurnIndex || 0,
+            JSON.stringify(trackerState),
+            JSON.stringify(sessionStates)
+        );
+        console.log(`[Combat] Saved snapshot: "${description}"`);
+    } catch (err) {
+        console.error('[Combat] Failed to save snapshot:', err.message);
+    }
+}
+
+function restoreCombatSnapshot(db, snapshotId) {
+    const snapshot = db.prepare('SELECT * FROM combat_snapshots WHERE id = ?').get(snapshotId);
+    if (!snapshot) throw new Error('Snapshot not found');
+
+    const trackerState = JSON.parse(snapshot.tracker_state_json);
+    const sessionStates = JSON.parse(snapshot.session_states_json);
+
+    // 1. Restore initiative tracker
+    db.prepare('DELETE FROM initiative_tracker').run();
+    
+    const insertStmt = db.prepare(`
+        INSERT INTO initiative_tracker (
+            id, entity_name, entity_type, initiative, current_hp, max_hp, ac, is_active, is_hidden, sort_order, character_id, encounter_id, instance_id, stats_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const entity of trackerState) {
+        let parsedStats = entity.stats_json;
+        if (typeof parsedStats === 'object' && parsedStats !== null) {
+            parsedStats = JSON.stringify(parsedStats);
+        }
+        insertStmt.run(
+            entity.id,
+            entity.entity_name,
+            entity.entity_type,
+            entity.initiative,
+            entity.current_hp,
+            entity.max_hp,
+            entity.ac,
+            entity.is_active,
+            entity.is_hidden,
+            entity.sort_order,
+            entity.character_id || null,
+            entity.encounter_id || null,
+            entity.instance_id || null,
+            parsedStats || null
+        );
+    }
+
+    // 2. Restore character session states
+    for (const state of sessionStates) {
+        saveSessionState(db, state);
+    }
+
+    // 3. Restore global combat variables
+    currentCombatRound = snapshot.combat_round;
+    currentTurnIndex = snapshot.combat_turn_index;
+    saveCombatState();
+
+    return snapshot;
+}
+
 loadCombatState();
 
 // --- Helpers ---
@@ -1155,6 +1235,7 @@ io.on('connection', (socket) => {
             logAction('DM', '⚔️ Combat has begun!');
             broadcastInitiative();
             broadcastTimeline();
+            createCombatSnapshot(db, '⚔️ Combat Started');
         }
     });
 
@@ -1235,6 +1316,9 @@ io.on('connection', (socket) => {
             }
         }
 
+        const entityName = activeEntity ? activeEntity.entity_name : 'Unknown';
+        createCombatSnapshot(db, `Round ${currentCombatRound}, Turn ${newActiveIdx + 1} (${entityName}'s turn)`);
+
         io.emit('initiative_state', tracker);
     });
 
@@ -1253,6 +1337,10 @@ io.on('connection', (socket) => {
         currentTurnIndex = newActiveIdx;
         saveCombatState();
         broadcastCombatState();
+
+        const activeEntity = tracker[newActiveIdx];
+        const entityName = activeEntity ? activeEntity.entity_name : 'Unknown';
+        createCombatSnapshot(db, `Round ${currentCombatRound}, Turn ${newActiveIdx + 1} (${entityName}'s turn)`);
 
         io.emit('initiative_state', tracker);
     });
@@ -1278,14 +1366,17 @@ io.on('connection', (socket) => {
 
     socket.on('dismiss_dead', () => {
         if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        createCombatSnapshot(db, 'Before Dismissing Dead');
         const result = db.prepare("DELETE FROM initiative_tracker WHERE entity_type IN ('monster', 'npc') AND current_hp <= 0").run();
         broadcastInitiative();
         logAction('DM', `Dismissed ${result.changes} dead combatant(s) from tracker.`);
         socket.emit('dismiss_dead_result', { dismissed: result.changes });
+        createCombatSnapshot(db, 'Dismissed Dead');
     });
 
     socket.on('clear_all_conditions', () => {
         if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        createCombatSnapshot(db, 'Before Clearing Conditions');
         const pcEntries = db.prepare("SELECT character_id FROM initiative_tracker WHERE entity_type = 'pc' AND character_id IS NOT NULL").all();
         let cleared = 0;
         for (const entry of pcEntries) {
@@ -1301,6 +1392,7 @@ io.on('connection', (socket) => {
         broadcastInitiative();
         logAction('DM', `Cleared conditions from ${cleared} character(s).`);
         socket.emit('clear_conditions_result', { cleared });
+        createCombatSnapshot(db, 'Cleared Conditions');
     });
 
     socket.on('add_marker', ({ mapId, name, type, x, y, linkedMapId, description }) => {
@@ -1378,6 +1470,7 @@ io.on('connection', (socket) => {
 
     socket.on('end_encounter', async (callback) => {
         try {
+            createCombatSnapshot(db, `Pre-Encounter End (Round ${currentCombatRound})`);
             // Snapshot timeline + party state BEFORE clearing
             const timeline = getCombatTimeline(db);
             const trackerState = getTrackerState();
@@ -1448,6 +1541,33 @@ io.on('connection', (socket) => {
             console.error('[Combat] Error ending encounter:', err.message);
             // Still clear combat even if report fails
             try { endEncounter(); currentCombatRound = 0; currentTurnIndex = 0; saveCombatState(); broadcastCombatState(); broadcastInitiative(); } catch (_) {}
+            callback?.({ success: false, error: err.message });
+        }
+    });
+
+    socket.on('get_combat_snapshots', (callback) => {
+        try {
+            const snapshots = db.prepare('SELECT id, snapshot_time, description, combat_round, combat_turn_index FROM combat_snapshots ORDER BY id DESC LIMIT 20').all();
+            callback?.({ success: true, snapshots });
+        } catch (err) {
+            callback?.({ success: false, error: err.message });
+        }
+    });
+
+    socket.on('restore_combat_snapshot', ({ snapshotId }, callback) => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        try {
+            const snapshot = restoreCombatSnapshot(db, snapshotId);
+            broadcastPartyState();
+            broadcastInitiative();
+            broadcastCombatState();
+            logAction('DM', `🔮 Restored combat checkpoint: "${snapshot.description}"`);
+            
+            const tracker = getTrackerState();
+            io.emit('initiative_state', tracker);
+            callback?.({ success: true, snapshot });
+        } catch (err) {
+            console.error('[Combat] Failed to restore snapshot:', err.message);
             callback?.({ success: false, error: err.message });
         }
     });

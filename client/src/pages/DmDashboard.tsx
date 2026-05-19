@@ -29,11 +29,12 @@ import { LootManager } from '../components/LootManager';
 import { BuffManagerModal } from '../components/BuffManagerModal';
 import { EncounterBuilderModal } from '../components/EncounterBuilderModal';
 import { Compendium } from '../components/Compendium';
+import { CombatRecoveryModal } from '../components/CombatRecoveryModal';
 import { ActionableLoreMessage } from '../components/ActionableLoreMessage';
 import { parseLoreMessage } from '../lib/loreParser';
 import {
   Eye, Swords, Users, Gem, Scroll, Sparkles, Map,
-  FlagOff, Plus, BookOpen, ShieldAlert, Send, Zap, NotebookPen, StickyNote
+  FlagOff, Plus, BookOpen, ShieldAlert, Send, Zap, NotebookPen, StickyNote, History
 } from 'lucide-react';
 import { toast } from 'sonner';
 import socket from '../socket';
@@ -61,6 +62,7 @@ export default function DmDashboard() {
   const [showSpawner, setShowSpawner] = useState(false);
   const [showAutomation, setShowAutomation] = useState(false);
   const [showCompendium, setShowCompendium] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
   const [prepContext, setPrepContext] = useState<{ type: string; label?: string } | null>(null);
   const openPrep = (type = 'general', label?: string) => setPrepContext({ type, label });
 
@@ -146,6 +148,7 @@ export default function DmDashboard() {
         onStartEncounter={handleStartEncounter}
       />
       <DmAutomationPanel open={showAutomation} onClose={() => setShowAutomation(false)} />
+      <CombatRecoveryModal open={showRecovery} onClose={() => setShowRecovery(false)} />
       <Compendium open={showCompendium} onClose={() => setShowCompendium(false)} />
       <DmPrepPanel
         isOpen={prepContext !== null}
@@ -356,6 +359,9 @@ export default function DmDashboard() {
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowEncounterLibrary(true)}>
                   <Swords className="h-3 w-3 mr-1" /> Encounters
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10" onClick={() => setShowRecovery(true)}>
+                  <History className="h-3 w-3 mr-1" /> Recover
                 </Button>
                 <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" title="Encounter prep notes" onClick={() => openPrep('encounter', 'Encounters')}>
                   <StickyNote className="h-3.5 w-3.5" />

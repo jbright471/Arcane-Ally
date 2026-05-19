@@ -406,6 +406,10 @@ function getFilteredTimeline(db, { limit = 200, round, eventType, targetId } = {
     `).all(...params, limit);
 }
 
+function getCharacterProvenance(db, characterId, limit = 100) {
+    return getFilteredTimeline(db, { targetId: characterId, limit });
+}
+
 module.exports = {
     applyPartyEffect,
     previewPartyEffect,
@@ -418,4 +422,5 @@ module.exports = {
     writeConcentrationCheckEvent,
     writeAuditEvent,
     reverseEvent,
+    getCharacterProvenance,
 };

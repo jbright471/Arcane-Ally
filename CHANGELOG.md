@@ -4,6 +4,13 @@ All notable changes to the **DnD Party Sync** project will be documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## [1.14.0] - 2026-05-19
+
+### Added
+- **🔍 Modifier Trace Overlay (Phase 20.0)**: Integrated calculations provenance to mathematically resolve character AC, Ability Scores, Saving Throws, Skills, Speed, and Initiative in real-time. Hovering or tapping any statistic displays a beautiful Radix popover detailing the base scores, active equipment, temporary dynamic buffs, and environmental condition reductions (e.g. grappled, paralyzed) affecting that stat.
+- **⏳ Combat Session Snapshots (Phase 20.0)**: Seamless encounter chronology backups. The system automatically records deep SQLite checkpoints in the background during critical combat transitions (start/end encounter, turn changes, condition clears, and dead dismissals). DMs can access the new gold-accented "Recover" timeline panel to roll back HP, spell slots, initiative, and status conditions to any of the 20 most recent checkpoints instantly.
+- **📖 Arcane Codex Update**: Appended dedicated chapters to the internal documentation guidebook detailing the Modifier Trace Overlay and the Combat Recovery Snapshots engine.
+
 ## [1.13.0] - 2026-05-17
 
 ### Added

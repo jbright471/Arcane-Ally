@@ -246,6 +246,33 @@ export type DndCondition = typeof DND_CONDITIONS[number];
 
 export type ProficiencyLevel = 'proficiency' | 'expertise' | 'half';
 
+export interface StatSource {
+  source: string;
+  type: string;
+  value: number | string;
+}
+
+export interface ProvenanceBreakdown {
+  final: number;
+  sources: StatSource[];
+}
+
+export interface RollProvenanceBreakdown extends ProvenanceBreakdown {
+  rollState: 'normal' | 'advantage' | 'disadvantage' | 'auto-fail';
+  advantages: string[];
+  disadvantages: string[];
+  autoFails: string[];
+}
+
+export interface StatProvenance {
+  abilityScores: Record<AbilityScore, { base: number; final: number; sources: StatSource[] }>;
+  ac: { finalAC: number; breakdown: string; sources?: StatSource[] };
+  speed: ProvenanceBreakdown;
+  initiative: ProvenanceBreakdown;
+  saves: Record<AbilityScore, RollProvenanceBreakdown>;
+  skills: Record<string, RollProvenanceBreakdown>;
+}
+
 export interface Character {
   id: string;
   name: string;
@@ -279,6 +306,7 @@ export interface Character {
   hitDice: Record<string, number>;
   /** Hit dice spent this rest cycle, e.g. { "d10": 2 } */
   hitDiceUsed: Record<string, number>;
+  provenance?: StatProvenance;
 }
 
 // ... rest of the file helpers remain the same
@@ -373,5 +401,7 @@ export function createDefaultCharacter(id: string): Character {
     speed: 30,
     initiative: 0,
     activeBuffs: [],
+    skillProficiencies: {},
+    saveProficiencies: {},
   };
 }

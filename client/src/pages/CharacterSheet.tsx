@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { getAbilityModifier, rollDice } from '../types/character';
+import { getAbilityModifier, rollDice, type AbilityScore } from '../types/character';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -12,6 +12,7 @@ import {
 import { type RollFeedEvent, getRollTypeMeta } from '../types/effects';
 import { DiceRoller } from '../components/DiceRoller';
 import { RollableStat } from '../components/RollableStat';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { StatChecks } from '../components/StatChecks';
 import { ActionsPanel } from '../components/ActionsPanel';
 import { ConditionBadges } from '../components/ConditionBadges';
@@ -74,9 +75,8 @@ export default function CharacterSheet() {
 
   // ── Accumulate this character's own roll history ──
   useEffect(() => {
-    const charIdNum = parseInt(id || '');
     const handler = (event: RollFeedEvent) => {
-      if (event.characterId !== charIdNum) return;
+      if (String(event.characterId) !== String(id)) return;
       setRollHistory(prev => [...prev.slice(-29), event]); // keep last 30
     };
     socket.on('roll_feed_event', handler);
@@ -277,11 +277,49 @@ export default function CharacterSheet() {
               {/* Combat stat pills */}
               <div className="flex flex-wrap gap-2">
                 {/* AC */}
-                <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px]">
-                  <Shield className="h-3.5 w-3.5 text-mana mb-0.5" />
-                  <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">AC</span>
-                  <span className="font-display font-bold text-lg leading-tight">{character.ac}</span>
-                </div>
+                {character.provenance?.ac?.sources && character.provenance.ac.sources.length > 0 ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px] cursor-help">
+                        <Shield className="h-3.5 w-3.5 text-mana mb-0.5" />
+                        <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">AC</span>
+                        <span className="font-display font-bold text-lg leading-tight">{character.ac}</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="center" className="bg-transparent border-none p-0 shadow-none">
+                      <div className="p-2.5 space-y-1.5 text-xs max-w-[260px] bg-slate-950/95 border border-amber-900/30 rounded-lg shadow-xl font-sans text-slate-300 backdrop-blur-sm">
+                        <div className="font-semibold text-amber-400 font-display uppercase tracking-wider text-[10px] pb-1.5 border-b border-amber-950/40">
+                          Armor Class Breakdown
+                        </div>
+                        <div className="space-y-1 pt-0.5">
+                          {character.provenance.ac.sources.map((src, i) => (
+                            <div key={i} className="flex justify-between items-center gap-4">
+                              <span className="text-slate-400 font-medium">{src.source}</span>
+                              <span className="font-mono font-semibold text-amber-500/90 text-right">
+                                {typeof src.value === 'number' && src.value >= 0 ? `+${src.value}` : src.value}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between items-center pt-1.5 mt-1 border-t border-amber-950/40 font-bold text-amber-400">
+                          <span>Final AC</span>
+                          <span className="font-mono text-sm">{character.ac}</span>
+                        </div>
+                        {character.provenance.ac.breakdown && (
+                          <div className="text-[10px] text-slate-400 italic pt-1 border-t border-amber-950/20">
+                            Calculation: {character.provenance.ac.breakdown}
+                          </div>
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px]">
+                    <Shield className="h-3.5 w-3.5 text-mana mb-0.5" />
+                    <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">AC</span>
+                    <span className="font-display font-bold text-lg leading-tight">{character.ac}</span>
+                  </div>
+                )}
                 {/* Proficiency */}
                 <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px]">
                   <Sparkles className="h-3.5 w-3.5 text-primary mb-0.5" />
@@ -289,22 +327,92 @@ export default function CharacterSheet() {
                   <span className="font-display font-bold text-lg leading-tight">+{character.proficiencyBonus}</span>
                 </div>
                 {/* Speed */}
-                <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px]">
-                  <Footprints className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
-                  <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">SPD</span>
-                  <span className="font-display font-bold text-lg leading-tight">{character.speed}ft</span>
-                </div>
+                {character.provenance?.speed?.sources && character.provenance.speed.sources.length > 0 ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px] cursor-help">
+                        <Footprints className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
+                        <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">SPD</span>
+                        <span className="font-display font-bold text-lg leading-tight">{character.speed}ft</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="center" className="bg-transparent border-none p-0 shadow-none">
+                      <div className="p-2.5 space-y-1.5 text-xs max-w-[260px] bg-slate-950/95 border border-amber-900/30 rounded-lg shadow-xl font-sans text-slate-300 backdrop-blur-sm">
+                        <div className="font-semibold text-amber-400 font-display uppercase tracking-wider text-[10px] pb-1.5 border-b border-amber-950/40">
+                          Speed Breakdown
+                        </div>
+                        <div className="space-y-1 pt-0.5">
+                          {character.provenance.speed.sources.map((src, i) => (
+                            <div key={i} className="flex justify-between items-center gap-4">
+                              <span className="text-slate-400 font-medium">{src.source}</span>
+                              <span className="font-mono font-semibold text-amber-500/90 text-right">
+                                {typeof src.value === 'number' && src.value >= 0 ? `+${src.value}` : src.value}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between items-center pt-1.5 mt-1 border-t border-amber-950/40 font-bold text-amber-400">
+                          <span>Final Speed</span>
+                          <span className="font-mono text-sm">{character.speed}ft</span>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px]">
+                    <Footprints className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
+                    <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">SPD</span>
+                    <span className="font-display font-bold text-lg leading-tight">{character.speed}ft</span>
+                  </div>
+                )}
                 {/* Initiative — clickable */}
-                <button
-                  onClick={handleInitiativeRoll}
-                  title={`Roll Initiative (1d20 ${initModStr})`}
-                  aria-label="Roll Initiative"
-                  className="group flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px] hover:border-primary/50 hover:bg-primary/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  <Zap className="h-3.5 w-3.5 text-primary mb-0.5 group-hover:text-primary transition-colors" />
-                  <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">INIT</span>
-                  <span className="font-display font-bold text-lg leading-tight text-primary">{initModStr}</span>
-                </button>
+                {character.provenance?.initiative?.sources && character.provenance.initiative.sources.length > 0 ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={handleInitiativeRoll}
+                        aria-label="Roll Initiative"
+                        className="group flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px] hover:border-primary/50 hover:bg-primary/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <Zap className="h-3.5 w-3.5 text-primary mb-0.5 group-hover:text-primary transition-colors" />
+                        <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">INIT</span>
+                        <span className="font-display font-bold text-lg leading-tight text-primary">{initModStr}</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="center" className="bg-transparent border-none p-0 shadow-none">
+                      <div className="p-2.5 space-y-1.5 text-xs max-w-[260px] bg-slate-950/95 border border-amber-900/30 rounded-lg shadow-xl font-sans text-slate-300 backdrop-blur-sm">
+                        <div className="font-semibold text-amber-400 font-display uppercase tracking-wider text-[10px] pb-1.5 border-b border-amber-950/40">
+                          Initiative Breakdown
+                        </div>
+                        <div className="space-y-1 pt-0.5">
+                          {character.provenance.initiative.sources.map((src, i) => (
+                            <div key={i} className="flex justify-between items-center gap-4">
+                              <span className="text-slate-400 font-medium">{src.source}</span>
+                              <span className="font-mono font-semibold text-amber-500/90 text-right">
+                                {typeof src.value === 'number' && src.value >= 0 ? `+${src.value}` : src.value}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between items-center pt-1.5 mt-1 border-t border-amber-950/40 font-bold text-amber-400">
+                          <span>Final Modifier</span>
+                          <span className="font-mono text-sm">{initModStr}</span>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <button
+                    onClick={handleInitiativeRoll}
+                    title={`Roll Initiative (1d20 ${initModStr})`}
+                    aria-label="Roll Initiative"
+                    className="group flex flex-col items-center justify-center px-3 py-2 rounded-lg border border-border bg-secondary/20 min-w-[56px] hover:border-primary/50 hover:bg-primary/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <Zap className="h-3.5 w-3.5 text-primary mb-0.5 group-hover:text-primary transition-colors" />
+                    <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">INIT</span>
+                    <span className="font-display font-bold text-lg leading-tight text-primary">{initModStr}</span>
+                  </button>
+                )}
               </div>
 
             </div>
@@ -348,6 +456,7 @@ export default function CharacterSheet() {
                     rollType="Ability Check"
                     characterName={character.name}
                     variant="card"
+                    breakdown={character.provenance?.abilityScores?.[key as AbilityScore]}
                   />
                 ))}
               </div>

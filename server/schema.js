@@ -278,25 +278,6 @@ function runMigrations() {
   // ---- Phase 14.0: Pending Saves (Sync-Linked Dice Rolls) ----
   db.exec(`
     CREATE TABLE IF NOT EXISTS pending_saves (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      character_id    INTEGER NOT NULL,
-      save_dc         INTEGER NOT NULL,
-      save_ability    TEXT NOT NULL,
-      on_pass_json    TEXT DEFAULT NULL,
-      on_fail_json    TEXT DEFAULT NULL,
-      source_name     TEXT DEFAULT NULL,
-      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
-    );
-  `);
-
-  // ---- Phase 12.2: Encounter Templates ----
-  addColumnSafe('encounters', 'maps_json', "TEXT DEFAULT '[]'");
-  addColumnSafe('encounters', 'notes_json', "TEXT DEFAULT '[]'");
-  addColumnSafe('encounters', 'automation_presets_json', "TEXT DEFAULT '[]'");
-  addColumnSafe('encounters', 'difficulty', "TEXT DEFAULT NULL");
-  addColumnSafe('encounters', 'tags', "TEXT DEFAULT '[]'");
-  addColumnSafe('encounters', 'environment_json', "TEXT DEFAULT '[]'");
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL,
       dc           INTEGER NOT NULL DEFAULT 15,
@@ -308,6 +289,14 @@ function runMigrations() {
       FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
     );
   `);
+
+  // ---- Phase 12.2: Encounter Templates ----
+  addColumnSafe('encounters', 'maps_json', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'notes_json', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'automation_presets_json', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'difficulty', "TEXT DEFAULT NULL");
+  addColumnSafe('encounters', 'tags', "TEXT DEFAULT '[]'");
+  addColumnSafe('encounters', 'environment_json', "TEXT DEFAULT '[]'");
 
   // ---- Phase 13.0: Effect Stream index ----
   try {
@@ -381,6 +370,19 @@ function runMigrations() {
   addColumnSafe('encounters', 'notes_json', "TEXT DEFAULT '[]'");
   addColumnSafe('encounters', 'automation_presets_json', "TEXT DEFAULT '[]'");
   addColumnSafe('automation_presets', 'encounter_id', "INTEGER DEFAULT NULL");
+
+  // ---- Phase 20.0: Combat Session Snapshots ----
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS combat_snapshots (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      snapshot_time      TEXT NOT NULL DEFAULT (datetime('now')),
+      description        TEXT NOT NULL,
+      combat_round       INTEGER NOT NULL,
+      combat_turn_index  INTEGER NOT NULL,
+      tracker_state_json TEXT NOT NULL,
+      session_states_json TEXT NOT NULL
+    );
+  `);
 
   console.log('[DB] Migrations complete.');
 }

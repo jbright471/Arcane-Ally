@@ -23,6 +23,7 @@ const {
   restoreAllSpellSlots,
   shortRestFeatures,
   longRestFeatures,
+  resolveStatProvenance,
 } = require('./rulesEngine');
 
 // ---------------------------------------------------------------------------
@@ -354,7 +355,12 @@ function applyBuffEvent(db, characterId, buffData) {
     name: buffData.name,
     sourceName: buffData.sourceName || 'System',
     isConcentration: !!buffData.isConcentration,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    modifierType: buffData.modifierType || null,
+    modifierValue: buffData.modifierValue || null,
+    statAffected: buffData.statAffected || null,
+    stat: buffData.stat || null,
+    modifier: buffData.modifier || null,
   };
 
   state.activeBuffs.push(newBuff);
@@ -481,8 +487,12 @@ function getResolvedCharacterState(db, characterId) {
   const state = getSessionState(db, characterId);
   if (!char || !state) return null;
 
-  const currentAC = resolveCurrentAC(char, state.activeBuffs, state.activeConditions, [...char.inventory, ...char.homebrewInventory]);
-  const finalScores = resolveFinalAbilityScores(char, [...char.inventory, ...char.homebrewInventory]);
+  const provenance = resolveStatProvenance(char, state.activeBuffs, state.activeConditions, [...char.inventory, ...char.homebrewInventory]);
+  const currentAC = provenance.ac;
+  const finalScores = {};
+  for (const [key, val] of Object.entries(provenance.abilityScores)) {
+    finalScores[key] = val.final;
+  }
 
   const proficiencyBonus = Math.floor((char.level - 1) / 4) + 2;
 
@@ -499,6 +509,7 @@ function getResolvedCharacterState(db, characterId) {
     ac: currentAC.finalAC,
     acBreakdown: currentAC.breakdown,
     abilityScores: finalScores,
+    provenance,
     skills: char.skills,
     skillProficiencies: char.skillProficiencies || {},
     saveProficiencies:  char.saveProficiencies  || {},

@@ -87,6 +87,7 @@ function normaliseCharacter(raw: any): Character {
     raw_dndbeyond_json: raw.raw_dndbeyond_json,
     hitDice: raw.hitDice || {},
     hitDiceUsed: raw.hitDiceUsed || {},
+    provenance: raw.provenance,
   };
 }
 
