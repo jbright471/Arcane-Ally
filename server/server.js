@@ -38,6 +38,7 @@ const {
     getCharacterProvenance,
 } = require('./lib/effectEngine');
 const { getPermissions, setPermissions, checkPermission } = require('./lib/permissions');
+const { computeSnapshotDiff } = require('./lib/snapshotDiff');
 
 const {
     applyDamageEvent,
@@ -1550,6 +1551,17 @@ io.on('connection', (socket) => {
             const snapshots = db.prepare('SELECT id, snapshot_time, description, combat_round, combat_turn_index FROM combat_snapshots ORDER BY id DESC LIMIT 20').all();
             callback?.({ success: true, snapshots });
         } catch (err) {
+            callback?.({ success: false, error: err.message });
+        }
+    });
+
+    socket.on('get_combat_snapshot_diff', ({ snapshotId }, callback) => {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        try {
+            const diff = computeSnapshotDiff(db, snapshotId, currentCombatRound, currentTurnIndex, getTrackerState, getAllCharacters, getSessionState);
+            callback?.({ success: true, diff });
+        } catch (err) {
+            console.error('[Combat] Failed to compute snapshot diff:', err.message);
             callback?.({ success: false, error: err.message });
         }
     });
