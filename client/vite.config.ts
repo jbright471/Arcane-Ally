@@ -22,11 +22,12 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     proxy: {
-      '/api': 'http://backend:3001',
+      '/api': 'http://dnd-party-sync-backend:3001',
       '/socket.io': {
-        target: 'http://backend:3001',
+        target: 'http://dnd-party-sync-backend:3001',
         ws: true,
       },
     },
   },
 });
+

@@ -13,7 +13,7 @@ import { cn } from '../lib/utils';
 import {
   BookOpen, Search, Scroll, Swords, Eye, Shield, Heart, Sparkles,
   Dices, Moon, Sun, Gem, Users, Zap, Map, HelpCircle, ChevronRight,
-  Mic, Globe, Package, ClipboardList, Compass, ArrowLeft, Smartphone,
+  Mic, Globe, Package, ClipboardList, Compass, ArrowLeft, Smartphone, History,
 } from 'lucide-react';
 
 // ── Guide content data ───────────────────────────────────────────────────
@@ -920,6 +920,52 @@ OLLAMA_URL=http://your-ollama-host:11434
 \`\`\`
 
 > **Tip:** If Ollama is unavailable, AI features gracefully degrade — the app remains fully functional, you just won't be able to generate content or parse PDFs.`,
+  },
+  {
+    id: 'modifier-trace',
+    title: 'Modifier Trace Overlay',
+    category: 'player',
+    icon: Sparkles,
+    content: `# Modifier Trace Overlay
+    
+Arcane Ally calculates all of your character sheet statistics in real-time, tracing every active item, passive ability, temporary buff, and environmental condition to its exact source.
+
+## Hoverable Stat Provenance
+Hover or tap any primary statistic on your Character Sheet (such as Ability Scores, Armor Class, Speed, Initiative, Saving Throws, and Skills) to view a detailed popover overlay:
+- **Base Score**: The un-modified attribute score of your character.
+- **Active Equipment**: Flat bonuses, armor changes, or modifiers granted by currently equipped weapons, shields, and accessories.
+- **Temporary Effects**: Dynamic bonuses applied to your character by the DM (such as the *Bless* spell, *Haste*, or homebrew active effects).
+- **Environmental Conditions**: Reductions, disadvantages, advantage flags, or automatic failure overrides caused by current conditions (e.g. *Grappled*, *Paralyzed*, or *Exhausted*).
+
+## Real-Time Updates
+Whenever the DM grants you a new dynamic buff, drops a condition on you, or you claim and equip a magic item from the Shared Loot Pool, the calculations are recalculated atomically. Every tooltip update happens instantaneously with absolutely zero page refreshes required.`,
+  },
+  {
+    id: 'combat-recovery',
+    title: 'Combat Recovery & Snapshots',
+    category: 'dm',
+    icon: History,
+    content: `# Combat Recovery & Snapshots
+
+Live sessions are full of chaotic twists. Arcane Ally features an automated chronology engine that records complete snapshots of your game world at every critical phase boundary.
+
+## Automated Checkpoint Creation
+Snapshots are recorded silently in the background whenever:
+- An **encounter is initiated**
+- A **new turn begins** or is advanced
+- The **previous turn is rolled back**
+- Dead combatants are dismissed
+- Status conditions are bulk cleared
+- An **encounter is concluded**
+
+Each snapshot is a complete deep copy of the combat universe, capturing the initiative order, active round/turn index, current player hit points, active temporary conditions, remaining condition round durations, and consumed spell slots.
+
+## Reverting the Chronology
+If a player's browser crashes, the server encounters a disconnect, or you make a combat misclick, you can restore state cleanly:
+- Click the **Recover** button in the *Combat Controls* panel on the DM Dashboard.
+- The *Chronology Recovery Console* lists the latest 20 saved checkpoints with descriptive names (e.g. *"Next Turn: Round 2, Turn 3"*) and precise time-stamps.
+- Click **Restore** next to your chosen checkpoint.
+- After a confirmation warning, the entire state of active characters, HP, and the initiative tracker will instantly roll back to that exact timeline checkpoint.`,
   },
 ];
 

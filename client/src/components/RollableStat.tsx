@@ -3,6 +3,7 @@ import socket from '../socket';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { Dices, AlertTriangle, ChevronUp, ChevronDown, Ban } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import {
   evaluateRoll,
   rollWithAdvantage,
@@ -68,7 +69,17 @@ export function RollableStat({
   onRoll,
   conditions = [],
   ability,
-}: RollableStatProps) {
+  breakdown,
+}: RollableStatProps & {
+  breakdown?: {
+    final: number;
+    sources: { source: string; type: string; value: number | string }[];
+    rollState?: string;
+    advantages?: string[];
+    disadvantages?: string[];
+    autoFails?: string[];
+  };
+}) {
   // Resolve effective proficiency from either prop
   const effectiveProfLevel: ProficiencyLevel | 'none' =
     proficiencyLevel ?? (proficient ? 'proficiency' : 'none');
@@ -154,54 +165,91 @@ export function RollableStat({
 
   const modStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
 
+  const hasBreakdown = breakdown && breakdown.sources && breakdown.sources.length > 0;
+
+  const tooltipBody = hasBreakdown ? (
+    <div className="p-2.5 space-y-1.5 text-xs max-w-[260px] bg-slate-950/95 border border-amber-900/30 rounded-lg shadow-xl font-sans text-slate-300 backdrop-blur-sm">
+      <div className="font-semibold text-amber-400 font-display uppercase tracking-wider text-[10px] pb-1.5 border-b border-amber-950/40">
+        {label} Breakdown
+      </div>
+      <div className="space-y-1 pt-0.5">
+        {breakdown.sources.map((src, i) => (
+          <div key={i} className="flex justify-between items-center gap-4">
+            <span className="text-slate-400 font-medium">{src.source}</span>
+            <span className="font-mono font-semibold text-amber-500/90 text-right">
+              {typeof src.value === 'number' && src.value >= 0 ? `+${src.value}` : src.value}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between items-center pt-1.5 mt-1 border-t border-amber-950/40 font-bold text-amber-400">
+        <span>Total Modifier</span>
+        <span className="font-mono text-sm">{modStr}</span>
+      </div>
+      {(breakdown.advantages && breakdown.advantages.length > 0) && (
+        <div className="text-[10px] text-emerald-400 font-medium pt-1">
+          Advantage from: {breakdown.advantages.join(', ')}
+        </div>
+      )}
+      {(breakdown.disadvantages && breakdown.disadvantages.length > 0) && (
+        <div className="text-[10px] text-destructive font-medium pt-1">
+          Disadvantage from: {breakdown.disadvantages.join(', ')}
+        </div>
+      )}
+      {(breakdown.autoFails && breakdown.autoFails.length > 0) && (
+        <div className="text-[10px] text-destructive font-bold pt-1 uppercase">
+          Auto-Fail from: {breakdown.autoFails.join(', ')}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   /* ── Row layout: used for Skills and Saving Throws ── */
-  if (variant === 'row') {
-    return (
-      <button
-        onClick={handleClick}
+  const rowElement = (
+    <button
+      onClick={handleClick}
+      className={cn(
+        'group w-full flex items-center gap-2 px-2 py-1 rounded-md text-left',
+        'border border-transparent hover:bg-primary/10 hover:border-primary/20',
+        'transition-colors duration-100 cursor-pointer',
+        indicator === 'disadvantage' && 'border-destructive/20 bg-destructive/5',
+        indicator === 'advantage' && 'border-emerald-500/20 bg-emerald-500/5',
+        indicator === 'auto-fail' && 'border-destructive/30 bg-destructive/10 opacity-60',
+        indicator === 'incapacitated' && 'border-destructive/30 bg-destructive/10 opacity-40 cursor-not-allowed',
+        className,
+      )}
+      title={hasBreakdown ? undefined : indicatorTitle(indicator, rollType, label, modStr)}
+      aria-label={`Roll ${label} ${rollType}`}
+      disabled={indicator === 'incapacitated'}
+    >
+      {/* Proficiency indicator */}
+      <span
         className={cn(
-          'group w-full flex items-center gap-2 px-2 py-1 rounded-md text-left',
-          'border border-transparent hover:bg-primary/10 hover:border-primary/20',
-          'transition-colors duration-100 cursor-pointer',
-          indicator === 'disadvantage' && 'border-destructive/20 bg-destructive/5',
-          indicator === 'advantage' && 'border-emerald-500/20 bg-emerald-500/5',
-          indicator === 'auto-fail' && 'border-destructive/30 bg-destructive/10 opacity-60',
-          indicator === 'incapacitated' && 'border-destructive/30 bg-destructive/10 opacity-40 cursor-not-allowed',
-          className,
+          'w-2 h-2 rounded-full border shrink-0',
+          effectiveProfLevel === 'expertise'   && 'bg-amber-400 border-amber-400',
+          effectiveProfLevel === 'proficiency' && 'bg-primary border-primary',
+          effectiveProfLevel === 'half'        && 'bg-primary/40 border-primary/60',
+          effectiveProfLevel === 'none'        && 'border-muted-foreground/50',
         )}
-        title={indicatorTitle(indicator, rollType, label, modStr)}
-        aria-label={`Roll ${label} ${rollType}`}
-        disabled={indicator === 'incapacitated'}
-      >
-        {/* Proficiency indicator */}
-        <span
-          className={cn(
-            'w-2 h-2 rounded-full border shrink-0',
-            effectiveProfLevel === 'expertise'   && 'bg-amber-400 border-amber-400',
-            effectiveProfLevel === 'proficiency' && 'bg-primary border-primary',
-            effectiveProfLevel === 'half'        && 'bg-primary/40 border-primary/60',
-            effectiveProfLevel === 'none'        && 'border-muted-foreground/50',
-          )}
-          title={effectiveProfLevel === 'expertise' ? 'Expertise' : effectiveProfLevel === 'proficiency' ? 'Proficient' : effectiveProfLevel === 'half' ? 'Half Proficiency' : undefined}
-        />
-        {/* Ability abbreviation */}
-        {sublabel && (
-          <span className="text-[10px] text-muted-foreground w-7 shrink-0 font-display">{sublabel}</span>
-        )}
-        {/* Skill / save name */}
-        <span className="text-sm flex-1 group-hover:text-foreground transition-colors">{label}</span>
-        {/* Condition indicator icon */}
-        <IndicatorIcon indicator={indicator} />
-        {/* Modifier */}
-        <span className="text-sm font-display font-bold tabular-nums">{modStr}</span>
-        {/* Dice icon — appears on hover */}
-        <Dices className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-70 transition-opacity shrink-0" />
-      </button>
-    );
-  }
+        title={effectiveProfLevel === 'expertise' ? 'Expertise' : effectiveProfLevel === 'proficiency' ? 'Proficient' : effectiveProfLevel === 'half' ? 'Half Proficiency' : undefined}
+      />
+      {/* Ability abbreviation */}
+      {sublabel && (
+        <span className="text-[10px] text-muted-foreground w-7 shrink-0 font-display">{sublabel}</span>
+      )}
+      {/* Skill / save name */}
+      <span className="text-sm flex-1 group-hover:text-foreground transition-colors">{label}</span>
+      {/* Condition indicator icon */}
+      <IndicatorIcon indicator={indicator} />
+      {/* Modifier */}
+      <span className="text-sm font-display font-bold tabular-nums">{modStr}</span>
+      {/* Dice icon — appears on hover */}
+      <Dices className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-70 transition-opacity shrink-0" />
+    </button>
+  );
 
   /* ── Card layout: used for Ability Scores and Initiative ── */
-  return (
+  const cardElement = (
     <button
       onClick={handleClick}
       className={cn(
@@ -215,7 +263,7 @@ export function RollableStat({
         indicator === 'incapacitated' && 'border-destructive/40 bg-destructive/10 opacity-40 cursor-not-allowed',
         className,
       )}
-      title={indicatorTitle(indicator, rollType, label, modStr)}
+      title={hasBreakdown ? undefined : indicatorTitle(indicator, rollType, label, modStr)}
       aria-label={`Roll ${label}`}
       disabled={indicator === 'incapacitated'}
     >
@@ -245,6 +293,23 @@ export function RollableStat({
       </div>
     </button>
   );
+
+  const mainElement = variant === 'row' ? rowElement : cardElement;
+
+  if (hasBreakdown) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {mainElement}
+        </TooltipTrigger>
+        <TooltipContent side="top" align="center" className="bg-transparent border-none p-0 shadow-none">
+          {tooltipBody}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return mainElement;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
