@@ -48,3 +48,5 @@ _agents/
 
 # Claude Code internal memory (personal, not shared)
 .claude/
+*.db-shm
+*.db-wal

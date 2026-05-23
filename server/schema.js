@@ -371,16 +371,28 @@ function runMigrations() {
   addColumnSafe('encounters', 'automation_presets_json', "TEXT DEFAULT '[]'");
   addColumnSafe('automation_presets', 'encounter_id', "INTEGER DEFAULT NULL");
 
-  // ---- Phase 20.0: Combat Session Snapshots ----
+  // ---- Phase 20.0: Encounter Rollback (Snapshots) ----
   db.exec(`
     CREATE TABLE IF NOT EXISTS combat_snapshots (
-      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-      snapshot_time      TEXT NOT NULL DEFAULT (datetime('now')),
-      description        TEXT NOT NULL,
-      combat_round       INTEGER NOT NULL,
-      combat_turn_index  INTEGER NOT NULL,
-      tracker_state_json TEXT NOT NULL,
-      session_states_json TEXT NOT NULL
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      label       TEXT NOT NULL,
+      round       INTEGER NOT NULL,
+      turn_index  INTEGER NOT NULL,
+      state_json  TEXT NOT NULL,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // ---- Phase 21.0: Rollback Audit Log ----
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS combat_restore_audit (
+      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+      snapshot_id           INTEGER,
+      action_type           TEXT NOT NULL, -- 'preview' or 'restore'
+      dm_identity           TEXT DEFAULT 'DM',
+      timestamp             TEXT NOT NULL DEFAULT (datetime('now')),
+      changed_entities_json TEXT NOT NULL DEFAULT '[]',
+      status                TEXT NOT NULL DEFAULT 'success'
     );
   `);
 

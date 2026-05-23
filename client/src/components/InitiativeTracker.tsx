@@ -8,13 +8,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import {
   Swords, SkipForward, SkipBack, StopCircle, Shield, Skull,
-  Plus, ChevronUp, ChevronDown, Eye, EyeOff, Zap, Loader2, Settings2,
+  Plus, ChevronUp, ChevronDown, Eye, EyeOff, Zap, Loader2, Settings2, History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import socket from '../socket';
 import { CombatReportModal } from './CombatReportModal';
 import { AoEEffectModal, type AoETarget } from './AoEEffectModal';
 import { CombatantSidebar } from './CombatantSidebar';
+import { CombatRecoveryModal } from './CombatRecoveryModal';
 
 // ─── Sorting Utility ─────────────────────────────────────────────────────────
 
@@ -129,6 +130,7 @@ export function InitiativeTracker() {
   const [isEnding, setIsEnding] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
   const [showAoE, setShowAoE] = useState(false);
   const [sidebarCombatant, setSidebarCombatant] = useState<Combatant | null>(null);
   const [reportData, setReportData] = useState<{
@@ -239,9 +241,16 @@ export function InitiativeTracker() {
               <Swords className="h-5 w-5 text-primary" />
               <span className="font-display text-lg">Combat Tracker</span>
             </div>
-            <Button onClick={handleStartCombat} size="sm" className="font-display">
-              <Swords className="h-4 w-4 mr-1" /> Start Combat
-            </Button>
+            <div className="flex items-center gap-1.5">
+              {isDm && (
+                <Button onClick={() => setShowRecovery(true)} variant="outline" size="sm" className="h-8 text-xs font-display">
+                  <History className="h-3.5 w-3.5 mr-1" /> Snapshots
+                </Button>
+              )}
+              <Button onClick={handleStartCombat} size="sm" className="font-display h-8">
+                <Swords className="h-4 w-4 mr-1" /> Start Combat
+              </Button>
+            </div>
           </div>
           {/* Allow pre-spawning monsters before combat starts */}
           <Button
@@ -264,6 +273,10 @@ export function InitiativeTracker() {
         open={showAoE}
         onClose={() => { setShowAoE(false); setSelectedIds(new Set()); }}
         targets={selectedAoETargets}
+      />
+      <CombatRecoveryModal
+        open={showRecovery}
+        onOpenChange={setShowRecovery}
       />
       </>
     );
@@ -312,6 +325,24 @@ export function InitiativeTracker() {
               </Tooltip>
             )}
             {isDm && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowRecovery(true)}
+                    className="h-7 px-2 text-[10px] text-muted-foreground hover:text-primary"
+                    title="Snapshots & Rollbacks"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-[10px]">
+                  Encounter Snapshots & Rollbacks
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {isDm && (
               <Popover open={showQuickActions} onOpenChange={setShowQuickActions}>
                 <PopoverTrigger asChild>
                   <Button
@@ -338,6 +369,13 @@ export function InitiativeTracker() {
                   >
                     <Shield className="h-3 w-3 text-muted-foreground/60" />
                     Clear All Conditions
+                  </button>
+                  <button
+                    onClick={() => { setShowRecovery(true); setShowQuickActions(false); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-secondary/50 text-left transition-colors"
+                  >
+                    <History className="h-3 w-3 text-muted-foreground/60" />
+                    Snapshots & Rollbacks
                   </button>
                 </PopoverContent>
               </Popover>
@@ -618,6 +656,10 @@ export function InitiativeTracker() {
         <CombatantSidebar
           combatant={sidebarCombatant}
           onClose={() => setSidebarCombatant(null)}
+        />
+        <CombatRecoveryModal
+          open={showRecovery}
+          onOpenChange={setShowRecovery}
         />
       </CardContent>
     </Card>

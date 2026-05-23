@@ -775,6 +775,13 @@ Navigate to **Party Notes** from the sidebar. These are shared with the entire p
 
 Private notes that only the DM can see, stored separately from party notes. Use these for plot secrets, NPC motivations, and encounter plans.
 
+## Portable Encounter Packs
+
+DMs can quickly scaffold full combat scenarios using lightweight **Encounter Packs**.
+1. Click the **Import Pack** button (next to Encounters) on the DM Dashboard.
+2. Select an Encounter Pack JSON file. 
+3. The pack is rigorously validated and securely unpacked, immediately populating the Encounter Library with monsters, map notes, and dedicated automation presets—all sandboxed without affecting your global settings.
+
 ## NPC Manager
 
 Click **NPCs** in the God-Eye View to manage your NPC roster:
@@ -964,8 +971,13 @@ Each snapshot is a complete deep copy of the combat universe, capturing the init
 If a player's browser crashes, the server encounters a disconnect, or you make a combat misclick, you can restore state cleanly:
 - Click the **Recover** button in the *Combat Controls* panel on the DM Dashboard.
 - The *Chronology Recovery Console* lists the latest 20 saved checkpoints with descriptive names (e.g. *"Next Turn: Round 2, Turn 3"*) and precise time-stamps.
-- Click **Restore** next to your chosen checkpoint.
-- After a confirmation warning, the entire state of active characters, HP, and the initiative tracker will instantly roll back to that exact timeline checkpoint.`,
+- After a confirmation warning, the entire state of active characters, HP, and the initiative tracker will instantly roll back to that exact timeline checkpoint.
+
+## The Rollback Audit Log
+
+Transparency is key. Every time you preview or execute a rollback, the event is securely logged in the **Recovery History** panel. This provides a clear audit trail of automated state changes for both you and your players.
+
+If you are self-hosting Arcane Ally, you maintain full control over your data. You can clear these logs at any time by clicking the **Purge** button in the Recovery History header, permanently deleting the session's rollback traces.`,
   },
 ];
 

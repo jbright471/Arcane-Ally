@@ -238,25 +238,358 @@ function resolveConcentrationCheckDC(damageTaken, concentratingOn) {
   return { required: true, dc };
 }
 
-function resolveFinalAbilityScores(character, allInventory = []) {
+function resolveFinalAbilityScores(character, allInventory = [], activeBuffs = []) {
   const base = character.abilityScores || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
-  const final = { ...base };
-  const MAP = { 'strength': 'STR', 'dexterity': 'DEX', 'constitution': 'CON', 'intelligence': 'INT', 'wisdom': 'WIS', 'charisma': 'CHA' };
+  const finalScores = { ...base };
+  const MAP = {
+    'strength': 'STR', 'dexterity': 'DEX', 'constitution': 'CON',
+    'intelligence': 'INT', 'wisdom': 'WIS', 'charisma': 'CHA',
+    'str': 'STR', 'dex': 'DEX', 'con': 'CON', 'int': 'INT', 'wis': 'WIS', 'cha': 'CHA'
+  };
 
+  const breakdown = {
+    STR: [{ source: 'Base', value: base.STR ?? 10 }],
+    DEX: [{ source: 'Base', value: base.DEX ?? 10 }],
+    CON: [{ source: 'Base', value: base.CON ?? 10 }],
+    INT: [{ source: 'Base', value: base.INT ?? 10 }],
+    WIS: [{ source: 'Base', value: base.WIS ?? 10 }],
+    CHA: [{ source: 'Base', value: base.CHA ?? 10 }]
+  };
+
+  // 1. Process items flat bonuses
   for (const item of allInventory) {
-    if (item.equipped && item.stats && item.stats.statBonuses) {
-      for (let [stat, bonus] of Object.entries(item.stats.statBonuses)) {
-        let s = stat.toUpperCase();
-        if (MAP[stat.toLowerCase()]) s = MAP[stat.toLowerCase()];
-        if (final[s] !== undefined) final[s] += bonus;
+    if (item.equipped && item.stats) {
+      if (item.stats.statBonuses) {
+        for (let [stat, bonus] of Object.entries(item.stats.statBonuses)) {
+          const upper = stat.toUpperCase();
+          const norm = MAP[upper] || MAP[stat.toLowerCase()] || upper;
+          if (finalScores[norm] !== undefined) {
+            finalScores[norm] += bonus;
+            breakdown[norm].push({ source: item.name, type: 'gear-bonus', value: bonus });
+          }
+        }
       }
     }
   }
-  return final;
+
+  // 2. Process buffs flat bonuses
+  for (const buff of activeBuffs) {
+    const name = (buff.name || '').toLowerCase();
+    if (buff.modifierType === 'flatBonus' && buff.statAffected) {
+      const upper = buff.statAffected.toUpperCase();
+      const norm = MAP[upper] || MAP[buff.statAffected.toLowerCase()] || upper;
+      const bonus = parseInt(buff.modifierValue, 10);
+      if (!isNaN(bonus) && finalScores[norm] !== undefined) {
+        finalScores[norm] += bonus;
+        breakdown[norm].push({ source: buff.sourceName || buff.name, type: 'buff-bonus', value: bonus });
+      }
+    }
+  }
+
+  // 3. Process item overrides (e.g. Gauntlets of Ogre Power)
+  for (const item of allInventory) {
+    if (item.equipped && item.stats && item.stats.statOverrides) {
+      for (let [stat, value] of Object.entries(item.stats.statOverrides)) {
+        const upper = stat.toUpperCase();
+        const norm = MAP[upper] || MAP[stat.toLowerCase()] || upper;
+        if (finalScores[norm] !== undefined && finalScores[norm] < value) {
+          finalScores[norm] = value;
+          breakdown[norm].push({ source: item.name, type: 'gear-override', value: value });
+        }
+      }
+    }
+  }
+
+  // 4. Process buff overrides
+  for (const buff of activeBuffs) {
+    if ((buff.modifierType === 'setStat' || buff.modifierType === 'setScore') && buff.statAffected) {
+      const upper = buff.statAffected.toUpperCase();
+      const norm = MAP[upper] || MAP[buff.statAffected.toLowerCase()] || upper;
+      const setValue = parseInt(buff.modifierValue, 10);
+      if (!isNaN(setValue) && finalScores[norm] !== undefined && finalScores[norm] < setValue) {
+        finalScores[norm] = setValue;
+        breakdown[norm].push({ source: buff.sourceName || buff.name, type: 'buff-override', value: setValue });
+      }
+    }
+  }
+
+  return { finalScores, breakdown };
+}
+
+const SKILL_ABILITIES = {
+  acrobatics: 'DEX',
+  'animal handling': 'WIS',
+  arcana: 'INT',
+  athletics: 'STR',
+  deception: 'CHA',
+  history: 'INT',
+  insight: 'WIS',
+  intimidation: 'CHA',
+  investigation: 'INT',
+  medicine: 'WIS',
+  nature: 'INT',
+  perception: 'WIS',
+  performance: 'CHA',
+  persuasion: 'CHA',
+  religion: 'INT',
+  'sleight of hand': 'DEX',
+  stealth: 'DEX',
+  survival: 'WIS'
+};
+
+function resolveSavingThrows(character, activeBuffs = [], _activeConditions = [], allInventory = []) {
+  const { finalScores } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
+  const proficiencyBonus = Math.floor((character.level - 1) / 4) + 2;
+
+  const stats = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+  const finalSaves = {};
+  const breakdown = {};
+
+  for (const stat of stats) {
+    const baseMod = getAbilityModifier(finalScores[stat]);
+    finalSaves[stat] = baseMod;
+    breakdown[stat] = [{ source: `${stat} Mod`, value: baseMod }];
+
+    const isProficient = character.saveProficiencies?.[stat] || character.saveProficiencies?.[stat.toLowerCase()];
+    if (isProficient) {
+      finalSaves[stat] += proficiencyBonus;
+      breakdown[stat].push({ source: 'Proficiency', value: proficiencyBonus });
+    }
+
+    for (const item of allInventory) {
+      if (item.equipped && item.stats) {
+        const universalBonus = item.stats.saveBonus ?? item.stats.savingThrowBonus;
+        if (universalBonus) {
+          finalSaves[stat] += universalBonus;
+          breakdown[stat].push({ source: item.name, type: 'gear-bonus', value: universalBonus });
+        }
+        const specificBonus = item.stats.saveBonuses?.[stat] ?? item.stats.saveBonuses?.[stat.toLowerCase()];
+        if (specificBonus) {
+          finalSaves[stat] += specificBonus;
+          breakdown[stat].push({ source: item.name, type: 'gear-bonus', value: specificBonus });
+        }
+      }
+    }
+
+    for (const buff of activeBuffs) {
+      const name = (buff.name || '').toLowerCase().trim();
+      if (name === 'bless') {
+        finalSaves[stat] += 2.5;
+        breakdown[stat].push({ source: 'Bless', type: 'buff-bonus', value: 2.5, dice: '1d4' });
+      }
+      if (name === 'bane') {
+        finalSaves[stat] -= 2.5;
+        breakdown[stat].push({ source: 'Bane', type: 'buff-penalty', value: -2.5, dice: '-1d4' });
+      }
+      if (name === 'slow' && stat === 'DEX') {
+        finalSaves[stat] -= 2;
+        breakdown[stat].push({ source: 'Slow', type: 'buff-penalty', value: -2 });
+      }
+
+      if (buff.modifierType === 'flatBonus' && buff.statAffected) {
+        const affected = buff.statAffected.toLowerCase();
+        if (affected.includes('save') || affected.includes('saving')) {
+          let matches = false;
+          if (affected.includes(stat.toLowerCase()) || affected.includes(stat)) {
+            matches = true;
+          } else if (!stats.some(s => affected.includes(s.toLowerCase()))) {
+            matches = true;
+          }
+          if (matches) {
+            const val = parseInt(buff.modifierValue, 10);
+            if (!isNaN(val)) {
+              finalSaves[stat] += val;
+              breakdown[stat].push({ source: buff.sourceName || buff.name, type: 'buff-bonus', value: val });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return { finalSaves, breakdown };
+}
+
+function resolveSkills(character, activeBuffs = [], _activeConditions = [], allInventory = []) {
+  const { finalScores } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
+  const proficiencyBonus = Math.floor((character.level - 1) / 4) + 2;
+
+  const finalSkills = {};
+  const breakdown = {};
+
+  for (const [skillName, ability] of Object.entries(SKILL_ABILITIES)) {
+    const abilityMod = getAbilityModifier(finalScores[ability]);
+    finalSkills[skillName] = abilityMod;
+    breakdown[skillName] = [{ source: `${ability} Mod`, value: abilityMod }];
+
+    let mult = 0;
+    let sourceName = 'Proficiency';
+    const prof = character.skillProficiencies?.[skillName] ?? character.skillProficiencies?.[skillName.toLowerCase()];
+    if (prof === 2 || prof === 'expertise' || prof === 'expert') {
+      mult = 2;
+      sourceName = 'Expertise';
+    } else if (prof === 1 || prof === 'proficient' || prof === 'prof' || prof === true) {
+      mult = 1;
+      sourceName = 'Proficient';
+    } else if (prof === 0.5 || prof === 'half-proficient' || prof === 'half-prof' || prof === 'half') {
+      mult = 0.5;
+      sourceName = 'Half-Proficient';
+    }
+
+    if (mult > 0) {
+      const bonus = Math.floor(mult * proficiencyBonus);
+      finalSkills[skillName] += bonus;
+      breakdown[skillName].push({ source: sourceName, value: bonus });
+    }
+
+    for (const item of allInventory) {
+      if (item.equipped && item.stats) {
+        const bonus = item.stats.skillBonuses?.[skillName] ?? item.stats.skillBonuses?.[skillName.toLowerCase()];
+        if (bonus) {
+          finalSkills[skillName] += bonus;
+          breakdown[skillName].push({ source: item.name, type: 'gear-bonus', value: bonus });
+        }
+      }
+    }
+
+    for (const buff of activeBuffs) {
+      if (buff.modifierType === 'flatBonus' && buff.statAffected) {
+        const affected = buff.statAffected.toLowerCase().trim();
+        if (affected === skillName.toLowerCase() || affected === `skill:${skillName.toLowerCase()}`) {
+          const val = parseInt(buff.modifierValue, 10);
+          if (!isNaN(val)) {
+            finalSkills[skillName] += val;
+            breakdown[skillName].push({ source: buff.sourceName || buff.name, type: 'buff-bonus', value: val });
+          }
+        }
+      }
+    }
+  }
+
+  return { finalSkills, breakdown };
+}
+
+function resolveSpeed(character, activeBuffs = [], activeConditions = [], allInventory = []) {
+  let baseSpeed = character.speed ?? 30;
+  if (typeof baseSpeed === 'object') {
+    baseSpeed = baseSpeed.walk ?? baseSpeed.base ?? 30;
+  }
+  let finalSpeed = baseSpeed;
+  const breakdown = [{ source: 'Base Speed', value: baseSpeed }];
+
+  for (const item of allInventory) {
+    if (item.equipped && item.stats && item.stats.speedBonus) {
+      finalSpeed += item.stats.speedBonus;
+      breakdown.push({ source: item.name, type: 'gear-bonus', value: item.stats.speedBonus });
+    }
+  }
+
+  for (const buff of activeBuffs) {
+    if (buff.modifierType === 'flatBonus' && (buff.statAffected || '').toLowerCase().includes('speed')) {
+      const val = parseInt(buff.modifierValue, 10);
+      if (!isNaN(val)) {
+        finalSpeed += val;
+        breakdown.push({ source: buff.sourceName || buff.name, type: 'buff-bonus', value: val });
+      }
+    }
+  }
+
+  let multiplier = 1;
+  const multipliersUsed = [];
+
+  const hasHaste = activeBuffs.some(b => b.name?.toLowerCase() === 'haste' || b.sourceName?.toLowerCase() === 'haste');
+  if (hasHaste) {
+    multiplier *= 2;
+    multipliersUsed.push({ source: 'Haste', multiplier: 2 });
+  }
+
+  const hasBootsOfSpeed = allInventory.some(item => item.equipped && (item.name?.toLowerCase().includes('boots of speed') || item.stats?.doubleSpeed));
+  if (hasBootsOfSpeed) {
+    multiplier *= 2;
+    multipliersUsed.push({ source: 'Boots of Speed', multiplier: 2 });
+  }
+
+  if (multiplier !== 1) {
+    finalSpeed = finalSpeed * multiplier;
+    for (const m of multipliersUsed) {
+      breakdown.push({ source: m.source, type: 'multiplier', value: `x${m.multiplier}` });
+    }
+  }
+
+  let exhaustionLevel = 0;
+  for (const cond of activeConditions) {
+    const lower = cond.toLowerCase().trim();
+    if (lower.startsWith('exhaustion')) {
+      const match = lower.match(/\d+/);
+      if (match) exhaustionLevel = parseInt(match[0], 10);
+      else exhaustionLevel = 1;
+    }
+  }
+
+  if (exhaustionLevel >= 2 && exhaustionLevel < 5) {
+    finalSpeed = Math.floor(finalSpeed / 2);
+    breakdown.push({ source: `Exhaustion Level ${exhaustionLevel}`, type: 'penalty', value: 'Halved' });
+  }
+
+  const isProne = activeConditions.some(c => c.toLowerCase() === 'prone');
+  if (isProne) {
+    finalSpeed = Math.floor(finalSpeed / 2);
+    breakdown.push({ source: 'Prone', type: 'penalty', value: 'Halved' });
+  }
+
+  const speedZeroConditions = ['grappled', 'restrained', 'stunned', 'paralyzed', 'unconscious', 'petrified'];
+  const activeZeroCond = activeConditions.find(c => speedZeroConditions.includes(c.toLowerCase()));
+
+  if (activeZeroCond) {
+    finalSpeed = 0;
+    breakdown.push({ source: activeZeroCond.charAt(0).toUpperCase() + activeZeroCond.slice(1).toLowerCase(), type: 'override', value: 0 });
+  } else if (exhaustionLevel >= 5) {
+    finalSpeed = 0;
+    breakdown.push({ source: `Exhaustion Level ${exhaustionLevel}`, type: 'override', value: 0 });
+  }
+
+  return { finalSpeed, breakdown };
+}
+
+function resolveInitiative(character, activeBuffs = [], _activeConditions = [], allInventory = []) {
+  const { finalScores } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
+  const dexMod = getAbilityModifier(finalScores.DEX || 10);
+
+  let finalInitiative = dexMod;
+  const breakdown = [{ source: 'DEX Modifier', value: dexMod }];
+
+  const features = character.features || [];
+  const alertFeat = features.find(f => f.name && f.name.toLowerCase().includes('alert'));
+  if (alertFeat) {
+    finalInitiative += 5;
+    breakdown.push({ source: 'Alert Feat', type: 'feat', value: 5 });
+  }
+
+  for (const item of allInventory) {
+    if (item.equipped && item.stats) {
+      const bonus = item.stats.initiativeBonus;
+      if (bonus) {
+        finalInitiative += bonus;
+        breakdown.push({ source: item.name, type: 'gear-bonus', value: bonus });
+      }
+    }
+  }
+
+  for (const buff of activeBuffs) {
+    if (buff.modifierType === 'flatBonus' && (buff.statAffected || '').toLowerCase().includes('initiative')) {
+      const val = parseInt(buff.modifierValue, 10);
+      if (!isNaN(val)) {
+        finalInitiative += val;
+        breakdown.push({ source: buff.sourceName || buff.name, type: 'buff-bonus', value: val });
+      }
+    }
+  }
+
+  return { finalInitiative, breakdown };
 }
 
 function resolveCurrentAC(character, activeBuffs = [], _activeConditions = [], allInventory = []) {
-  const scores = resolveFinalAbilityScores(character, allInventory);
+  const { finalScores: scores } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
   const dexMod = getAbilityModifier(scores.DEX || 10);
   const wisMod = getAbilityModifier(scores.WIS || 10);
   const conMod = getAbilityModifier(scores.CON || 10);
@@ -417,346 +750,81 @@ function longRestFeatures() { return {}; }
 function getAbilityModifier(score) { return Math.floor((score - 10) / 2); }
 function formatModifier(score) { const mod = getAbilityModifier(score); return mod >= 0 ? `+${mod}` : `${mod}`; }
 
-const SKILLS = [
-  { label: 'Acrobatics',     ability: 'DEX' },
-  { label: 'Animal Handling', ability: 'WIS' },
-  { label: 'Arcana',         ability: 'INT' },
-  { label: 'Athletics',      ability: 'STR' },
-  { label: 'Deception',      ability: 'CHA' },
-  { label: 'History',        ability: 'INT' },
-  { label: 'Insight',        ability: 'WIS' },
-  { label: 'Intimidation',   ability: 'CHA' },
-  { label: 'Investigation',  ability: 'INT' },
-  { label: 'Medicine',       ability: 'WIS' },
-  { label: 'Nature',         ability: 'INT' },
-  { label: 'Perception',     ability: 'WIS' },
-  { label: 'Performance',    ability: 'CHA' },
-  { label: 'Persuasion',     ability: 'CHA' },
-  { label: 'Religion',       ability: 'INT' },
-  { label: 'Sleight of Hand', ability: 'DEX' },
-  { label: 'Stealth',        ability: 'DEX' },
-  { label: 'Survival',       ability: 'WIS' },
-];
-
 function resolveStatProvenance(character, activeBuffs = [], activeConditions = [], allInventory = []) {
-  const baseScores = character.abilityScores || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
-  const proficiencyBonus = Math.floor((character.level - 1) / 4) + 2;
-
-  // 1. Resolve Ability Scores
-  const abilityScoresBreakdown = {};
-  for (const key of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']) {
-    abilityScoresBreakdown[key] = {
-      base: baseScores[key] || 10,
-      final: baseScores[key] || 10,
-      sources: [{ source: 'Base Score', type: 'base', value: baseScores[key] || 10 }]
+  // 1. Ability Scores
+  const { finalScores, breakdown: abilityBreakdown } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
+  const abilityScores = {};
+  for (const [stat, val] of Object.entries(finalScores)) {
+    abilityScores[stat] = {
+      final: val,
+      sources: abilityBreakdown[stat]
     };
   }
 
-  const MAP = { 'strength': 'STR', 'dexterity': 'DEX', 'constitution': 'CON', 'intelligence': 'INT', 'wisdom': 'WIS', 'charisma': 'CHA' };
-  for (const item of allInventory) {
-    if (item.equipped && item.stats && item.stats.statBonuses) {
-      for (let [stat, bonus] of Object.entries(item.stats.statBonuses)) {
-        let s = stat.toUpperCase();
-        if (MAP[stat.toLowerCase()]) s = MAP[stat.toLowerCase()];
-        if (abilityScoresBreakdown[s]) {
-          abilityScoresBreakdown[s].final += bonus;
-          abilityScoresBreakdown[s].sources.push({ source: item.name, type: 'gear', value: bonus });
+  // 2. AC
+  const ac = resolveCurrentAC(character, activeBuffs, activeConditions, allInventory);
+
+  // 3. Saves
+  const { finalSaves, breakdown: saveBreakdown } = resolveSavingThrows(character, activeBuffs, activeConditions, allInventory);
+  const saves = {};
+  for (const [stat, val] of Object.entries(finalSaves)) {
+    const isAutoFail = activeConditions.some(c => {
+      const lower = c.toLowerCase();
+      return (lower === 'paralyzed' || lower === 'petrified' || lower === 'stunned' || lower === 'unconscious') && (stat === 'STR' || stat === 'DEX');
+    });
+
+    let adjustedVal = val;
+    const hasBless = activeBuffs.some(b => b.name?.toLowerCase() === 'bless');
+    const hasBane = activeBuffs.some(b => b.name?.toLowerCase() === 'bane');
+    if (hasBless) adjustedVal -= 2.5;
+    if (hasBane) adjustedVal += 2.5;
+
+    saves[stat] = {
+      final: adjustedVal,
+      sources: saveBreakdown[stat].map(s => {
+        if (s.source === 'Bless') {
+          return { ...s, value: '1d4' };
         }
-      }
-    }
-  }
-
-  for (const buff of activeBuffs) {
-    const isFlat = buff.modifierType === 'flatBonus' || buff.modifier === 'flatBonus' || buff.modifierType === 'flat' || buff.stat;
-    if (isFlat) {
-      const stat = (buff.statAffected || buff.stat || '').toUpperCase();
-      const bonus = parseInt(buff.modifierValue || buff.modifier || '0', 10);
-      if (abilityScoresBreakdown[stat] && !isNaN(bonus) && bonus !== 0) {
-        abilityScoresBreakdown[stat].final += bonus;
-        abilityScoresBreakdown[stat].sources.push({ source: buff.name, type: 'buff', value: bonus });
-      }
-    }
-    if (buff.modifierType === 'setScore' || buff.modifier === 'setScore') {
-      const stat = (buff.statAffected || buff.stat || '').toUpperCase();
-      const value = parseInt(buff.modifierValue || buff.modifier || '0', 10);
-      if (abilityScoresBreakdown[stat] && !isNaN(value)) {
-        abilityScoresBreakdown[stat].final = value;
-        abilityScoresBreakdown[stat].sources.push({ source: buff.name, type: 'override', value });
-      }
-    }
-  }
-
-  // Resolve final modifiers
-  const finalScores = {};
-  const finalModifiers = {};
-  for (const [key, bData] of Object.entries(abilityScoresBreakdown)) {
-    finalScores[key] = bData.final;
-    finalModifiers[key] = Math.floor((bData.final - 10) / 2);
-  }
-
-  // 2. Resolve AC
-  const acRes = resolveCurrentAC(character, activeBuffs, activeConditions, allInventory);
-
-  // 3. Exhaustion Parsing
-  let exhaustionLevel = 0;
-  for (const cond of activeConditions) {
-    const match = cond.toLowerCase().match(/^exhaustion\s*(\d+)$/);
-    if (match) {
-      exhaustionLevel = Math.max(exhaustionLevel, parseInt(match[1], 10));
-    }
-  }
-
-  // 4. Resolve Speed
-  let baseSpeed = character.speed || 30;
-  let finalSpeed = baseSpeed;
-  const speedSources = [{ source: 'Base Speed', type: 'base', value: baseSpeed }];
-
-  for (const item of allInventory) {
-    if (item.equipped && item.stats && item.stats.speedBonus) {
-      finalSpeed += item.stats.speedBonus;
-      speedSources.push({ source: item.name, type: 'gear', value: item.stats.speedBonus });
-    }
-  }
-
-  let speedMultiplier = 1;
-  for (const buff of activeBuffs) {
-    const lowerName = (buff.name || '').toLowerCase();
-    if (lowerName === 'haste') {
-      speedMultiplier *= 2;
-      speedSources.push({ source: 'Haste', type: 'buff', value: 'x2' });
-    } else if (lowerName === 'slow') {
-      speedMultiplier *= 0.5;
-      speedSources.push({ source: 'Slow', type: 'buff', value: 'x0.5' });
-    } else if (buff.modifierType === 'flatBonus' && (buff.statAffected || '').toLowerCase().includes('speed')) {
-      const bonus = parseInt(buff.modifierValue, 10);
-      if (!isNaN(bonus) && bonus !== 0) {
-        finalSpeed += bonus;
-        speedSources.push({ source: buff.name, type: 'buff', value: bonus });
-      }
-    }
-  }
-
-  let grappledOrStunned = false;
-  for (const cond of activeConditions) {
-    const lowerCond = cond.toLowerCase().trim();
-    if (['grappled', 'restrained', 'paralyzed', 'petrified', 'stunned', 'unconscious'].includes(lowerCond)) {
-      grappledOrStunned = true;
-      speedSources.push({ source: lowerCond, type: 'condition', value: 'set to 0' });
-    }
-    if (lowerCond === 'prone') {
-      speedMultiplier *= 0.5;
-      speedSources.push({ source: 'prone', type: 'condition', value: 'halved' });
-    }
-  }
-
-  if (exhaustionLevel >= 5) {
-    grappledOrStunned = true;
-    speedSources.push({ source: `Exhaustion ${exhaustionLevel}`, type: 'condition', value: 'set to 0' });
-  } else if (exhaustionLevel >= 2) {
-    speedMultiplier *= 0.5;
-    speedSources.push({ source: `Exhaustion ${exhaustionLevel}`, type: 'condition', value: 'halved' });
-  }
-
-  if (grappledOrStunned) {
-    finalSpeed = 0;
-  } else {
-    finalSpeed = Math.floor(finalSpeed * speedMultiplier);
-  }
-
-  // 5. Resolve Initiative
-  const dexMod = finalModifiers.DEX || 0;
-  let finalInitiative = dexMod;
-  const initiativeSources = [{ source: 'DEX Modifier', type: 'ability', value: dexMod }];
-
-  for (const item of allInventory) {
-    if (item.equipped && item.stats && item.stats.initiativeBonus) {
-      finalInitiative += item.stats.initiativeBonus;
-      initiativeSources.push({ source: item.name, type: 'gear', value: item.stats.initiativeBonus });
-    }
-  }
-
-  for (const buff of activeBuffs) {
-    if (buff.modifierType === 'flatBonus' && (buff.statAffected || '').toLowerCase().includes('initiative')) {
-      const bonus = parseInt(buff.modifierValue, 10);
-      if (!isNaN(bonus) && bonus !== 0) {
-        finalInitiative += bonus;
-        initiativeSources.push({ source: buff.name, type: 'buff', value: bonus });
-      }
-    }
-  }
-
-  // 6. Resolve Saving Throws
-  const savesProvenance = {};
-  const saveProficiencies = character.saveProficiencies || {};
-  for (const key of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']) {
-    const abMod = finalModifiers[key] || 0;
-    let finalMod = abMod;
-    const sources = [{ source: `${key} Modifier`, type: 'ability', value: abMod }];
-
-    if (saveProficiencies[key]) {
-      finalMod += proficiencyBonus;
-      sources.push({ source: 'Proficiency', type: 'proficiency', value: proficiencyBonus });
-    }
-
-    let advReason = [];
-    let disReason = [];
-    let autoFailReason = [];
-
-    for (const buff of activeBuffs) {
-      const lowerName = (buff.name || '').toLowerCase();
-      const effect = BUFF_EFFECTS[lowerName];
-      if (effect) {
-        if (effect.saveBonusRoll) {
-          sources.push({ source: buff.name, type: 'buff', value: effect.saveBonusRoll });
+        if (s.source === 'Bane') {
+          return { ...s, value: '-1d4' };
         }
-        if (effect.saveAdvantage && effect.saveAdvantage.includes(key)) {
-          advReason.push(buff.name);
-        }
-        if (effect.savePenalty && effect.savePenalty[0] === key) {
-          const penalty = effect.savePenalty[1];
-          finalMod += penalty;
-          sources.push({ source: buff.name, type: 'buff', value: penalty });
-        }
-      }
-      if (buff.modifierType === 'flatBonus' && (buff.statAffected || '').toLowerCase() === `${key.toLowerCase()} save`) {
-        const bonus = parseInt(buff.modifierValue, 10);
-        if (!isNaN(bonus) && bonus !== 0) {
-          finalMod += bonus;
-          sources.push({ source: buff.name, type: 'buff', value: bonus });
-        }
-      }
-    }
-
-    for (const cond of activeConditions) {
-      const lowerCond = cond.toLowerCase().trim();
-      const effects = CONDITION_EFFECTS[lowerCond];
-      if (effects) {
-        if (effects.savingThrowDisadvantage && effects.savingThrowDisadvantage.includes(key)) {
-          disReason.push(lowerCond);
-        }
-        if (effects.autoFail && effects.autoFail.includes(key)) {
-          autoFailReason.push(lowerCond);
-        }
-      }
-    }
-
-    if (exhaustionLevel >= 3) {
-      disReason.push(`Exhaustion ${exhaustionLevel}`);
-    }
-
-    let rollState = 'normal';
-    if (autoFailReason.length > 0) rollState = 'auto-fail';
-    else if (advReason.length > 0 && disReason.length > 0) rollState = 'normal';
-    else if (advReason.length > 0) rollState = 'advantage';
-    else if (disReason.length > 0) rollState = 'disadvantage';
-
-    savesProvenance[key] = {
-      final: finalMod,
-      sources,
-      rollState,
-      advantages: advReason,
-      disadvantages: disReason,
-      autoFails: autoFailReason
+        return s;
+      }),
+      rollState: isAutoFail ? 'auto-fail' : 'normal'
     };
   }
 
-  // 7. Resolve Skills
-  const skillsProvenance = {};
-  const skillProficiencies = character.skillProficiencies || {};
-  for (const { label, ability } of SKILLS) {
-    const abMod = finalModifiers[ability] || 0;
-    let finalMod = abMod;
-    const sources = [{ source: `${ability} Modifier`, type: 'ability', value: abMod }];
+  // 4. Speed
+  const { finalSpeed, breakdown: speedBreakdown } = resolveSpeed(character, activeBuffs, activeConditions, allInventory);
+  const speed = {
+    final: finalSpeed,
+    breakdown: speedBreakdown
+  };
 
-    const prof = skillProficiencies[label];
-    if (prof === 'expertise') {
-      finalMod += proficiencyBonus * 2;
-      sources.push({ source: 'Expertise', type: 'proficiency', value: proficiencyBonus * 2 });
-    } else if (prof === 'proficiency') {
-      finalMod += proficiencyBonus;
-      sources.push({ source: 'Proficiency', type: 'proficiency', value: proficiencyBonus });
-    } else if (prof === 'half') {
-      const halfProf = Math.floor(proficiencyBonus / 2);
-      finalMod += halfProf;
-      sources.push({ source: 'Jack of All Trades', type: 'proficiency', value: halfProf });
-    }
-
-    let advReason = [];
-    let disReason = [];
-    let autoFailReason = [];
-
-    for (const buff of activeBuffs) {
-      const lowerName = (buff.name || '').toLowerCase();
-      if (lowerName === 'guidance') {
-        sources.push({ source: 'Guidance', type: 'buff', value: '+1d4' });
-      }
-      if (buff.modifierType === 'flatBonus' && (buff.statAffected || '').toLowerCase() === label.toLowerCase()) {
-        const bonus = parseInt(buff.modifierValue, 10);
-        if (!isNaN(bonus) && bonus !== 0) {
-          finalMod += bonus;
-          sources.push({ source: buff.name, type: 'buff', value: bonus });
-        }
-      }
-    }
-
-    for (const cond of activeConditions) {
-      const lowerCond = cond.toLowerCase().trim();
-      const effects = CONDITION_EFFECTS[lowerCond];
-      if (effects) {
-        if (effects.checksDisadvantage) {
-          disReason.push(lowerCond);
-        }
-        if (effects.autoFail) {
-          if (effects.autoFail.includes('sight-based checks') && ['Perception', 'Investigation'].includes(label)) {
-            autoFailReason.push(lowerCond);
-          }
-          if (effects.autoFail.includes('hearing checks') && label === 'Perception') {
-            autoFailReason.push(lowerCond);
-          }
-        }
-      }
-    }
-
-    if (exhaustionLevel >= 1) {
-      disReason.push(`Exhaustion ${exhaustionLevel}`);
-    }
-
-    let rollState = 'normal';
-    if (autoFailReason.length > 0) rollState = 'auto-fail';
-    else if (advReason.length > 0 && disReason.length > 0) rollState = 'normal';
-    else if (advReason.length > 0) rollState = 'advantage';
-    else if (disReason.length > 0) rollState = 'disadvantage';
-
-    skillsProvenance[label] = {
-      final: finalMod,
-      sources,
-      rollState,
-      advantages: advReason,
-      disadvantages: disReason,
-      autoFails: autoFailReason
+  // 5. Skills
+  const { finalSkills, breakdown: skillBreakdown } = resolveSkills(character, activeBuffs, activeConditions, allInventory);
+  const skills = {};
+  for (const [skill, val] of Object.entries(finalSkills)) {
+    skills[skill] = {
+      final: val,
+      sources: skillBreakdown[skill]
     };
   }
 
   return {
-    abilityScores: abilityScoresBreakdown,
-    ac: acRes,
-    speed: {
-      final: finalSpeed,
-      sources: speedSources
-    },
-    initiative: {
-      final: finalInitiative,
-      sources: initiativeSources
-    },
-    saves: savesProvenance,
-    skills: skillsProvenance
+    abilityScores,
+    ac,
+    saves,
+    speed,
+    skills
   };
 }
 
 module.exports = {
   resolveDamage, resolveHeal, resolveTempHp, resolveDeathSave,
   resolveConcentrationChange, isConcentrationSpell, resolveConcentrationCheckDC,
-  resolveCurrentAC, resolveFinalAbilityScores, resolveStatProvenance,
+  resolveCurrentAC, resolveFinalAbilityScores, resolveSavingThrows, resolveSkills, resolveSpeed, resolveInitiative,
+  resolveStatProvenance,
   applyCondition, removeCondition, resolveConditionModifiers, CONDITION_EFFECTS, BUFF_EFFECTS,
   useSpellSlot, restoreAllSpellSlots,
   useFeatureCharge, shortRestFeatures, longRestFeatures,
