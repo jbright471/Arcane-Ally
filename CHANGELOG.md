@@ -4,6 +4,12 @@ All notable changes to the **DnD Party Sync** project will be documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## [1.15.0] - 2026-05-22
+
+### Added
+- **🗃️ Rollback Audit Log & Purge**: Added a new combat restore audit database table and a Recovery History view in the CombatRecoveryModal to securely log DM combat rollback usage. Includes a Purge History option.
+- **🎒 Portable Encounter Packs**: DMs can now import lightweight Encounter Pack JSON files directly from the DM Dashboard. Added comprehensive schema validation.
+
 ## [1.14.0] - 2026-05-19
 
 ### Added

@@ -17,13 +17,16 @@ const {
   resolveConcentrationCheckDC,
   resolveCurrentAC,
   resolveFinalAbilityScores,
+  resolveSavingThrows,
+  resolveSkills,
+  resolveSpeed,
+  resolveInitiative,
   applyCondition,
   removeCondition,
   useSpellSlot,
   restoreAllSpellSlots,
   shortRestFeatures,
   longRestFeatures,
-  resolveStatProvenance,
 } = require('./rulesEngine');
 
 // ---------------------------------------------------------------------------
@@ -355,12 +358,7 @@ function applyBuffEvent(db, characterId, buffData) {
     name: buffData.name,
     sourceName: buffData.sourceName || 'System',
     isConcentration: !!buffData.isConcentration,
-    timestamp: new Date().toISOString(),
-    modifierType: buffData.modifierType || null,
-    modifierValue: buffData.modifierValue || null,
-    statAffected: buffData.statAffected || null,
-    stat: buffData.stat || null,
-    modifier: buffData.modifier || null,
+    timestamp: new Date().toISOString()
   };
 
   state.activeBuffs.push(newBuff);
@@ -487,12 +485,13 @@ function getResolvedCharacterState(db, characterId) {
   const state = getSessionState(db, characterId);
   if (!char || !state) return null;
 
-  const provenance = resolveStatProvenance(char, state.activeBuffs, state.activeConditions, [...char.inventory, ...char.homebrewInventory]);
-  const currentAC = provenance.ac;
-  const finalScores = {};
-  for (const [key, val] of Object.entries(provenance.abilityScores)) {
-    finalScores[key] = val.final;
-  }
+  const allInventory = [...char.inventory, ...char.homebrewInventory];
+  const { finalScores, breakdown: abilityScoresBreakdown } = resolveFinalAbilityScores(char, allInventory, state.activeBuffs);
+  const currentAC = resolveCurrentAC(char, state.activeBuffs, state.activeConditions, allInventory);
+  const savesResult = resolveSavingThrows(char, state.activeBuffs, state.activeConditions, allInventory);
+  const skillsResult = resolveSkills(char, state.activeBuffs, state.activeConditions, allInventory);
+  const speedResult = resolveSpeed(char, state.activeBuffs, state.activeConditions, allInventory);
+  const initResult = resolveInitiative(char, state.activeBuffs, state.activeConditions, allInventory);
 
   const proficiencyBonus = Math.floor((char.level - 1) / 4) + 2;
 
@@ -509,8 +508,15 @@ function getResolvedCharacterState(db, characterId) {
     ac: currentAC.finalAC,
     acBreakdown: currentAC.breakdown,
     abilityScores: finalScores,
-    provenance,
-    skills: char.skills,
+    abilityScoresBreakdown: abilityScoresBreakdown,
+    savingThrows: savesResult.finalSaves,
+    savingThrowsBreakdown: savesResult.breakdown,
+    skills: skillsResult.finalSkills,
+    skillsBreakdown: skillsResult.breakdown,
+    speed: speedResult.finalSpeed,
+    speedBreakdown: speedResult.breakdown,
+    initiative: initResult.finalInitiative,
+    initiativeBreakdown: initResult.breakdown,
     skillProficiencies: char.skillProficiencies || {},
     saveProficiencies:  char.saveProficiencies  || {},
     conditions: state.activeConditions,
@@ -535,9 +541,67 @@ function getResolvedCharacterState(db, characterId) {
   };
 }
 
+function getCombatStateInspector(db, characterId) {
+  const char = getCharacterData(db, characterId);
+  const state = getSessionState(db, characterId);
+  if (!char || !state) return null;
+
+  const allInventory = [...(char.inventory || []), ...(char.homebrewInventory || [])];
+  const acResult = require('./rulesEngine').resolveCurrentAC(char, state.activeBuffs, state.activeConditions, allInventory);
+  
+  const baseStats = char.abilityScores || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
+  const finalStats = { ...baseStats };
+  const statBreakdowns = {
+    STR: [{ source: 'Base', value: baseStats.STR || 10 }],
+    DEX: [{ source: 'Base', value: baseStats.DEX || 10 }],
+    CON: [{ source: 'Base', value: baseStats.CON || 10 }],
+    INT: [{ source: 'Base', value: baseStats.INT || 10 }],
+    WIS: [{ source: 'Base', value: baseStats.WIS || 10 }],
+    CHA: [{ source: 'Base', value: baseStats.CHA || 10 }]
+  };
+  
+  const MAP = { 'strength': 'STR', 'dexterity': 'DEX', 'constitution': 'CON', 'intelligence': 'INT', 'wisdom': 'WIS', 'charisma': 'CHA' };
+
+  for (const item of allInventory) {
+    if (item.equipped && item.stats && item.stats.statBonuses) {
+      for (let [stat, bonus] of Object.entries(item.stats.statBonuses)) {
+        let s = stat.toUpperCase();
+        if (MAP[stat.toLowerCase()]) s = MAP[stat.toLowerCase()];
+        if (finalStats[s] !== undefined) {
+            finalStats[s] += bonus;
+            statBreakdowns[s].push({ source: item.name, value: bonus });
+        }
+      }
+    }
+  }
+
+  const { CONDITION_EFFECTS } = require('./rulesEngine');
+  const conditions = state.activeConditions.map(cond => {
+    return { name: cond, effects: CONDITION_EFFECTS[cond.toLowerCase()] || {} };
+  });
+
+  return {
+    characterName: char.name,
+    ac: acResult,
+    abilityScores: {
+      final: finalStats,
+      breakdown: statBreakdowns
+    },
+    hp: {
+      current: state.currentHp,
+      max: char.baseMaxHp,
+      temp: state.tempHp
+    },
+    activeConditions: conditions,
+    activeBuffs: state.activeBuffs,
+    concentratingOn: state.concentratingOn,
+  };
+}
+
 module.exports = {
   getSessionState, saveSessionState, getCharacterData, getResolvedCharacterState,
   applyDamageEvent, applyHealEvent, setTempHpEvent, castConcentrationSpellEvent,
   dropConcentrationEvent, applyConditionEvent, removeConditionEvent, tickConditionsEvent,
-  useSpellSlotEvent, spendHitDieEvent, shortRestEvent, longRestEvent, applyBuffEvent, removeBuffEvent
+  useSpellSlotEvent, spendHitDieEvent, shortRestEvent, longRestEvent, applyBuffEvent, removeBuffEvent,
+  getCombatStateInspector,
 };

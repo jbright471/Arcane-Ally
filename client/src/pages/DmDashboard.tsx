@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -34,7 +34,7 @@ import { ActionableLoreMessage } from '../components/ActionableLoreMessage';
 import { parseLoreMessage } from '../lib/loreParser';
 import {
   Eye, Swords, Users, Gem, Scroll, Sparkles, Map,
-  FlagOff, Plus, BookOpen, ShieldAlert, Send, Zap, NotebookPen, StickyNote, History
+  FlagOff, Plus, BookOpen, ShieldAlert, Send, Zap, NotebookPen, StickyNote, History, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 import socket from '../socket';
@@ -80,6 +80,30 @@ export default function DmDashboard() {
   const handleQuickHp = (charId: string, delta: number) => {
     if (!navigator.onLine) { toast.warning('Offline — HP changes cannot be saved.'); return; }
     socket.emit('update_hp', { characterId: parseInt(charId), delta, actor: 'DM', damageType: delta < 0 ? 'force' : null });
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportPack = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const pack = JSON.parse(text);
+      const res = await fetch('/api/prep-packs/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pack)
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Import failed');
+      }
+      toast.success('Encounter pack imported successfully!');
+    } catch (err: any) {
+      toast.error('Import failed: ' + err.message);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleToggleCondition = (charId: string, conditions: string[], condition: string) => {
@@ -359,6 +383,10 @@ export default function DmDashboard() {
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowEncounterLibrary(true)}>
                   <Swords className="h-3 w-3 mr-1" /> Encounters
+                </Button>
+                <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleImportPack} />
+                <Button size="sm" variant="outline" className="h-8 text-xs text-primary border-primary/30 hover:bg-primary/10" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="h-3 w-3 mr-1" /> Import Pack
                 </Button>
                 <Button size="sm" variant="outline" className="h-8 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10" onClick={() => setShowRecovery(true)}>
                   <History className="h-3 w-3 mr-1" /> Recover

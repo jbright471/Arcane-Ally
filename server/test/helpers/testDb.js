@@ -40,7 +40,10 @@ function createTestDb() {
       raw_dndbeyond_json TEXT DEFAULT '',
       data_json   TEXT DEFAULT '{}',
       homebrew_inventory TEXT DEFAULT '[]',
-      ddb_id      INTEGER UNIQUE DEFAULT NULL
+      ddb_id      INTEGER UNIQUE DEFAULT NULL,
+      skill_proficiencies TEXT DEFAULT '{}',
+      save_proficiencies TEXT DEFAULT '{}',
+      attacks     TEXT DEFAULT '[]'
     );
 
     CREATE TABLE IF NOT EXISTS session_states (
@@ -56,6 +59,7 @@ function createTestDb() {
       hd_used_json      TEXT DEFAULT '{}',
       feature_uses_json TEXT DEFAULT '{}',
       active_features_json TEXT DEFAULT '[]',
+      condition_durations_json TEXT DEFAULT '{}',
       updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
     );
@@ -73,7 +77,8 @@ function createTestDb() {
       sort_order    INTEGER NOT NULL DEFAULT 0,
       character_id  INTEGER DEFAULT NULL,
       encounter_id  INTEGER DEFAULT NULL,
-      instance_id   TEXT DEFAULT NULL
+      instance_id   TEXT DEFAULT NULL,
+      stats_json    TEXT DEFAULT NULL
     );
 
     CREATE TABLE IF NOT EXISTS effect_events (
@@ -89,6 +94,11 @@ function createTestDb() {
       payload_json     TEXT NOT NULL DEFAULT '{}',
       parent_event_id  INTEGER DEFAULT NULL,
       source_preset_id INTEGER DEFAULT NULL,
+      request_id       TEXT DEFAULT NULL,
+      description      TEXT DEFAULT NULL,
+      is_reversed      INTEGER DEFAULT 0,
+      reversed_by_event_id INTEGER DEFAULT NULL,
+      group_id         TEXT DEFAULT NULL,
       created_at       TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (parent_event_id) REFERENCES effect_events(id)
     );
