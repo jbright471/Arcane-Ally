@@ -63,34 +63,50 @@ Unlike static character sheets, Arcane Ally is **event-driven**. When the DM dea
   },
   {
     id: 'importing',
-    title: 'Importing Characters',
+    title: 'Character Integration',
     category: 'getting-started',
     icon: Users,
-    content: `# Importing Characters
+    content: `# Character Integration & Creation
 
-Arcane Ally supports two import methods: **D&D Beyond URL** and **PDF Upload**.
+Arcane Ally supports three methods for character creation: **D&D Beyond Sync**, **AI PDF Import**, and **Manual Creation** from scratch.
 
 ## D&D Beyond Import
 
-1. Navigate to **Import DDB** from the sidebar
-2. Paste your full D&D Beyond character URL (e.g. \`https://www.dndbeyond.com/characters/12345678\`)
-3. Click **Import** — the app will fetch your character data directly from D&D Beyond's API
-4. Your ability scores, equipment, spells, and inventory are all imported automatically
+The fastest way to get started is by syncing your existing character directly from D&D Beyond:
 
-> **Tip:** Make sure your character is set to **Public** on D&D Beyond, otherwise the API will return an error.
+1. Navigate to **Import DDB** from the sidebar.
+2. Paste your full D&D Beyond character URL (e.g. \`https://www.dndbeyond.com/characters/12345678\`).
+3. Click **Import** — the app will query your character data directly from the D&D Beyond API.
+4. Your ability scores, equipment, spell list, and current inventory are compiled and loaded automatically.
 
-## PDF Import
+> **Tip:** Your character sheet must be set to **Public** on D&D Beyond. If set to Private, the API will fail to fetch the sheet.
 
-1. Navigate to **Import DDB** and switch to the **PDF** tab
-2. Upload your exported character sheet PDF
-3. The AI parser (powered by Ollama) will extract your stats, class, level, and abilities
-4. Review the parsed data and confirm
+## AI PDF Import
 
-> **Note:** PDF parsing uses AI and may not be 100% accurate for heavily customized sheets. Always double-check the imported values.
+If you have a PDF character sheet, you can parse it using the local AI:
 
-## Re-Syncing
+1. Navigate to **Import DDB** and select the **PDF** tab.
+2. Drag and drop or upload your D&D 5e character sheet PDF.
+3. The offline AI parser (powered by Ollama) reads your sheet and extracts details like stats, classes, levels, equipment, and spells.
+4. Review the generated data draft and click **Confirm** to save the character.
 
-Already imported but leveled up on D&D Beyond? Open your character sheet and click the **Sync** button in the header to pull the latest data without creating a duplicate.`,
+> **Note:** Because PDF styles and formats vary, AI parsing is an approximation. Always review the extracted numbers before finalizing.
+
+## Manual Creation from Scratch
+
+If you are not using D&D Beyond or a PDF, you can manually build your character sheet:
+
+1. Click **New Character** in the sidebar (or click the button in the Import page).
+2. Enter your character's name, class, level, Max HP, Armor Class (AC), and Speed (in feet).
+3. Adjust the six primary **Ability Scores** using the interactive sliders (values range from 1 to 30).
+4. Click **Create Character** to save your sheet. You can edit equipment, spells, and other features directly in your sheet at any time.
+
+## Re-Syncing Sheets
+
+If you level up, gain items, or edit your character on D&D Beyond later, you do not need to import a new character:
+- Open your Character Sheet inside Arcane Ally.
+- Click the **Sync** button in the header.
+- The app fetches and updates your stats, equipment, and spells, leaving your session-specific HP and spell slots clean and untouched.`,
   },
   {
     id: 'ui-overview',
@@ -127,6 +143,58 @@ Your character sheet is divided into panels:
 ## Contextual Help
 
 Look for the small **?** icons (help buttons) throughout the interface. Click or hover to see a styled popover explaining that specific UI element. These provide quick, in-context explanations without leaving the page.`,
+  },
+  {
+    id: 'self-hosting',
+    title: 'Self-Hosting & Deployment',
+    category: 'getting-started',
+    icon: Globe,
+    content: `# Self-Hosting & Deployment
+
+Arcane Ally is designed to run entirely on your local hardware or a home server. All features, databases, and AI processes run locally, ensuring that your campaigns are self-contained and private.
+
+## Architecture Pipeline
+
+The application uses a lightweight **Client-Server-WebSocket** architectural pipeline:
+- **Frontend Client**: A responsive single-page React app that communicates with the server via REST APIs and WebSockets.
+- **Backend API Server**: A Node.js Express server that manages SQLite storage, processes rules, and acts as the WebSocket coordinator.
+- **WebSocket Gateway**: Powered by Socket.io, providing instantaneous bidirectional state sync between players and DMs.
+- **Local AI Layer**: Integrates with a local running instance of **Ollama** for PDF character parsing and homebrew generation.
+
+## Local Quick Start
+
+To launch the entire stack on your local machine using Docker:
+
+1. **Clone the Repository**: Ensure you have downloaded the project files.
+2. **Configure Environment Variables**: Create a \`.env\` file in the root folder:
+   \`\`\`env
+   PORT=3002
+   OLLAMA_URL=http://localhost:11434
+   NODE_ENV=production
+   \`\`\`
+3. **Boot the Containers**: Execute the build and run commands:
+   \`\`\`bash
+   docker-compose up --build -d
+   \`\`\`
+4. **Access the Interface**:
+   - **Frontend App**: Open your browser to \`http://localhost:5173\` (or \`http://localhost:3000\` depending on your routing setup).
+   - **Backend API**: Running at \`http://localhost:3002\`.
+
+## WebRTC Voice Chat Security
+
+> [!WARNING]
+> WebRTC voice chat utilizes browser-level microphone access. For security, modern browsers **restrict microphone access to secure contexts (HTTPS or localhost)**. 
+
+If you are hosting Arcane Ally on a home server (e.g. \`http://192.168.1.50:5173\`) for remote or local players, you must secure the connection with an HTTPS certificate (such as a reverse proxy with Let's Encrypt or self-signed certs) for WebRTC voice communication to function.
+- **Localhost Rule**: Voice chat will work fine on \`http://localhost\` without any additional configuration.
+- **Remote Host Rule**: Remote connections *must* go through \`https://\` to allow microphone prompts.
+
+## Required Port Configurations
+
+Ensure the following ports are open on your host firewall or proxy:
+- **5173**: Default React frontend client port.
+- **3002**: Backend HTTP/Express API and Socket.io gateway port.
+- **11434**: Default Ollama API port (if running Ollama on the same server).`,
   },
 
   // ── Player Guide ───────────────────────────────────────────────────
@@ -268,6 +336,42 @@ If you're concentrating on a spell:
 - Taking damage triggers an automatic **Concentration Check** (CON save, DC = max(10, damage/2))
 - If you fail, concentration drops and the DM is notified
 - Casting another concentration spell automatically drops the current one`,
+  },
+  {
+    id: 'session-state',
+    title: 'Session State vs. Base Sheet',
+    category: 'player',
+    icon: Heart,
+    content: `# Session State vs. Base Sheet
+
+Arcane Ally enforces a strict separation between your character's **Base Sheet** and their **Active Session State**. This architecture ensures that your permanent character data remains pristine and unaltered between games, even when a session gets chaotic.
+
+## What is Base Sheet Data?
+
+Base Sheet data represents your permanent character statistics—the values that define your character over their entire career. These are imported from your character sheet sources or entered manually, and are only modified when you level up or change gear:
+- **Primary Attributes**: Strength, Dexterity, Constitution, Intelligence, Wisdom, and Charisma.
+- **Proficiencies & Skills**: Saving throw proficiencies, skill proficiencies, and languages.
+- **Maximum Resources**: Maximum Hit Points (HP) and maximum spell slots.
+- **Spellbook**: All known and prepared spells.
+- **Personal Inventory**: Equipped and unequipped weapons, armor, and magic accessories.
+
+## What is Active Session State?
+
+Active Session State represents the temporary, highly dynamic resources that fluctuate continuously during a game session. These values exist entirely in the live session layer:
+- **Current Hit Points**: Fluctuates from damage, healing, or temporary HP.
+- **Expended Resources**: Used spell slots and expended hit dice.
+- **Temporary Effects**: Active conditions (e.g. *Prone*, *Stunned*) and active spell buffs (e.g. *Bless*, *Shield*).
+- **Concentration**: Whether you are currently concentrating on an active spell.
+
+## Why This Separation Matters
+
+By keeping session state isolated, Arcane Ally offers powerful advantages:
+
+> **Data Safety**: If a player accidentally clicks "Cast Spell" at the wrong level or receives incorrect damage, the DM can reverse the action instantly. Your base sheet is never corrupted because the database stores the base values and live session states independently.
+
+> **Clean Teardowns**: When a campaign session is concluded or a character is imported again, all temporary HP, spent spell slots, and condition status tracks are cleanly isolated. You start fresh without having to manually erase scribbled HP numbers or check boxes.
+
+> **Offline Replays**: If your internet connection drops, your local companion view and sheet continue to track your session modifications in IndexedDB. Once reconnected, the client seamlessly replays your live session updates to the server, ensuring zero data loss.`,
   },
   {
     id: 'equipment-inventory',
@@ -633,28 +737,37 @@ On any monster stat block (SRD or homebrew), click **Add to Combat** to:
     icon: Mic,
     content: `# Voice Chat
 
-Arcane Ally includes **built-in WebRTC voice communication** — no Discord or external apps needed.
+Arcane Ally includes **built-in WebRTC voice communication**—no Discord, TeamSpeak, or external apps are required. All connected players and the Dungeon Master can share a single, zero-dependency voice room running directly through your self-hosted server.
 
 ## Joining Voice
 
-The voice chat widget is available on every page. Click the **microphone icon** to join the voice channel. All connected players and the DM share a single voice room.
+The Voice Chat widget is accessible on every page from the bottom toolbar or sidebar.
+1. Click the **microphone icon** to join the active voice room.
+2. A voice drawer will expand, showing all connected players, speaking states, and mute controls.
+3. Choose your audio input source and toggle between **Push-to-Talk** (bind a key) or **Open Mic** modes.
 
-## Features
+## Browser Microphone Permissions
 
-- **Push-to-talk or open mic** — choose your preferred mode
-- **Speaking indicators** — active speakers are highlighted in the voice panel
-- **Low latency** — peer-to-peer WebRTC connections for minimal delay
-- **No external dependencies** — runs entirely through your local server
+When joining for the first time, your browser will display a permission prompt asking to access your microphone:
+- **Allow Access**: You must click **Allow** for other players to hear you.
+- **Blocked State**: If you accidentally clicked "Block", look for the microphone icon in your browser's URL address bar to reset permissions.
 
-## How It Works
+> [!IMPORTANT]
+> **HTTPS Context Requirement**: Because microphone access is a sensitive browser feature, modern web browsers **strictly block microphone prompts in insecure HTTP contexts** unless accessing the app via \`http://localhost\`.
+> 
+> If you are hosting the server on a home machine (e.g. \`http://192.168.1.100:5173\`) for remote friends, you *must* access the app via a secure **HTTPS** address (utilizing a reverse proxy like Nginx or Caddy with Let's Encrypt certificates) for microphone prompts to appear. If accessed via insecure IP-based HTTP, the microphone will remain locked.
 
-Voice uses WebRTC with the server acting as a signaling relay:
-1. When you join, the client sends a \`voice_join\` event
-2. The server coordinates offer/answer/ICE candidate exchange between peers
-3. Audio streams flow directly between browsers (peer-to-peer)
-4. Speaking detection triggers \`voice_speaking\` events for visual indicators
+## Visual Speaking Indicators
 
-> **Note:** Voice quality depends on your local network. For best results, ensure all players are on the same LAN or have a stable connection to the host machine.`,
+- **Green Ring**: Combatant tokens and voice cards display a glowing neon-emerald ring when actively speaking.
+- **Muted Badge**: Appears next to any player who has toggled their mute state.
+
+## WebRTC Troubleshooting
+
+If you join voice but cannot hear others:
+1. **Refresh**: Perform a quick page refresh (\`Ctrl+R\`) to re-trigger the WebRTC signaling handshake.
+2. **Local Firewall Check**: If self-hosting, ensure your router or local server host is not blocking UDP traffic on high ports, as WebRTC establishes direct peer-to-peer audio links using ephemeral UDP channels.
+3. **LAN/VPN**: When playing over a VPN or a local network with strict routing rules, ensure all clients are on a path where peer-to-peer WebRTC signaling can establish ICE connections.`,
   },
   {
     id: 'companion-view',
