@@ -4,7 +4,7 @@ const { runMigrations } = require('../schema');
 const {
     applyPartyEffect,
     previewPartyEffect,
-} = require('../lib/effectEngine');
+} = require('../services/effects-engine');
 
 describe('Effect Engine Preview & Consent', () => {
     let db;

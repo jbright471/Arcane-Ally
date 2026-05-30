@@ -1,5 +1,5 @@
 /**
- * @backend-smith — Effect Engine
+ * @backend-smith — Effect Engine (Dedicated Service Module)
  * Deterministic, event-sourced cross-target effect processor.
  *
  * Design principles:
@@ -16,7 +16,7 @@ const {
     applyConditionEvent,
     removeConditionEvent,
     applyBuffEvent,
-} = require('./rulesIntegration');
+} = require('../../lib/rulesIntegration');
 
 // ─── Target resolution ────────────────────────────────────────────────────────
 

@@ -127,6 +127,11 @@ function createTestDb() {
       effects_json       TEXT DEFAULT NULL,
       session_id         TEXT DEFAULT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS campaign_state (
+      key                TEXT PRIMARY KEY,
+      value              TEXT
+    );
   `);
 
   return db;

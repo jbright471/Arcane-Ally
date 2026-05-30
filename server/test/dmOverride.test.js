@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb, insertCharacter } from './helpers/testDb.js';
 import { applyDamageEvent, applyBuffEvent, getSessionState } from '../lib/rulesIntegration.js';
-import { applyPartyEffect, processTurnTriggers, getCombatTimeline } from '../lib/effectEngine.js';
+import { applyPartyEffect, processTurnTriggers, getCombatTimeline } from '../services/effects-engine/index.js';
 
 describe('DM overrides vs automation', () => {
   let db;

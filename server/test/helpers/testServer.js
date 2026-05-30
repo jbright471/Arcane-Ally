@@ -36,7 +36,7 @@ const {
 const {
   applyPartyEffect,
   getCombatTimeline,
-} = require('../../lib/effectEngine');
+} = require('../../services/effects-engine');
 
 /**
  * Create and start the test server.
