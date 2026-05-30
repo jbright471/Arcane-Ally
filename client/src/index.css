@@ -139,3 +139,35 @@
 .animate-flash-heal {
   animation: flash-heal 800ms ease-out both;
 }
+
+@keyframes auraPulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(34, 197, 94, 0.3), inset 0 0 2px rgba(34, 197, 94, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.6), inset 0 0 4px rgba(34, 197, 94, 0.3);
+  }
+}
+
+@keyframes debuffPulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(168, 85, 247, 0.3), inset 0 0 2px rgba(168, 85, 247, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 8px rgba(168, 85, 247, 0.6), inset 0 0 4px rgba(168, 85, 247, 0.3);
+  }
+}
+
+.aura-highlight-buff {
+  animation: auraPulse 2.5s infinite ease-in-out;
+  border-color: rgba(34, 197, 94, 0.55) !important;
+  text-shadow: 0 0 6px rgba(34, 197, 94, 0.5) !important;
+  color: rgb(110, 231, 150) !important;
+}
+
+.aura-highlight-debuff {
+  animation: debuffPulse 2.5s infinite ease-in-out;
+  border-color: rgba(168, 85, 247, 0.55) !important;
+  text-shadow: 0 0 6px rgba(168, 85, 247, 0.5) !important;
+  color: rgb(216, 180, 254) !important;
+}

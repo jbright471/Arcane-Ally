@@ -9,7 +9,7 @@ import {
   getCombatTimeline,
   processTurnTriggers,
   processAurasForTurn,
-} from '../lib/effectEngine.js';
+} from '../services/effects-engine/index.js';
 
 // ── Suite ────────────────────────────────────────────────────────────────────
 

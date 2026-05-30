@@ -36,7 +36,7 @@ const {
     writeAuditEvent,
     reverseEvent,
     getCharacterProvenance,
-} = require('./lib/effectEngine');
+} = require('./services/effects-engine');
 const { getPermissions, setPermissions, checkPermission } = require('./lib/permissions');
 
 const {
@@ -61,6 +61,18 @@ const {
 } = require('./lib/rulesIntegration');
 
 const { createSnapshot, computeDiff, restoreSnapshot } = require('./lib/snapshotEngine');
+
+const { getActiveAuras, clearAllAuras } = require('./services/effects-engine/auras');
+const { getSmartPins, saveSmartPins, clearAllSmartPins } = require('./services/effects-engine/smartPins');
+
+function broadcastAuras() {
+    io.emit('active_auras_sync', getActiveAuras(db));
+}
+
+function broadcastSmartPins() {
+    io.emit('combat_smart_pins_sync', getSmartPins(db));
+}
+
 
 function applyEffect(effect) {
     if (!effect.characterId) return { success: false, error: 'No characterId provided' };
@@ -557,6 +569,8 @@ io.on('connection', (socket) => {
     broadcastMapState();
     broadcastWorldMapState();
     broadcastWorldState();
+    broadcastAuras();
+    broadcastSmartPins();
     socket.emit('approval_mode', isApprovalMode);
     socket.emit('voice_room_state', [...voiceRoom.entries()].map(([id, info]) => ({ socketId: id, ...info })));
     socket.emit('timeline_update', getCombatTimeline(db));
@@ -572,6 +586,54 @@ io.on('connection', (socket) => {
             return resolvedState || { ...char, currentHp: char.current_hp, maxHp: char.max_hp };
         });
         socket.emit('party_state', resolved);
+    });
+
+    // --- Aura-Sync Sockets ---
+    socket.on('save_aura', (auraData) => {
+        const { createOrUpdateAura } = require('./services/effects-engine/auras');
+        createOrUpdateAura(db, auraData);
+        broadcastAuras();
+        broadcastPartyState();
+    });
+
+    socket.on('toggle_aura', ({ auraId, active }) => {
+        const { toggleAura } = require('./services/effects-engine/auras');
+        toggleAura(db, auraId, active);
+        broadcastAuras();
+        broadcastPartyState();
+    });
+
+    socket.on('update_aura_targets', ({ auraId, targets }) => {
+        const { updateAuraTargets } = require('./services/effects-engine/auras');
+        updateAuraTargets(db, auraId, targets);
+        broadcastAuras();
+        broadcastPartyState();
+    });
+
+    socket.on('delete_aura', ({ id }) => {
+        const { deleteAura } = require('./services/effects-engine/auras');
+        deleteAura(db, id);
+        broadcastAuras();
+        broadcastPartyState();
+    });
+
+    // --- Smart Pins Sockets ---
+    socket.on('save_smart_pin', (pinData) => {
+        const { addOrUpdatePin } = require('./services/effects-engine/smartPins');
+        addOrUpdatePin(db, pinData);
+        broadcastSmartPins();
+    });
+
+    socket.on('delete_smart_pin', ({ id }) => {
+        const { deletePin } = require('./services/effects-engine/smartPins');
+        deletePin(db, id);
+        broadcastSmartPins();
+    });
+
+    socket.on('save_pins_to_template', ({ encounterId }) => {
+        const { savePinsToTemplate } = require('./services/effects-engine/smartPins');
+        const res = savePinsToTemplate(db, encounterId);
+        socket.emit('pins_saved_to_template_result', res);
     });
 
     socket.on('log_action', async ({ actor, description, useLlm }, callback) => {
@@ -1229,9 +1291,30 @@ io.on('connection', (socket) => {
             saveCombatState();
             broadcastCombatState();
             clearTimeline(db);
+
+            // Aura-Sync cleanup
+            clearAllAuras(db);
+            broadcastAuras();
+
+            // Smart Pins load from template
+            clearAllSmartPins(db);
+            const encounter = db.prepare('SELECT notes_json FROM encounters WHERE id = ?').get(encounterId);
+            if (encounter && encounter.notes_json) {
+                try {
+                    const notes = JSON.parse(encounter.notes_json);
+                    if (Array.isArray(notes)) {
+                        saveSmartPins(db, notes);
+                    }
+                } catch (err) {
+                    console.error('[Combat] Error parsing encounter notes:', err.message);
+                }
+            }
+            broadcastSmartPins();
+
             logAction('DM', '⚔️ Combat has begun!');
             broadcastInitiative();
             broadcastTimeline();
+            broadcastPartyState();
         }
     });
 
@@ -1507,8 +1590,16 @@ io.on('connection', (socket) => {
             currentTurnIndex = 0;
             saveCombatState();
             broadcastCombatState();
+
+            // Clear active auras & smart pins
+            clearAllAuras(db);
+            broadcastAuras();
+            clearAllSmartPins(db);
+            broadcastSmartPins();
+
             logAction('DM', '🏁 Combat has ended.');
             broadcastInitiative();
+            broadcastPartyState();
 
             // Generate AI report if there were meaningful events
             if (events.length >= 2) {
@@ -1524,7 +1615,19 @@ io.on('connection', (socket) => {
         } catch (err) {
             console.error('[Combat] Error ending encounter:', err.message);
             // Still clear combat even if report fails
-            try { endEncounter(); currentCombatRound = 0; currentTurnIndex = 0; saveCombatState(); broadcastCombatState(); broadcastInitiative(); } catch (_) {}
+            try { 
+                endEncounter(); 
+                currentCombatRound = 0; 
+                currentTurnIndex = 0; 
+                saveCombatState(); 
+                broadcastCombatState(); 
+                clearAllAuras(db);
+                broadcastAuras();
+                clearAllSmartPins(db);
+                broadcastSmartPins();
+                broadcastInitiative(); 
+                broadcastPartyState();
+            } catch (_) {}
             callback?.({ success: false, error: err.message });
         }
     });
