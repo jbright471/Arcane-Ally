@@ -52,8 +52,9 @@ HP changes flash red (damage) or green (healing) on character cards. Latency is 
 
 **Initiative Tracker** — automatic initiative rolling (auto-roll d20 + DEX mod for all combatants), turn advancement, visibility toggles, HP tracking, and manual reordering. Three spawn methods: Quick Spawn, Compendium, and AI Lore Console.
 - **Smart Encounter Recovery** — total persistence for encounter flow. The active combat round and turn index are continuously synced to the SQLite database. Initiative automatically resumes on server restart or client reconnect.
+- **Player Miniature Sidebar** — a slide-out drawer on the left side of the screen containing connected player miniatures, enabling visual status telemetry (HP, AC, Speed, conditions) and interactive spell slot pips (click to consume/restore slots via WebSockets) with quick +/-5 HP adjusters.
 
-- **AoE Multi-Target Effects** — select multiple combatants with checkboxes, then click the AoE button to open a multi-row effect builder (damage, heal, add/remove condition). All targets are resolved in a single DB transaction with a shared group ID for timeline correlation.
+- **AoE Multi-Target Effects** — select multiple combatants with checkboxes, then click the AoE button to open a multi-row effect builder (damage, heal, add/remove condition). Targets are processed concurrently using the `/api/v1/effects/bulk-apply` REST API. If one target validation fails, its nested transaction rolls back independently, keeping other targets updated.
 - **Quick Encounter Automations** — one-click "Dismiss Dead" removes all dead tracker entries; "Clear All Conditions" wipes conditions from every PC. Both accessible from the DM-only Quick Actions popover.
 
 **AI Lore Console** — creative AI assistant with preset prompts (Room Desc, NPC Idea, Loot Drop, Combat). Generates atmospheric D&D content with **actionable response cards**:
@@ -109,10 +110,14 @@ Buttons disable after use to prevent duplicate spawns.
 - **Session Recap** — AI-generated session summaries from the action log
 
 ### Equipment System
-- **Slot-based layout** — main hand, off hand, armor, ring, amulet, head, hands, feet
-- **QuickEquipParser** — paste item text; AI extracts stats and creates the item
-- **ManualItemForm** — full manual item creation with type, rarity, damage, AC, and stat bonuses
-- **D&D Beyond sync** — equipment imported and slotted automatically
+- **Slot-based layout** — main hand, off hand, armor, ring, amulet, head, hands, feet.
+- **QuickEquipParser** — paste item text; AI extracts stats and creates the item.
+- **ManualItemForm** — full manual item creation with type, rarity, damage, AC, and stat bonuses.
+- **D&D Beyond sync** — equipment imported and slotted automatically.
+- **Dynamic Rules Engine**:
+  - **Level-Scaling Formulas** — Base AC, AC bonuses, speeds, initiatives, ability scores, and saving throws/skills can be defined using formulas like `1 + floor(level / 5)` or `floor(level / 2)` that auto-scale fluidly.
+  - **Condition-Based Disables** — Gear can specify conditions under which they are suppressed (e.g., dropping shield AC bonus when paralyzed).
+  - **Stacking & Deduplication** — Enforces limits on duplicate items (e.g., non-stacking Rings of Protection) and duplicate buffs (e.g. merging duplicate Bless effects, keeping the highest).
 
 ## App Guidebook
 
@@ -135,6 +140,11 @@ The project runs entirely on local hardware with no external cloud dependencies.
 3. **Access:**
    - Frontend: `http://localhost:5173`
    - Backend API: `http://localhost:3002`
+
+4. **Container Health & Telemetry:**
+   - **Telemetry API** — `/api/health` exposes V8 process uptime and memory usage metrics.
+   - **Memory Exhaustion Loop Guard** — An automated script (`healthcheck.js`) monitors memory and triggers container exits (exit code 1) if V8 heap utilization exceeds 500MB, preventing memory leak loops.
+   - **Lightweight 3-Stage Docker Build** — The container is optimized to strip compiler libraries (`python3`, `make`, `g++`) from the final run image, keeping container size at a bare minimum.
 
 ## Project Structure
 
@@ -164,5 +174,7 @@ The project runs entirely on local hardware with no external cloud dependencies.
 | `/api/loot` | 3 | Loot generation, archive, assignment |
 | `/api/lore` | 1 | AI lore generation |
 | `/api/chat` | 1 | Rules assistant |
+| `/api/v1/effects` | 1 | Bulk Apply AoE / multi-target damage, healing, or conditions |
+| `/api/health` | 1 | Telemetry endpoint (uptime, RSS, heap memory sizes) |
 
 **70+ Socket.io real-time events** covering character state, combat, dice, loot, voting, world, voice, effects, automation, permissions, and battlemap tokens.

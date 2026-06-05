@@ -238,7 +238,8 @@ function resolveConcentrationCheckDC(damageTaken, concentratingOn) {
   return { required: true, dc };
 }
 
-function resolveFinalAbilityScores(character, allInventory = [], activeBuffs = []) {
+function resolveFinalAbilityScores(character, allInventory = [], activeBuffs = [], activeConditions = []) {
+  const { dedupedBuffs, finalInventory } = preprocessState(character, activeBuffs, activeConditions, allInventory);
   const base = character.abilityScores || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
   const finalScores = { ...base };
   const MAP = {
@@ -257,7 +258,7 @@ function resolveFinalAbilityScores(character, allInventory = [], activeBuffs = [
   };
 
   // 1. Process items flat bonuses
-  for (const item of allInventory) {
+  for (const item of finalInventory) {
     if (item.equipped && item.stats) {
       if (item.stats.statBonuses) {
         for (let [stat, bonus] of Object.entries(item.stats.statBonuses)) {
@@ -273,7 +274,7 @@ function resolveFinalAbilityScores(character, allInventory = [], activeBuffs = [
   }
 
   // 2. Process buffs flat bonuses
-  for (const buff of activeBuffs) {
+  for (const buff of dedupedBuffs) {
     const name = (buff.name || '').toLowerCase();
     if (buff.modifierType === 'flatBonus' && buff.statAffected) {
       const upper = buff.statAffected.toUpperCase();
@@ -287,7 +288,7 @@ function resolveFinalAbilityScores(character, allInventory = [], activeBuffs = [
   }
 
   // 3. Process item overrides (e.g. Gauntlets of Ogre Power)
-  for (const item of allInventory) {
+  for (const item of finalInventory) {
     if (item.equipped && item.stats && item.stats.statOverrides) {
       for (let [stat, value] of Object.entries(item.stats.statOverrides)) {
         const upper = stat.toUpperCase();
@@ -301,7 +302,7 @@ function resolveFinalAbilityScores(character, allInventory = [], activeBuffs = [
   }
 
   // 4. Process buff overrides
-  for (const buff of activeBuffs) {
+  for (const buff of dedupedBuffs) {
     if ((buff.modifierType === 'setStat' || buff.modifierType === 'setScore') && buff.statAffected) {
       const upper = buff.statAffected.toUpperCase();
       const norm = MAP[upper] || MAP[buff.statAffected.toLowerCase()] || upper;
@@ -337,8 +338,9 @@ const SKILL_ABILITIES = {
   survival: 'WIS'
 };
 
-function resolveSavingThrows(character, activeBuffs = [], _activeConditions = [], allInventory = []) {
-  const { finalScores } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
+function resolveSavingThrows(character, activeBuffs = [], activeConditions = [], allInventory = []) {
+  const { dedupedBuffs, finalInventory } = preprocessState(character, activeBuffs, activeConditions, allInventory);
+  const { finalScores } = resolveFinalAbilityScores(character, finalInventory, dedupedBuffs, activeConditions);
   const proficiencyBonus = Math.floor((character.level - 1) / 4) + 2;
 
   const stats = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
@@ -356,7 +358,7 @@ function resolveSavingThrows(character, activeBuffs = [], _activeConditions = []
       breakdown[stat].push({ source: 'Proficiency', value: proficiencyBonus });
     }
 
-    for (const item of allInventory) {
+    for (const item of finalInventory) {
       if (item.equipped && item.stats) {
         const universalBonus = item.stats.saveBonus ?? item.stats.savingThrowBonus;
         if (universalBonus) {
@@ -371,7 +373,7 @@ function resolveSavingThrows(character, activeBuffs = [], _activeConditions = []
       }
     }
 
-    for (const buff of activeBuffs) {
+    for (const buff of dedupedBuffs) {
       const name = (buff.name || '').toLowerCase().trim();
       if (name === 'bless') {
         finalSaves[stat] += 2.5;
@@ -410,8 +412,9 @@ function resolveSavingThrows(character, activeBuffs = [], _activeConditions = []
   return { finalSaves, breakdown };
 }
 
-function resolveSkills(character, activeBuffs = [], _activeConditions = [], allInventory = []) {
-  const { finalScores } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
+function resolveSkills(character, activeBuffs = [], activeConditions = [], allInventory = []) {
+  const { dedupedBuffs, finalInventory } = preprocessState(character, activeBuffs, activeConditions, allInventory);
+  const { finalScores } = resolveFinalAbilityScores(character, finalInventory, dedupedBuffs, activeConditions);
   const proficiencyBonus = Math.floor((character.level - 1) / 4) + 2;
 
   const finalSkills = {};
@@ -442,7 +445,7 @@ function resolveSkills(character, activeBuffs = [], _activeConditions = [], allI
       breakdown[skillName].push({ source: sourceName, value: bonus });
     }
 
-    for (const item of allInventory) {
+    for (const item of finalInventory) {
       if (item.equipped && item.stats) {
         const bonus = item.stats.skillBonuses?.[skillName] ?? item.stats.skillBonuses?.[skillName.toLowerCase()];
         if (bonus) {
@@ -452,7 +455,7 @@ function resolveSkills(character, activeBuffs = [], _activeConditions = [], allI
       }
     }
 
-    for (const buff of activeBuffs) {
+    for (const buff of dedupedBuffs) {
       if (buff.modifierType === 'flatBonus' && buff.statAffected) {
         const affected = buff.statAffected.toLowerCase().trim();
         if (affected === skillName.toLowerCase() || affected === `skill:${skillName.toLowerCase()}`) {
@@ -470,6 +473,7 @@ function resolveSkills(character, activeBuffs = [], _activeConditions = [], allI
 }
 
 function resolveSpeed(character, activeBuffs = [], activeConditions = [], allInventory = []) {
+  const { dedupedBuffs, finalInventory } = preprocessState(character, activeBuffs, activeConditions, allInventory);
   let baseSpeed = character.speed ?? 30;
   if (typeof baseSpeed === 'object') {
     baseSpeed = baseSpeed.walk ?? baseSpeed.base ?? 30;
@@ -477,14 +481,14 @@ function resolveSpeed(character, activeBuffs = [], activeConditions = [], allInv
   let finalSpeed = baseSpeed;
   const breakdown = [{ source: 'Base Speed', value: baseSpeed }];
 
-  for (const item of allInventory) {
+  for (const item of finalInventory) {
     if (item.equipped && item.stats && item.stats.speedBonus) {
       finalSpeed += item.stats.speedBonus;
       breakdown.push({ source: item.name, type: 'gear-bonus', value: item.stats.speedBonus });
     }
   }
 
-  for (const buff of activeBuffs) {
+  for (const buff of dedupedBuffs) {
     if (buff.modifierType === 'flatBonus' && (buff.statAffected || '').toLowerCase().includes('speed')) {
       const val = parseInt(buff.modifierValue, 10);
       if (!isNaN(val)) {
@@ -497,13 +501,13 @@ function resolveSpeed(character, activeBuffs = [], activeConditions = [], allInv
   let multiplier = 1;
   const multipliersUsed = [];
 
-  const hasHaste = activeBuffs.some(b => b.name?.toLowerCase() === 'haste' || b.sourceName?.toLowerCase() === 'haste');
+  const hasHaste = dedupedBuffs.some(b => b.name?.toLowerCase() === 'haste' || b.sourceName?.toLowerCase() === 'haste');
   if (hasHaste) {
     multiplier *= 2;
     multipliersUsed.push({ source: 'Haste', multiplier: 2 });
   }
 
-  const hasBootsOfSpeed = allInventory.some(item => item.equipped && (item.name?.toLowerCase().includes('boots of speed') || item.stats?.doubleSpeed));
+  const hasBootsOfSpeed = finalInventory.some(item => item.equipped && (item.name?.toLowerCase().includes('boots of speed') || item.stats?.doubleSpeed));
   if (hasBootsOfSpeed) {
     multiplier *= 2;
     multipliersUsed.push({ source: 'Boots of Speed', multiplier: 2 });
@@ -551,8 +555,9 @@ function resolveSpeed(character, activeBuffs = [], activeConditions = [], allInv
   return { finalSpeed, breakdown };
 }
 
-function resolveInitiative(character, activeBuffs = [], _activeConditions = [], allInventory = []) {
-  const { finalScores } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
+function resolveInitiative(character, activeBuffs = [], activeConditions = [], allInventory = []) {
+  const { dedupedBuffs, finalInventory } = preprocessState(character, activeBuffs, activeConditions, allInventory);
+  const { finalScores } = resolveFinalAbilityScores(character, finalInventory, dedupedBuffs, activeConditions);
   const dexMod = getAbilityModifier(finalScores.DEX || 10);
 
   let finalInitiative = dexMod;
@@ -565,7 +570,7 @@ function resolveInitiative(character, activeBuffs = [], _activeConditions = [], 
     breakdown.push({ source: 'Alert Feat', type: 'feat', value: 5 });
   }
 
-  for (const item of allInventory) {
+  for (const item of finalInventory) {
     if (item.equipped && item.stats) {
       const bonus = item.stats.initiativeBonus;
       if (bonus) {
@@ -575,7 +580,7 @@ function resolveInitiative(character, activeBuffs = [], _activeConditions = [], 
     }
   }
 
-  for (const buff of activeBuffs) {
+  for (const buff of dedupedBuffs) {
     if (buff.modifierType === 'flatBonus' && (buff.statAffected || '').toLowerCase().includes('initiative')) {
       const val = parseInt(buff.modifierValue, 10);
       if (!isNaN(val)) {
@@ -588,8 +593,9 @@ function resolveInitiative(character, activeBuffs = [], _activeConditions = [], 
   return { finalInitiative, breakdown };
 }
 
-function resolveCurrentAC(character, activeBuffs = [], _activeConditions = [], allInventory = []) {
-  const { finalScores: scores } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
+function resolveCurrentAC(character, activeBuffs = [], activeConditions = [], allInventory = []) {
+  const { dedupedBuffs, finalInventory } = preprocessState(character, activeBuffs, activeConditions, allInventory);
+  const { finalScores: scores } = resolveFinalAbilityScores(character, finalInventory, dedupedBuffs, activeConditions);
   const dexMod = getAbilityModifier(scores.DEX || 10);
   const wisMod = getAbilityModifier(scores.WIS || 10);
   const conMod = getAbilityModifier(scores.CON || 10);
@@ -603,7 +609,7 @@ function resolveCurrentAC(character, activeBuffs = [], _activeConditions = [], a
     acMethod = 'imported-fixed';
   }
 
-  const equippedArmors = allInventory.filter(item => {
+  const equippedArmors = finalInventory.filter(item => {
     if (!item.equipped) return false;
     const name = (item.name || '').toLowerCase();
     return name.includes('leather') || name.includes('studded') || name.includes('chain') ||
@@ -629,7 +635,7 @@ function resolveCurrentAC(character, activeBuffs = [], _activeConditions = [], a
     }
   }
 
-  const hasMageArmor = activeBuffs.some(b => b.name?.toLowerCase() === 'mage armor' || b.sourceName?.toLowerCase() === 'mage armor');
+  const hasMageArmor = dedupedBuffs.some(b => b.name?.toLowerCase() === 'mage armor' || b.sourceName?.toLowerCase() === 'mage armor');
   if (hasMageArmor) {
     if (13 + dexMod > unarmoredAC) {
       unarmoredAC = 13 + dexMod;
@@ -654,14 +660,14 @@ function resolveCurrentAC(character, activeBuffs = [], _activeConditions = [], a
   let acSetOverride = null;
   const breakdown = [{ source: acMethod, value: baseAC }];
 
-  for (const item of allInventory) {
+  for (const item of finalInventory) {
     if (item.equipped && item.stats && item.stats.acBonus) {
       acFlatBonus += item.stats.acBonus;
       breakdown.push({ source: item.name, type: 'gear-bonus', value: item.stats.acBonus });
     }
   }
 
-  for (const buff of activeBuffs) {
+  for (const buff of dedupedBuffs) {
     const name = (buff.name || '').toLowerCase();
     const effect = BUFF_EFFECTS[name];
     if (effect && effect.acBonus) {
@@ -752,7 +758,7 @@ function formatModifier(score) { const mod = getAbilityModifier(score); return m
 
 function resolveStatProvenance(character, activeBuffs = [], activeConditions = [], allInventory = []) {
   // 1. Ability Scores
-  const { finalScores, breakdown: abilityBreakdown } = resolveFinalAbilityScores(character, allInventory, activeBuffs);
+  const { finalScores, breakdown: abilityBreakdown } = resolveFinalAbilityScores(character, allInventory, activeBuffs, activeConditions);
   const abilityScores = {};
   for (const [stat, val] of Object.entries(finalScores)) {
     abilityScores[stat] = {
@@ -830,3 +836,133 @@ module.exports = {
   useFeatureCharge, shortRestFeatures, longRestFeatures,
   getAbilityModifier, formatModifier, DAMAGE_TYPES,
 };
+
+function evaluateEquipmentProperty(value, level) {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const formula = value.replace(/\blevel\b/g, String(level));
+    try {
+      const safeEval = new Function('floor', 'ceil', `return ${formula}`);
+      const res = safeEval(Math.floor, Math.ceil);
+      return typeof res === 'number' && !isNaN(res) ? res : 0;
+    } catch (err) {
+      console.error('Error evaluating formula:', value, err);
+      return 0;
+    }
+  }
+  return 0;
+}
+
+function preprocessState(character, activeBuffs = [], activeConditions = [], allInventory = []) {
+  const level = character?.level || 1;
+  const normalizedConditions = (activeConditions || []).map(c => c.toLowerCase().trim());
+
+  // 1. Evaluate Dynamic Equipment Properties (formulas) and disable if condition matches
+  const evaluatedInventory = (allInventory || []).map(item => {
+    if (!item.equipped) return item;
+
+    // Check disabled conditions
+    const disabledBy = item.stats?.disabledByConditions || [];
+    const isDisabled = disabledBy.some(cond => normalizedConditions.includes(cond.toLowerCase().trim()));
+    if (isDisabled) {
+      return { ...item, equipped: false, disabledByCondition: true };
+    }
+
+    // Evaluate stats properties using character level
+    if (!item.stats) return item;
+    const newStats = { ...item.stats };
+
+    const keysToEvaluate = ['acBonus', 'ac', 'speedBonus', 'saveBonus', 'initiativeBonus'];
+    for (const key of keysToEvaluate) {
+      if (newStats[key] !== undefined) {
+        newStats[key] = evaluateEquipmentProperty(newStats[key], level);
+      }
+    }
+
+    const dictKeys = ['statBonuses', 'statOverrides', 'saveBonuses', 'skillBonuses'];
+    for (const key of dictKeys) {
+      if (newStats[key]) {
+        const newDict = { ...newStats[key] };
+        for (const [k, val] of Object.entries(newDict)) {
+          newDict[k] = evaluateEquipmentProperty(val, level);
+        }
+        newStats[key] = newDict;
+      }
+    }
+
+    return { ...item, stats: newStats };
+  });
+
+  // 2. Stacking Buff Interceptor: Deduplicate buffs by name (case-insensitive)
+  const uniqueBuffsMap = new Map();
+  for (const buff of activeBuffs || []) {
+    const name = (buff.name || '').toLowerCase().trim();
+    if (!name) continue;
+    if (!uniqueBuffsMap.has(name)) {
+      uniqueBuffsMap.set(name, buff);
+    } else {
+      const existing = uniqueBuffsMap.get(name);
+      const valExisting = parseFloat(existing.modifierValue || 0);
+      const valNew = parseFloat(buff.modifierValue || 0);
+      if (valNew > valExisting) {
+        uniqueBuffsMap.set(name, buff);
+      }
+    }
+  }
+  const dedupedBuffs = Array.from(uniqueBuffsMap.values());
+
+  // 3. Stacking Item Interceptor: Only benefit from one shield, and no duplicate items by name
+  const activeItemsByName = new Map();
+  let bestShield = null;
+
+  for (const item of evaluatedInventory) {
+    if (!item.equipped) continue;
+    const name = (item.name || '').toLowerCase().trim();
+    const type = (item.type || '').toLowerCase().trim();
+
+    if (type === 'shield' || name.includes('shield')) {
+      if (!bestShield) {
+        bestShield = item;
+      } else {
+        const existingAC = bestShield.stats?.acBonus || 0;
+        const newAC = item.stats?.acBonus || 0;
+        if (newAC > existingAC) {
+          bestShield = item;
+        }
+      }
+      continue;
+    }
+
+    if (!activeItemsByName.has(name)) {
+      activeItemsByName.set(name, item);
+    } else {
+      const existing = activeItemsByName.get(name);
+      const existingAC = existing.stats?.acBonus || 0;
+      const newAC = item.stats?.acBonus || 0;
+      if (newAC > existingAC) {
+        activeItemsByName.set(name, item);
+      }
+    }
+  }
+
+  const dedupedInventory = Array.from(activeItemsByName.values());
+  if (bestShield) {
+    dedupedInventory.push(bestShield);
+  }
+
+  // Create final inventory where suppressed items are marked equipped: false
+  const finalInventory = evaluatedInventory.map(item => {
+    if (!item.equipped) return item;
+    const isKeep = dedupedInventory.some(keep => keep.id === item.id);
+    if (!isKeep) {
+      return { ...item, equipped: false, suppressedByStacking: true };
+    }
+    return item;
+  });
+
+  return {
+    dedupedBuffs,
+    finalInventory
+  };
+}
