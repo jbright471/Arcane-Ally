@@ -5,7 +5,7 @@ import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Input } from './ui/input';
 import { Plus, Trash2, Zap, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import socket from '../socket';
+import { useGame } from '../context/GameContext';
 import { generateRequestId } from '../lib/requestId';
 import { DND_CONDITIONS } from '../types/character';
 
@@ -55,6 +55,8 @@ function newEffect(): EffectEntry {
 }
 
 export function AoEEffectModal({ open, onClose, targets }: Props) {
+  const { state } = useGame();
+  const { dmToken } = state;
   const [effects, setEffects] = useState<EffectEntry[]>([newEffect()]);
   const [results, setResults] = useState<AoERecord[] | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -66,15 +68,6 @@ export function AoEEffectModal({ open, onClose, targets }: Props) {
       setIsPending(false);
     }
   }, [open]);
-
-  useEffect(() => {
-    const handler = ({ records }: { groupId: string; records: AoERecord[] }) => {
-      setResults(records);
-      setIsPending(false);
-    };
-    socket.on('aoe_effect_result', handler);
-    return () => { socket.off('aoe_effect_result', handler); };
-  }, []);
 
   const updateEffect = (key: string, patch: Partial<EffectEntry>) => {
     setEffects(prev => prev.map(e => e._key === key ? { ...e, ...patch } : e));
@@ -101,12 +94,43 @@ export function AoEEffectModal({ open, onClose, targets }: Props) {
     });
 
     setIsPending(true);
-    socket.emit('apply_aoe_effect', {
-      requestId: generateRequestId(),
-      targets: serverTargets,
-      effects: serverEffects,
-      actor: 'DM',
-    });
+    fetch('/api/v1/effects/bulk-apply', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${dmToken || ''}`,
+      },
+      body: JSON.stringify({
+        requestId: generateRequestId(),
+        targets: serverTargets,
+        effects: serverEffects,
+        actor: 'DM',
+      }),
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (data.success) {
+          setResults(data.records);
+        } else {
+          throw new Error(data.error || 'Failed to apply effects');
+        }
+      })
+      .catch(err => {
+        console.error('Error applying bulk effect:', err);
+        setResults(targets.map(t => ({
+          targetId: t.trackerId,
+          targetName: t.name,
+          eventType: 'error',
+          logMessage: err.message,
+          success: false
+        })));
+      })
+      .finally(() => {
+        setIsPending(false);
+      });
   };
 
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

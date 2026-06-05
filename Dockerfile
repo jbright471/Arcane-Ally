@@ -6,30 +6,41 @@ RUN npm install --legacy-peer-deps
 COPY client/ ./
 RUN npm run build
 
-# Stage 2: Setup the Express backend and serve the frontend
-FROM node:20-alpine
-WORKDIR /app
-
-# Enable SQLite and build tools in Alpine
-# gcompat helps with pre-built binaries expecting glibc
-RUN apk add --no-cache python3 make g++ poppler-utils libc6-compat gcompat
-
-# Copy backend package files and install production dependencies
+# Stage 2: Build the backend packages (with native compilation tools)
+FROM node:20-alpine AS backend-builder
 WORKDIR /app/server
-COPY --chown=node:node server/package*.json ./
+RUN apk add --no-cache python3 make g++ libc6-compat gcompat
+COPY server/package*.json ./
 # Build from source to ensure binary compatibility with Alpine
 RUN npm install --build-from-source --omit=dev
 
-# Copy backend source and built frontend with correct ownership at copy-time
-# (avoids a slow `chown -R node:node /app` over thousands of node_modules files)
-COPY --chown=node:node server/ ./
+# Stage 3: Production lightweight runner
+FROM node:20-alpine
+WORKDIR /app
+
+# Install runtime dependencies only (libc6-compat, gcompat, and poppler-utils for pdf processing if needed)
+RUN apk add --no-cache libc6-compat gcompat poppler-utils
+
+# Copy node_modules from backend-builder
+COPY --chown=node:node --from=backend-builder /app/server/node_modules /app/server/node_modules
+
+# Copy backend source
+COPY --chown=node:node server/ /app/server/
+
+# Copy built frontend assets
 COPY --chown=node:node --from=frontend-builder /app/client/dist /app/client/dist
 
-# Ensure writable dirs exist
-RUN mkdir -p /app/server /app/client
+WORKDIR /app/server
 
-# Switch to non-root user for security
+# Ensure writable dirs exist and are owned by node
+RUN mkdir -p /app/server /app/client && chown -R node:node /app
+
+# Switch to non-root user
 USER node
+
+# Healthcheck definition
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node /app/server/scripts/healthcheck.js
 
 EXPOSE 3001
 CMD ["npm", "start"]

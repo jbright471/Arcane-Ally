@@ -423,4 +423,7 @@ module.exports = {
     writeAuditEvent,
     reverseEvent,
     getCharacterProvenance,
+    applyToCharacter,
+    applyToMonster,
+    writeEventRecord,
 };

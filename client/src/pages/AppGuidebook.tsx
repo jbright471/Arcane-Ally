@@ -194,7 +194,14 @@ If you are hosting Arcane Ally on a home server (e.g. \`http://192.168.1.50:5173
 Ensure the following ports are open on your host firewall or proxy:
 - **5173**: Default React frontend client port.
 - **3002**: Backend HTTP/Express API and Socket.io gateway port.
-- **11434**: Default Ollama API port (if running Ollama on the same server).`,
+- **11434**: Default Ollama API port (if running Ollama on the same server).
+
+## Production Container Telemetry & Health Checks
+
+For robust deployment monitoring, Arcane Ally comes configured with container health monitoring and telemetry:
+- **Telemetry Endpoint**: The \`/api/health\` endpoint serves server uptime and raw V8 engine memory usage figures (\`rss\`, \`heapTotal\`, \`heapUsed\`).
+- **Memory Loop Guard**: An automated Node-based healthcheck script (\`healthcheck.js\`) queries the telemetry endpoint and exits with code 1 if heap memory consumption exceeds a threshold of 500MB (preventing infinite loop memory exhaustion).
+- **Lightweight 3-Stage Container**: The production \`Dockerfile\` is optimized into three build stages, completely discarding heavy build dependencies like \`g++\`, \`make\`, and \`python3\` from the final stage runner, dropping the final image footprint.`,
   },
 
   // ── Player Guide ───────────────────────────────────────────────────
@@ -416,7 +423,29 @@ When the DM drops loot, it appears in the **Party Loot Pool** — a shared inven
 2. Click **Claim** — the item moves from the shared pool to your personal inventory
 3. Other players can no longer see or claim that item
 
-> **Note:** If the DM has set loot permissions to "DM Approval," your claim will be queued and the DM must approve it before the transfer happens.`,
+> **Note:** If the DM has set loot permissions to "DM Approval," your claim will be queued and the DM must approve it before the transfer happens.
+
+## Dynamic Calculations & Stacking Rules
+
+To ensure strict compliance with 5e rules and enable homebrew magic items, the engine applies calculations on all active equipment:
+
+### 1. Level-Scaling Formulas
+Equipment can have dynamic, math-based properties that scale automatically with your character's level. Formulas like \`1 + floor(level / 5)\` or \`floor(level / 2)\` can be defined on:
+- AC bonuses (\`acBonus\`) and base AC (\`ac\`)
+- Speed bonuses (\`speedBonus\`)
+- Initiative bonuses (\`initiativeBonus\`)
+- Saving throw bonuses (\`saveBonus\` and \`saveBonuses\` dictionary)
+- Ability score bonuses (\`statBonuses\` and \`statOverrides\` dictionaries)
+- Skill bonuses (\`skillBonuses\` dictionary)
+
+### 2. Condition-Based Disables
+Items can specify a list of conditions that temporarily disable them via \`disabledByConditions\`. For example, a shield can specify \`disabledByConditions: ["paralyzed", "stunned", "unconscious"]\`. If you are affected by any of those conditions, the item's bonuses are dropped automatically in real-time.
+
+### 3. Stacking & Deduplication
+To prevent rule abuse, the engine intercepts and enforces equipment stacking limits:
+- **Shield Stacking**: You can only benefit from a single equipped shield. If multiple shields are equipped, only the one with the highest AC bonus is active; the others are suppressed.
+- **Duplicate Equipment**: Multiple equipped items with the identical name (case-insensitive, e.g. two *Rings of Protection*) do not stack. Only the one with the highest AC bonus is active.
+- **Buff Deduplication**: Buffs with the duplicate name (case-insensitive) are merged; only the highest modifier value is applied.`,
   },
 
   // ── DM Guide ───────────────────────────────────────────────────────
@@ -532,7 +561,14 @@ Click any combatant's **name** to open the sidecar panel on the right. It shows:
 
 Click the same name again (or press Escape) to close it. This lets you reference a monster's stat block mid-combat without leaving the tracker.
 
-## AoE / Multi-Target Effects
+## Player Miniature Sidebar
+
+The **Player Miniature Sidebar** (toggled via the **Miniatures** button in the header) provides a slide-out drawer containing connected player miniatures. It allows:
+- **Visual Status Telemetry**: View real-time HP stats, Armor Class, Speed, ability modifiers, and conditions.
+- **Interactive Spell Slots**: Display slot pips. Clicking pips allows DMs and players to quickly use (fill) or restore (clear) spell slots, emitting a WebSocket event to keep all views synchronized.
+- **Quick Adjustments**: Hit points can be modified instantly with \`-5\` and \`+5\` quick update buttons.
+
+## AoE / Multi-Target Effects (REST API)
 
 To apply an effect to multiple combatants at once:
 
@@ -540,9 +576,9 @@ To apply an effect to multiple combatants at once:
 2. Once ≥1 target is selected, an orange **AoE** button appears in the tracker header
 3. Click **AoE** to open the effect builder modal
 4. Add one or more effect rows: **Damage** (value + type), **Heal**, or **Condition**
-5. Click **Apply** — all effects are applied atomically in a single database transaction
+5. Click **Apply** — this invokes the secure POST \`/api/v1/effects/bulk-apply\` REST API, passing the DM Authorization token header.
 
-Results appear per-target in the modal summary. All events from the same AoE share a **group ID** in the Effect Timeline.
+The server calculates effects concurrently and writes target updates inside nested transaction savepoints. If a condition validation fails on a single target, only its rollback occurs, letting other targets update successfully. Results appear per-target in the modal summary. All events from the same AoE share a **group ID** in the Effect Timeline.
 
 ## Quick Actions (DM)
 
@@ -1058,7 +1094,17 @@ Hover or tap any primary statistic on your Character Sheet (such as Ability Scor
 - **Environmental Conditions**: Reductions, disadvantages, advantage flags, or automatic failure overrides caused by current conditions (e.g. *Grappled*, *Paralyzed*, or *Exhausted*).
 
 ## Real-Time Updates
-Whenever the DM grants you a new dynamic buff, drops a condition on you, or you claim and equip a magic item from the Shared Loot Pool, the calculations are recalculated atomically. Every tooltip update happens instantaneously with absolutely zero page refreshes required.`,
+Whenever the DM grants you a new dynamic buff, drops a condition on you, or you claim and equip a magic item from the Shared Loot Pool, the calculations are recalculated atomically. Every tooltip update happens instantaneously with absolutely zero page refreshes required.
+
+## Floating Glow Status Tags
+
+To draw immediate attention to live changes in the middle of battle, character cards in the **Player Miniatures** panel display floating, glowing status tags that flash briefly when changes occur:
+- **Condition Changes**: Flashes purple on condition application (e.g. \`+Poisoned\`) and zinc/grey when removed (e.g. \`-Prone\`).
+- **Buff Updates**: Flashes emerald on buff application (e.g. \`+Bless\`) and amber when removed.
+- **AC & Speed Adjustments**: Flashes blue/teal on stat increases and rose on reductions (e.g. \`+2 AC\` or \`-10 Speed\`).
+- **Ability Scores**: Flashes indigo on score gains and rose on score drops.
+
+These tags animate automatically via CSS \`@keyframes\` and fade out after 2.5 seconds, providing clear visual telemetry of actions without disrupting the UI layout.`,
   },
   {
     id: 'combat-recovery',

@@ -17,6 +17,7 @@ import { CombatReportModal } from './CombatReportModal';
 import { AoEEffectModal, type AoETarget } from './AoEEffectModal';
 import { CombatantSidebar } from './CombatantSidebar';
 import { CombatRecoveryModal } from './CombatRecoveryModal';
+import { SidebarSheetMini } from './combat/SidebarSheetMini';
 
 // ─── Sorting Utility ─────────────────────────────────────────────────────────
 
@@ -148,6 +149,7 @@ export function InitiativeTracker() {
   const [smartPins, setSmartPins] = useState<any[]>([]);
   const [showAuraPanel, setShowAuraPanel] = useState(false);
   const [showAuraSpawner, setShowAuraSpawner] = useState(false);
+  const [showMiniatures, setShowMiniatures] = useState(false);
   const [newAuraName, setNewAuraName] = useState('');
   const [newAuraCaster, setNewAuraCaster] = useState('');
   const [newAuraRadius, setNewAuraRadius] = useState(30);
@@ -319,6 +321,9 @@ export function InitiativeTracker() {
               <span className="font-display text-lg">Combat Tracker</span>
             </div>
             <div className="flex items-center gap-1.5">
+              <Button onClick={() => setShowMiniatures(true)} variant="outline" size="sm" className="h-8 text-xs font-display">
+                <Users className="h-3.5 w-3.5 mr-1" /> Miniatures
+              </Button>
               {isDm && (
                 <Button onClick={() => setShowRecovery(true)} variant="outline" size="sm" className="h-8 text-xs font-display">
                   <History className="h-3.5 w-3.5 mr-1" /> Snapshots
@@ -354,6 +359,10 @@ export function InitiativeTracker() {
       <CombatRecoveryModal
         open={showRecovery}
         onOpenChange={setShowRecovery}
+      />
+      <SidebarSheetMini
+        open={showMiniatures}
+        onClose={() => setShowMiniatures(false)}
       />
       </>
     );
@@ -394,6 +403,15 @@ export function InitiativeTracker() {
             </div>
           </CardTitle>
           <div className="flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowMiniatures(true)}
+              className="h-7 px-2 text-[10px] text-muted-foreground hover:text-primary"
+              title="Player Miniatures Drawer"
+            >
+              <Users className="h-3 w-3 mr-1" /> Miniatures
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -997,6 +1015,10 @@ export function InitiativeTracker() {
         <CombatRecoveryModal
           open={showRecovery}
           onOpenChange={setShowRecovery}
+        />
+        <SidebarSheetMini
+          open={showMiniatures}
+          onClose={() => setShowMiniatures(false)}
         />
       </CardContent>
     </Card>

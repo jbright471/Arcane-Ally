@@ -36,6 +36,9 @@ const {
     writeAuditEvent,
     reverseEvent,
     getCharacterProvenance,
+    applyToCharacter,
+    applyToMonster,
+    writeEventRecord,
 } = require('./services/effects-engine');
 const { getPermissions, setPermissions, checkPermission } = require('./lib/permissions');
 
@@ -240,6 +243,172 @@ function requireDm(token) {
     return row && row.value === token;
 }
 
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+    });
+});
+
+app.post('/api/v1/effects/bulk-apply', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization || '';
+        const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+        if (!requireDm(token)) {
+            return res.status(401).json({ error: 'Unauthorized: Invalid DM Token' });
+        }
+
+        const { requestId, targets, effects, actor } = req.body;
+        if (!Array.isArray(targets) || targets.length === 0) {
+            return res.status(400).json({ error: 'No targets specified' });
+        }
+        if (!Array.isArray(effects) || effects.length === 0) {
+            return res.status(400).json({ error: 'No effects specified' });
+        }
+
+        // Resolve targets via effects-engine (handles both characters and monsters)
+        const resolved = resolveTargets(db, targets.map(t => ({ id: Number(t.id), type: t.type })));
+        if (resolved.length === 0) {
+            return res.status(400).json({ error: 'No valid targets found' });
+        }
+
+        const groupId = requestId;
+        const records = [];
+
+        // Map target calculations into concurrent execution promises (Promise.all)
+        const promises = resolved.map(async (target) => {
+            const targetRecords = [];
+            try {
+                // Run database updates for each target in separate nested/independent transactions (using try-catch)
+                db.transaction(() => {
+                    for (const effect of effects) {
+                        const perTargetRequestId = requestId ? `${requestId}-${target.id}-${effect.type}` : undefined;
+
+                        // Idempotency check per sub-event
+                        if (perTargetRequestId) {
+                            const exists = db.prepare('SELECT 1 FROM effect_events WHERE request_id = ?').get(perTargetRequestId);
+                            if (exists) {
+                                targetRecords.push({
+                                    targetId: target.id,
+                                    targetName: target.name,
+                                    eventType: effect.type,
+                                    logMessage: 'duplicate skipped',
+                                    success: false
+                                });
+                                continue;
+                            }
+                        }
+
+                        let result, eventType;
+                        if (target.type === 'character') {
+                            switch (effect.type) {
+                                case 'damage':
+                                    result = applyDamageEvent(db, target.id, effect.value || 0, effect.damageType || 'untyped');
+                                    eventType = 'damage';
+                                    break;
+                                case 'heal':
+                                    result = applyHealEvent(db, target.id, effect.value || 0);
+                                    eventType = 'heal';
+                                    break;
+                                case 'condition':
+                                    result = applyConditionEvent(db, target.id, effect.condition);
+                                    eventType = 'condition_applied';
+                                    break;
+                                case 'remove_condition':
+                                    result = removeConditionEvent(db, target.id, effect.condition);
+                                    eventType = 'condition_removed';
+                                    break;
+                                default:
+                                    result = { success: false, error: `Unknown effect: ${effect.type}` };
+                                    eventType = 'unknown';
+                            }
+                        } else {
+                            // Monster — damage/heal only (conditions noted but not stored in schema)
+                            const entity = db.prepare('SELECT * FROM initiative_tracker WHERE id = ?').get(target.id);
+                            if (!entity) {
+                                targetRecords.push({
+                                    targetId: target.id,
+                                    targetName: target.name,
+                                    eventType: effect.type,
+                                    logMessage: 'Monster not found',
+                                    success: false
+                                });
+                                continue;
+                            }
+                            if (effect.type === 'damage') {
+                                const dmg = Math.max(0, effect.value || 0);
+                                const newHp = Math.max(0, entity.current_hp - dmg);
+                                db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
+                                result = { success: true, logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)` };
+                                eventType = 'damage';
+                            } else if (effect.type === 'heal') {
+                                const heal = Math.max(0, effect.value || 0);
+                                const newHp = Math.min(entity.max_hp, entity.current_hp + heal);
+                                db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
+                                result = { success: true, logMessage: `${entity.entity_name} healed ${heal} HP (${newHp}/${entity.max_hp} HP)` };
+                                eventType = 'heal';
+                            } else {
+                                result = { success: true, logMessage: `${target.name}: ${effect.condition || effect.type} (noted)` };
+                                eventType = effect.type === 'condition' ? 'condition_applied' : 'condition_removed';
+                            }
+                        }
+
+                        if (result.success) {
+                            writeAuditEvent(db, {
+                                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
+                                eventType,
+                                actor: actor || 'DM',
+                                targetId: target.id,
+                                targetName: target.name,
+                                payload: { ...effect },
+                                requestId: perTargetRequestId,
+                                description: result.logMessage,
+                                groupId,
+                            });
+                        }
+
+                        targetRecords.push({
+                            targetId: target.id,
+                            targetName: target.name,
+                            eventType,
+                            logMessage: result.logMessage || result.error,
+                            success: result.success
+                        });
+                    }
+                })();
+            } catch (err) {
+                console.error(`Error processing bulk-apply target ${target.name}:`, err);
+                for (const effect of effects) {
+                    targetRecords.push({
+                        targetId: target.id,
+                        targetName: target.name,
+                        eventType: effect.type,
+                        logMessage: err.message,
+                        success: false
+                    });
+                }
+            }
+            return targetRecords;
+        });
+
+        const results = await Promise.all(promises);
+        const flatRecords = results.flat();
+
+        // Broadcast state updates
+        broadcastPartyState();
+        broadcastTimelineImmediate();
+
+        // Log the group action
+        logAction(actor || 'DM', `AoE [${effects.map(e => e.type).join('+')}] → ${resolved.map(t => t.name).join(', ')}`);
+
+        res.json({ success: true, groupId, records: flatRecords });
+    } catch (err) {
+        console.error('Error in bulk-apply endpoint:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/log', (req, res) => {
     const logs = db.prepare('SELECT * FROM action_log ORDER BY id DESC LIMIT 100').all();
     res.json(logs.reverse());
@@ -378,7 +547,16 @@ function broadcastCombatState() {
 loadCombatState();
 
 // --- Helpers ---
+let partyStateTimer = null;
 function broadcastPartyState() {
+    if (partyStateTimer) clearTimeout(partyStateTimer);
+    partyStateTimer = setTimeout(() => {
+        rawBroadcastPartyState();
+        partyStateTimer = null;
+    }, 50);
+}
+
+function rawBroadcastPartyState() {
     const characters = getAllCharacters();
     const resolved = characters.map(char => {
         const resolvedState = getResolvedCharacterState(db, char.id);
@@ -425,7 +603,16 @@ function broadcastLogs() {
     io.emit('action_logged', logs.reverse());
 }
 
+let initiativeTimer = null;
 function broadcastInitiative() {
+    if (initiativeTimer) clearTimeout(initiativeTimer);
+    initiativeTimer = setTimeout(() => {
+        rawBroadcastInitiative();
+        initiativeTimer = null;
+    }, 50);
+}
+
+function rawBroadcastInitiative() {
     const tracker = getTrackerState();
     io.emit('initiative_state', tracker);
 }

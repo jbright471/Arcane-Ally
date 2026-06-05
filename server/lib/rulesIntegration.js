@@ -545,7 +545,7 @@ function getResolvedCharacterState(db, characterId) {
 
   const combinedBuffs = deduplicateCombinedBuffs([...(state.activeBuffs || []), ...auraBuffs]);
   const allInventory = [...char.inventory, ...char.homebrewInventory];
-  const { finalScores, breakdown: abilityScoresBreakdown } = resolveFinalAbilityScores(char, allInventory, combinedBuffs);
+  const { finalScores, breakdown: abilityScoresBreakdown } = resolveFinalAbilityScores(char, allInventory, combinedBuffs, state.activeConditions);
   const currentAC = resolveCurrentAC(char, combinedBuffs, state.activeConditions, allInventory);
   const savesResult = resolveSavingThrows(char, combinedBuffs, state.activeConditions, allInventory);
   const skillsResult = resolveSkills(char, combinedBuffs, state.activeConditions, allInventory);

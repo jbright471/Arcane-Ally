@@ -4,6 +4,19 @@ All notable changes to the **DnD Party Sync** project will be documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## [1.16.0] - 2026-06-05
+
+### Added
+- **🛡️ Player Miniature Sidebar**: Integrated a slide-out drawer on the left side of the combat tracker (`SidebarSheetMini.tsx`) showing live player cards, HP status (+/-5 quick controls), AC/Speed/ability grid, active conditions, and interactive spell slot pips (click to toggle and sync preparation status via WebSockets).
+- **⚡ Bulk AoE REST API**: Added a secure POST `/api/v1/effects/bulk-apply` endpoint for multi-target actions. Loops targets concurrently using `Promise.all` and wraps writes in database savepoint transactions. A single target validation failure rolls back independently without affecting other targets.
+- **⚙️ V8 Memory Telemetry & Loop Guard**: Exposed a `/api/health` telemetry endpoint displaying uptime and V8 memory usage profiles (`rss`, `heapTotal`, `heapUsed`). Integrated an automated memory monitoring script (`healthcheck.js`) that aborts the process (exit code 1) if memory consumption exceeds 500MB, preventing endless execution loops.
+- **✨ Gothic Scrollbars & Tag Glow Animators**: Added custom CSS scrollbars, `@keyframes gothic-glow`, and `@keyframes flash-tag-glow` to style active state modifications. Floating, color-coded tag flashes temporarily display telemetry feedback (e.g. `+Bless`, `-Prone`, `+2 AC`) when character state updates.
+
+### Changed
+- **🐳 3-Stage Lightweight Docker Container**: Refactored `Dockerfile` into a multi-stage compilation flow, fully discarding build dependencies (`python3`, `make`, `g++`) from the final release image, and declared the automated health check path.
+- **🧪 Rules Engine Attribute Resolution**: Hardened `rulesEngine.js` and `rulesIntegration.js` to propagate active conditions during stat calculations, ensuring equipment modifiers (like Strength/Dexterity) drop automatically when characters are disabled (e.g. paralyzed, stunned, unconscious).
+- **📖 Arcane Codex Update**: Expanded the guidebook sections (`self-hosting`, `equipment-inventory`, `combat-management`, `modifier-trace`) to detail level-scaling formulas, condition-disabled suppressions, stacking rules, and Docker telemetries.
+
 ## [1.15.0] - 2026-05-22
 
 ### Added

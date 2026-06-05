@@ -131,11 +131,66 @@ function validateCharacter(c) {
         warnings.push('inventory is empty — most characters carry at least basic equipment');
     }
 
+    const allItems = [...(c.inventory || []), ...(c.homebrewInventory || [])];
+    for (const item of allItems) {
+        if (item && item.stats) {
+            if (item.stats.disabledByConditions !== undefined) {
+                if (!Array.isArray(item.stats.disabledByConditions) || !item.stats.disabledByConditions.every(s => typeof s === 'string')) {
+                    errors.push(`Item "${item.name || 'Unnamed'}" stats.disabledByConditions must be an array of strings`);
+                }
+            }
+            const keysToEvaluate = ['acBonus', 'ac', 'speedBonus', 'saveBonus', 'initiativeBonus'];
+            for (const key of keysToEvaluate) {
+                const val = item.stats[key];
+                if (val !== undefined && val !== null) {
+                    if (typeof val === 'string') {
+                        if (!isValidFormula(val)) {
+                            errors.push(`Item "${item.name || 'Unnamed'}" stats.${key} formula "${val}" is invalid`);
+                        }
+                    } else if (typeof val !== 'number') {
+                        errors.push(`Item "${item.name || 'Unnamed'}" stats.${key} must be a number or a formula string`);
+                    }
+                }
+            }
+            const dictKeys = ['statBonuses', 'statOverrides', 'saveBonuses', 'skillBonuses'];
+            for (const key of dictKeys) {
+                const dict = item.stats[key];
+                if (dict && typeof dict === 'object' && !Array.isArray(dict)) {
+                    for (const [k, val] of Object.entries(dict)) {
+                        if (val !== undefined && val !== null) {
+                            if (typeof val === 'string') {
+                                if (!isValidFormula(val)) {
+                                    errors.push(`Item "${item.name || 'Unnamed'}" stats.${key}.${k} formula "${val}" is invalid`);
+                                }
+                            } else if (typeof val !== 'number') {
+                                errors.push(`Item "${item.name || 'Unnamed'}" stats.${key}.${k} must be a number or a formula string`);
+                            }
+                        }
+                    }
+                } else if (dict !== undefined && dict !== null) {
+                    errors.push(`Item "${item.name || 'Unnamed'}" stats.${key} must be an object`);
+                }
+            }
+        }
+    }
+
     return {
         valid: errors.length === 0,
         errors,
         warnings,
     };
+}
+
+function isValidFormula(val) {
+    if (typeof val === 'number') return true;
+    if (typeof val !== 'string') return false;
+    const formula = val.replace(/\blevel\b/g, '1');
+    try {
+        new Function('floor', 'ceil', `return ${formula}`);
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
 module.exports = {
