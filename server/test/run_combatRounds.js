@@ -1,6 +1,6 @@
 'use strict';
 
-const { createTestDb, insertCharacter, insertMonster } = require('./helpers/testDb.js');
+const { createTestDb, insertCharacter } = require('./helpers/testDb.js');
 const {
   applyDamageEvent,
   applyHealEvent,
@@ -9,8 +9,6 @@ const {
   removeBuffEvent,
   castConcentrationSpellEvent,
   dropConcentrationEvent,
-  applyConditionEvent,
-  removeConditionEvent,
   tickConditionsEvent,
   getSessionState,
   getResolvedCharacterState,
@@ -63,7 +61,7 @@ class MockStateBus {
     return timeline;
   }
 
-  emitUpdateHp(socket, { characterId, delta, damageType, skipConcentrationAutoRoll, actor }) {
+  emitUpdateHp(socket, { characterId, delta, damageType, skipConcentrationAutoRoll, actor: _actor }) {
     let result = delta < 0 
       ? applyDamageEvent(this.db, characterId, Math.abs(delta), damageType || 'untyped')
       : applyHealEvent(this.db, characterId, delta);

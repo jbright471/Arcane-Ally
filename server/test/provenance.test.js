@@ -2,12 +2,10 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  resolveFinalAbilityScores,
   resolveCurrentAC,
   resolveSavingThrows,
   resolveSkills,
   resolveSpeed,
-  resolveInitiative,
 } from '../lib/rulesEngine.js';
 
 describe('D&D 5e Rules Engine Provenance Calculations', () => {

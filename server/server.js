@@ -36,9 +36,6 @@ const {
     writeAuditEvent,
     reverseEvent,
     getCharacterProvenance,
-    applyToCharacter,
-    applyToMonster,
-    writeEventRecord,
 } = require('./services/effects-engine');
 const { getPermissions, setPermissions, checkPermission } = require('./lib/permissions');
 
@@ -274,7 +271,6 @@ app.post('/api/v1/effects/bulk-apply', async (req, res) => {
         }
 
         const groupId = requestId;
-        const records = [];
 
         // Map target calculations into concurrent execution promises (Promise.all)
         const promises = resolved.map(async (target) => {
@@ -1757,11 +1753,9 @@ io.on('connection', (socket) => {
                 });
 
             // Build survivor snapshot from tracker (PCs + alive monsters)
-            const characters = getAllCharacters();
             const survivors = trackerState
                 .filter(e => e.current_hp > 0)
                 .map(e => {
-                    const char = e.character_id ? characters.find(c => c.id === e.character_id) : null;
                     return {
                         name: e.entity_name,
                         type: e.entity_type,
