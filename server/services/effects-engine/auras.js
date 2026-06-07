@@ -5,7 +5,7 @@ function getActiveAuras(db) {
   if (!row || !row.value) return [];
   try {
     return JSON.parse(row.value);
-  } catch (e) {
+  } catch (_e) {
     return [];
   }
 }

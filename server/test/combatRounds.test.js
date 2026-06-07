@@ -1,7 +1,7 @@
 'use strict';
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestDb, insertCharacter, insertMonster } from './helpers/testDb.js';
+import { createTestDb, insertCharacter } from './helpers/testDb.js';
 import {
   applyDamageEvent,
   applyHealEvent,
@@ -10,8 +10,6 @@ import {
   removeBuffEvent,
   castConcentrationSpellEvent,
   dropConcentrationEvent,
-  applyConditionEvent,
-  removeConditionEvent,
   tickConditionsEvent,
   getSessionState,
   getResolvedCharacterState,
@@ -67,7 +65,7 @@ class MockStateBus {
   }
 
   // Simulate Socket update_hp event from a client
-  emitUpdateHp(socket, { characterId, delta, damageType, skipConcentrationAutoRoll, actor }) {
+  emitUpdateHp(socket, { characterId, delta, damageType, skipConcentrationAutoRoll, actor: _actor }) {
     let result = delta < 0 
       ? applyDamageEvent(this.db, characterId, Math.abs(delta), damageType || 'untyped')
       : applyHealEvent(this.db, characterId, delta);

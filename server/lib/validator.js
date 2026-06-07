@@ -188,7 +188,7 @@ function isValidFormula(val) {
     try {
         new Function('floor', 'ceil', `return ${formula}`);
         return true;
-    } catch (e) {
+    } catch (_e) {
         return false;
     }
 }

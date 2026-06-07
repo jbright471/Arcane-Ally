@@ -275,7 +275,6 @@ function resolveFinalAbilityScores(character, allInventory = [], activeBuffs = [
 
   // 2. Process buffs flat bonuses
   for (const buff of dedupedBuffs) {
-    const name = (buff.name || '').toLowerCase();
     if (buff.modifierType === 'flatBonus' && buff.statAffected) {
       const upper = buff.statAffected.toUpperCase();
       const norm = MAP[upper] || MAP[buff.statAffected.toLowerCase()] || upper;
