@@ -2504,5 +2504,5 @@ cron.schedule('0 3 * * *', async () => {
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-    console.log(`[Server] DnD Party Sync backend running on http://localhost:${PORT}`);
+    console.log(`[Server] Arcane Ally backend running on http://localhost:${PORT}`);
 });

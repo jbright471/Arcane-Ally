@@ -1,4 +1,4 @@
-# Arcane Ally — DnD Party Sync
+# Arcane Ally
 
 A high-performance, self-hosted companion application for D&D 5e. Real-time party management, AI-powered content generation, and a full DM command center — all running on your local hardware.
 

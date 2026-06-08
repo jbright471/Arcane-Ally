@@ -1,4 +1,4 @@
-// DnD Party Sync — Service Worker
+// Arcane Ally — Service Worker
 // Strategy: network-first for API, cache-first for static assets
 
 const CACHE_NAME = 'dnd-offline-v1';

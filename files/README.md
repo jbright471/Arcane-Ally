@@ -1,4 +1,4 @@
-# DnD Party Sync — PDF Character Parser
+# Arcane Ally — PDF Character Parser
 
 Extracts structured character data from D&D Beyond PDF exports using an LLM.
 

@@ -357,7 +357,7 @@ export default function App() {
       
       {/* Header */}
       <div style={{ marginBottom:20,paddingBottom:16,borderBottom:"1px solid #1e2d3d" }}>
-        <div style={{ fontSize:10,color:"#334155",letterSpacing:"0.3em",fontFamily:"'JetBrains Mono',monospace" }}>DND PARTY SYNC // TACTICAL VIEW</div>
+        <div style={{ fontSize:10,color:"#334155",letterSpacing:"0.3em",fontFamily:"'JetBrains Mono',monospace" }}>ARCANE ALLY // TACTICAL VIEW</div>
         <div style={{ fontSize:22,fontWeight:700,letterSpacing:"0.08em",color:"#e2e8f0",marginTop:2 }}>COMBAT DASHBOARD</div>
       </div>
 
