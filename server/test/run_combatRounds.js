@@ -158,7 +158,7 @@ class MockStateBus {
 // ── Test Runner ──────────────────────────────────────────────────────────────
 
 function run() {
-  console.log('--- DnD Party Sync: Running Integration Tests ---');
+  console.log('--- Arcane Ally: Running Integration Tests ---');
 
   // Test 1: Multi-user rounds
   (() => {

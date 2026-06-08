@@ -1,10 +1,10 @@
 # Changelog
 
-All notable changes to the **DnD Party Sync** project will be documented in this file.
+All notable changes to the **Arcane Ally** project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
-## [1.17.0] - 2026-06-08
+## [1.0.0] - 2026-06-08
 
 ### Added
 - **🛡️ External Sheet Import Guardrails**: Real-time validation layer analyzing incoming character stats (Level, HP, AC, ability scores) from D&D Beyond or PDFs. Flags standard 5e rules anomalies (Danger/Warning/Info) and holds player-initiated updates in a staged DM approval queue (`pending_imports`).

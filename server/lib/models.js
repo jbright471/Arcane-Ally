@@ -1,5 +1,5 @@
 /**
- * Core Models for the DnD Party Sync Pivot
+ * Core Models for Arcane Ally
  * Based on the "dnd stuff.docx" specifications.
  */
 
