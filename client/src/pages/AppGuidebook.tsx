@@ -1138,6 +1138,67 @@ Transparency is key. Every time you preview or execute a rollback, the event is 
 
 If you are self-hosting Arcane Ally, you maintain full control over your data. You can clear these logs at any time by clicking the **Purge** button in the Recovery History header, permanently deleting the session's rollback traces.`,
   },
+  {
+    id: 'effect-presets',
+    title: 'Effect Preset Library',
+    category: 'dm',
+    icon: Zap,
+    content: `# Effect Preset Library
+
+Managing active spells, conditions, and temporary modifiers in combat can be tedious. Arcane Ally features an **Effect Preset Library** that allows Dungeon Masters to pre-configure and quick-apply combat modifiers with a single click.
+
+## Default Templates
+The application comes pre-seeded with standard 5e effects, including:
+- **Bless**: Grants +2.5 Wisconsin/Dexterity/Charisma saving throw modifiers.
+- **Haste**: Grants +2 AC, double speed, and advantage on Dexterity saves.
+- **Shield of Faith**: Grants +2 AC.
+- **Frightened**: Applies the Frightened condition.
+- **Poisoned**: Applies the Poisoned condition.
+
+## Creating Custom Presets
+DMs can build reusable presets for homebrew spells, magic item modifications, monster auras, and environmental effects:
+1. Click the **Presets** button in the DM Command Center header to open the drawer.
+2. Click the **+** (Plus) button to open the Preset Creator.
+3. Configure the name, category (spell, condition, aura, item, or environmental), and modifier details:
+   - **Condition Presets**: Apply standard status effects (e.g. *Stunned*, *Incapacitated*).
+   - **Stat Buff Presets**: Grant flat bonuses to Armor Class (AC), speed, or saving throws (e.g. +5 AC, +10 Speed).
+4. Save the preset to persist it in the SQLite database.
+
+## Bulk Applying Presets
+To apply a preset to multiple combatants concurrently:
+1. Open the **Presets** drawer and select a preset.
+2. Check the boxes next to the target creatures and characters in the active initiative order.
+3. Click **Apply Preset Effect**.
+4. The server runs calculations concurrently and logs the action on both the Roll Feed and the Effect Timeline.`,
+  },
+  {
+    id: 'import-guardrails',
+    title: 'Import Guardrails & Safety Diffs',
+    category: 'dm',
+    icon: Shield,
+    content: `# Import Guardrails & Safety Diffs
+
+When importing or syncing characters from D&D Beyond or uploading character PDFs, discrepancies or mistakes in stats can disrupt active combat. Arcane Ally includes an **Import Guardrails** safety layer that intercepts and flags anomalous character modifications.
+
+## Automated Safety Scanning
+Every incoming character sheet is automatically validated against standard D&D rules. Discrepancies are flagged by severity:
+- **Danger**: Suspicious level increases (> 1 level), massive Max HP jumps (>30% or > 50 HP), high Armor Class (> 25 AC), or any ability score exceeding 20 (or 24 for fresh sheets).
+- **Warning**: Moderate HP increases, or ability score shifts > 4.
+- **Info**: Normal progression updates (leveling up by 1, minor AC/stat tweaks).
+
+## Staging & The DM Approval Queue
+To prevent unauthorized mutations of the live game state, player-initiated sheets containing warnings or dangers are **held in a staging area** (\`pending_imports\`) instead of mutating the live database immediately:
+- The server responds with a \`202 Pending\` status.
+- A notification sounds, and a glowing **Staged** alert badge appears next to the **DM Queue** toggle in the DM Dashboard.
+- The player is notified that their sheet is awaiting DM review.
+
+## Reviewing and Resolving Sheets
+To resolve pending imports:
+1. Click the **Staged** alert button on the DM Dashboard header.
+2. The **Character Sheet Guardrail Console** renders all staged characters side-by-side.
+3. Review the comparative stats (e.g., \`Level: 4 ➔ 5\`, \`Max HP: 32 ➔ 40\`) alongside the safety flag reasons.
+4. Click **Approve Sync** to commit the changes and initialise session states, or **Discard** to reject the incoming sync and keep the existing sheet.`,
+  },
 ];
 
 // ── Category metadata ────────────────────────────────────────────────────

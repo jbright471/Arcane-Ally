@@ -396,6 +396,124 @@ function runMigrations() {
     );
   `);
 
+  // ---- Phase 22.0: Effect Presets & Import Guardrails ----
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS effect_presets (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      name         TEXT NOT NULL,
+      category     TEXT NOT NULL, -- 'spell', 'condition', 'aura', 'item', 'environmental'
+      effects_json TEXT NOT NULL DEFAULT '[]',
+      description  TEXT DEFAULT '',
+      is_locked    INTEGER DEFAULT 0,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS pending_imports (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      character_id       INTEGER DEFAULT NULL, -- NULL for new imports
+      player_name        TEXT DEFAULT 'Player',
+      url                TEXT DEFAULT '',
+      incoming_data_json TEXT NOT NULL,
+      diff_json          TEXT NOT NULL DEFAULT '{}',
+      created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Seed default effect presets
+  const seedPresets = [
+    {
+      name: 'Bless',
+      category: 'spell',
+      effects_json: JSON.stringify([
+        {
+          type: 'buff',
+          buffData: {
+            name: 'Bless',
+            modifierType: 'flatBonus',
+            statAffected: 'all saves',
+            modifierValue: '2.5',
+            isConcentration: true,
+            sourceName: 'Bless'
+          }
+        }
+      ]),
+      description: 'Whenever a target makes an attack roll or a saving throw before the spell ends, the target can roll a d4 and add the number rolled to the attack roll or saving throw.',
+      is_locked: 1
+    },
+    {
+      name: 'Haste',
+      category: 'spell',
+      effects_json: JSON.stringify([
+        {
+          type: 'buff',
+          buffData: {
+            name: 'Haste',
+            modifierType: 'flatBonus',
+            statAffected: 'ac',
+            modifierValue: '2',
+            isConcentration: true,
+            sourceName: 'Haste'
+          }
+        }
+      ]),
+      description: 'Choose a willing creature. Speed is doubled, gains +2 bonus to AC, has advantage on Dex saving throws, and gains an additional action.',
+      is_locked: 1
+    },
+    {
+      name: 'Shield of Faith',
+      category: 'spell',
+      effects_json: JSON.stringify([
+        {
+          type: 'buff',
+          buffData: {
+            name: 'Shield of Faith',
+            modifierType: 'flatBonus',
+            statAffected: 'ac',
+            modifierValue: '2',
+            isConcentration: true,
+            sourceName: 'Shield of Faith'
+          }
+        }
+      ]),
+      description: 'A shimmering field appears and surrounds a creature of your choice, granting it a +2 bonus to AC for the duration.',
+      is_locked: 1
+    },
+    {
+      name: 'Frightened',
+      category: 'condition',
+      effects_json: JSON.stringify([
+        {
+          type: 'condition',
+          condition: 'Frightened'
+        }
+      ]),
+      description: 'A frightened creature has disadvantage on ability checks and attack rolls while the source of its fear is within line of sight, and cannot willingly move closer to the source.',
+      is_locked: 1
+    },
+    {
+      name: 'Poisoned',
+      category: 'condition',
+      effects_json: JSON.stringify([
+        {
+          type: 'condition',
+          condition: 'Poisoned'
+        }
+      ]),
+      description: 'A poisoned creature has disadvantage on attack rolls and ability checks.',
+      is_locked: 1
+    }
+  ];
+
+  for (const preset of seedPresets) {
+    const exists = db.prepare('SELECT 1 FROM effect_presets WHERE name = ?').get(preset.name);
+    if (!exists) {
+      db.prepare(`
+        INSERT INTO effect_presets (name, category, effects_json, description, is_locked)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(preset.name, preset.category, preset.effects_json, preset.description, preset.is_locked);
+    }
+  }
+
   console.log('[DB] Migrations complete.');
 }
 

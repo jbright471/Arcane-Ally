@@ -70,6 +70,9 @@ Buttons disable after use to prevent duplicate spawns.
 
 **DM Prep Panel** — per-character and per-encounter sticky notes accessible from the God-Eye View.
 
+- **Effect Preset Library** — Reusable, DM-created templates for spells, conditions, monster auras, and environmental modifiers. Allows searching, editing, and quick-applying modifiers concurrently to target PCs and monsters from a dedicated side-panel drawer.
+- **Import Guardrails & Safety Diffs** — Real-time validation layer analyzing incoming character stats (Level, HP, AC, ability scores) from D&D Beyond or PDFs. Flags rule anomalies (Danger/Warning/Info) and holds player-initiated updates in a staged DM approval queue (`pending_imports`) with side-by-side comparative views.
+
 ### Party Loot Pool
 - DM drops items from homebrew library, custom creation, or AI generation
 - **Need / Greed / Pass voting** — DM can open a vote on any item; players vote and the server auto-resolves when all connected players have voted (need beats greed; random tiebreak within tier); DM can also force-resolve at any time
@@ -176,5 +179,6 @@ The project runs entirely on local hardware with no external cloud dependencies.
 | `/api/chat` | 1 | Rules assistant |
 | `/api/v1/effects` | 1 | Bulk Apply AoE / multi-target damage, healing, or conditions |
 | `/api/health` | 1 | Telemetry endpoint (uptime, RSS, heap memory sizes) |
+| `/api/effect-presets` | 4 | CRUD operations for reusable effect and condition presets |
 
 **70+ Socket.io real-time events** covering character state, combat, dice, loot, voting, world, voice, effects, automation, permissions, and battlemap tokens.

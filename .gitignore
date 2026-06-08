@@ -40,6 +40,8 @@ data/
 server/node_modules/
 client/node_modules/
 client/dist/
+.vite/
+client/.vite/
 
 # Antigravity Brain
 .agents/
@@ -50,3 +52,8 @@ _agents/
 .claude/
 *.db-shm
 *.db-wal
+
+# Personal documentation and checklists
+dnd-companion-project-brief.md
+CLAUDE.md
+TODO.md
