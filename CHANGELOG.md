@@ -4,6 +4,19 @@ All notable changes to the **DnD Party Sync** project will be documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## [1.17.0] - 2026-06-08
+
+### Added
+- **🛡️ External Sheet Import Guardrails**: Real-time validation layer analyzing incoming character stats (Level, HP, AC, ability scores) from D&D Beyond or PDFs. Flags standard 5e rules anomalies (Danger/Warning/Info) and holds player-initiated updates in a staged DM approval queue (`pending_imports`).
+- **🗃️ DM Staging Queue Console**: Created `ImportDiffModal.tsx` rendering side-by-side comparative views of level, HP, AC, and ability changes. Displays safety flags and triggers DM approvals/discards.
+- **✨ Effect Preset Library**: Reusable DM-created templates for spells, conditions, monster auras, and environmental modifiers. Pre-seeded with *Bless*, *Haste*, *Shield of Faith*, *Frightened*, and *Poisoned*.
+- **⚡ Bulk Preset Application**: Built `EffectPresetLibrary.tsx` drawer letting DMs search, create custom templates, and select combatants to apply effects concurrently.
+- **⚙️ Persisted Approval Mode State**: Persisted the toggle state of `isApprovalMode` in the SQLite database under key `'approval_mode'` inside `campaign_state` table.
+
+### Changed
+- **📝 Sockets Payload Alignment**: Enhanced `pending_import_created` socket emission payload to include the full `incomingData` object for real-time frontend synchronization.
+- **📖 Arcane Codex Update**: Appended dedicated chapters to the internal documentation guidebook detailing the Effect Preset Library and the Import Guardrails & Safety Diffs engines.
+
 ## [1.16.0] - 2026-06-05
 
 ### Added

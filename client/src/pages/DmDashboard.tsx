@@ -30,6 +30,8 @@ import { BuffManagerModal } from '../components/BuffManagerModal';
 import { EncounterBuilderModal } from '../components/EncounterBuilderModal';
 import { Compendium } from '../components/Compendium';
 import { CombatRecoveryModal } from '../components/CombatRecoveryModal';
+import { EffectPresetLibrary } from '../components/combat/EffectPresetLibrary';
+import { ImportDiffModal } from '../components/combat/ImportDiffModal';
 import { ActionableLoreMessage } from '../components/ActionableLoreMessage';
 import { parseLoreMessage } from '../lib/loreParser';
 import {
@@ -63,6 +65,8 @@ export default function DmDashboard() {
   const [showAutomation, setShowAutomation] = useState(false);
   const [showCompendium, setShowCompendium] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
+  const [showImportDiff, setShowImportDiff] = useState(false);
   const [prepContext, setPrepContext] = useState<{ type: string; label?: string } | null>(null);
   const openPrep = (type = 'general', label?: string) => setPrepContext({ type, label });
 
@@ -174,6 +178,8 @@ export default function DmDashboard() {
       <DmAutomationPanel open={showAutomation} onClose={() => setShowAutomation(false)} />
       <CombatRecoveryModal open={showRecovery} onClose={() => setShowRecovery(false)} />
       <Compendium open={showCompendium} onClose={() => setShowCompendium(false)} />
+      <EffectPresetLibrary open={showPresets} onClose={() => setShowPresets(false)} />
+      <ImportDiffModal open={showImportDiff} onClose={() => setShowImportDiff(false)} />
       <DmPrepPanel
         isOpen={prepContext !== null}
         onClose={() => setPrepContext(null)}
@@ -228,6 +234,16 @@ export default function DmDashboard() {
             />
             <span className="text-[10px] text-muted-foreground/50 uppercase tracking-tighter">Automation</span>
           </div>
+          {state.pendingImports && state.pendingImports.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowImportDiff(true)}
+              className="font-display border-rose-500/40 text-rose-400 hover:bg-rose-500/10 relative animate-pulse-glow"
+            >
+              <ShieldAlert className="h-4 w-4 mr-1 text-rose-500" /> Staged ({state.pendingImports.length})
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -235,6 +251,14 @@ export default function DmDashboard() {
             className="font-display border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
           >
             <BookOpen className="h-4 w-4 mr-1" /> Compendium
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowPresets(true)}
+            className="font-display border-primary/30 text-primary hover:bg-primary/10"
+          >
+            <Sparkles className="h-4 w-4 mr-1" /> Presets
           </Button>
           <Button
             variant="outline"

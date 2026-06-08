@@ -17,6 +17,7 @@ const worldRouter = require('./routes/world');
 const notesRouter = require('./routes/notes');
 const homebrewRouter = require('./routes/homebrew');
 const prepPacksRouter = require('./routes/prepPacks');
+const effectPresetsRouter = require('./routes/effectPresets');
 const db = require('./db');
 const { askRulesAssistant, resolveActionLLM, generateSessionRecap, generateCombatReport, generateLoreLLM } = require('./ollama');
 const { backupDatabase } = require('./backup');
@@ -124,6 +125,7 @@ const io = new Server(server, {
         methods: ['GET', 'POST', 'PATCH', 'DELETE'],
     },
 });
+app.set('io', io);
 
 // --- Middleware ---
 app.use(cors());
@@ -144,6 +146,7 @@ app.use('/api/homebrew', homebrewRouter);
 app.use('/api/automation', automationRouter);
 app.use('/api/dm-notes', dmNotesRouter);
 app.use('/api/prep-packs', prepPacksRouter);
+app.use('/api/effect-presets', effectPresetsRouter);
 
 // --- Combat Snapshot REST Routes ---
 app.post('/api/combat/snapshots', (req, res) => {
@@ -512,6 +515,12 @@ app.post('/api/recaps/combat', (req, res) => {
 
 // --- Global State ---
 let isApprovalMode = false;
+try {
+    const approvalRow = db.prepare("SELECT value FROM campaign_state WHERE key = 'approval_mode'").get();
+    isApprovalMode = approvalRow ? approvalRow.value === '1' : false;
+} catch (e) {
+    console.error("[DB] Error loading approval mode state", e);
+}
 const playerSocketMap = new Map(); // socket.id -> { characterId, playerName }
 const voiceRoom = new Map(); // socket.id -> { characterId, playerName }
 const pendingEffects = new Map(); // pending_id -> { timeout, payload }
@@ -755,6 +764,16 @@ io.on('connection', (socket) => {
     broadcastAuras();
     broadcastSmartPins();
     socket.emit('approval_mode', isApprovalMode);
+    const pendingImports = db.prepare('SELECT * FROM pending_imports ORDER BY created_at ASC').all().map(r => ({
+        id: r.id,
+        characterId: r.character_id,
+        playerName: r.player_name,
+        url: r.url,
+        flags: JSON.parse(r.diff_json || '{}').flags || [],
+        diff: JSON.parse(r.diff_json || '{}').diff || {},
+        incomingData: JSON.parse(r.incoming_data_json)
+    }));
+    socket.emit('pending_imports_sync', pendingImports);
     socket.emit('voice_room_state', [...voiceRoom.entries()].map(([id, info]) => ({ socketId: id, ...info })));
     socket.emit('timeline_update', getCombatTimeline(db));
     socket.emit('permissions_state', getPermissions(db));
@@ -845,6 +864,11 @@ io.on('connection', (socket) => {
 
     socket.on('toggle_approval_mode', (mode) => {
         isApprovalMode = !!mode;
+        try {
+            db.prepare("INSERT OR REPLACE INTO campaign_state (key, value) VALUES ('approval_mode', ?)").run(isApprovalMode ? '1' : '0');
+        } catch (e) {
+            console.error("[DB] Error saving approval mode state", e);
+        }
         io.emit('approval_mode', isApprovalMode);
         logAction('DM', `Approval Mode is now ${isApprovalMode ? 'ON' : 'OFF'}.`);
     });
@@ -868,6 +892,163 @@ io.on('connection', (socket) => {
         db.prepare("UPDATE action_log SET status = 'applied' WHERE id = ?").run(logId);
         broadcastLogs();
         broadcastPartyState();
+    });
+
+    socket.on('resolve_pending_import', ({ id, approved }) => {
+        if (!socket.dmAuthenticated) return;
+        try {
+            const row = db.prepare('SELECT * FROM pending_imports WHERE id = ?').get(id);
+            if (!row) return;
+
+            if (approved) {
+                const parsed = JSON.parse(row.incoming_data_json);
+                const charId = row.character_id;
+
+                if (charId) {
+                    db.prepare(`
+                        UPDATE characters SET
+                            name = ?, class = ?, level = ?, max_hp = ?, ac = ?,
+                            stats = ?, skills = ?, features = ?, features_traits = ?,
+                            inventory = ?, spells = ?, backstory = ?,
+                            raw_dndbeyond_json = ?, data_json = ?,
+                            skill_proficiencies = ?, save_proficiencies = ?, attacks = ?
+                        WHERE id = ?
+                    `).run(
+                        parsed.name, parsed.class, parsed.level, parsed.maxHp, parsed.ac,
+                        parsed.stats, parsed.skills, parsed.features, parsed.features_traits,
+                        parsed.inventory, parsed.spells, parsed.backstory,
+                        parsed.raw_dndbeyond_json, parsed.data_json,
+                        parsed.skill_proficiencies || '{}',
+                        parsed.save_proficiencies  || '{}',
+                        parsed.attacks             || '[]',
+                        charId
+                    );
+                    logAction('DM', `Approved sync for character: ${parsed.name}`);
+                } else {
+                    const stmt = db.prepare(`
+                        INSERT INTO characters (
+                            name, class, level, max_hp, current_hp, ac,
+                            stats, skills, features, features_traits, inventory, homebrew_inventory, spells, backstory,
+                            raw_dndbeyond_json, data_json, skill_proficiencies, save_proficiencies, attacks
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?)
+                    `);
+
+                    const result = stmt.run(
+                        parsed.name, parsed.class, parsed.level, parsed.maxHp, parsed.currentHp, parsed.ac,
+                        parsed.stats, parsed.skills, parsed.features, parsed.features_traits, parsed.inventory,
+                        parsed.spells, parsed.backstory, parsed.raw_dndbeyond_json, parsed.data_json,
+                        parsed.skill_proficiencies || '{}',
+                        parsed.save_proficiencies  || '{}',
+                        parsed.attacks             || '[]',
+                    );
+                    const newCharId = result.lastInsertRowid;
+
+                    db.prepare(`
+                      INSERT INTO session_states (character_id, current_hp, temp_hp, death_saves_json, conditions_json, buffs_json, concentrating_on, slots_used_json, hd_used_json, feature_uses_json, active_features_json)
+                      VALUES (?, ?, 0, '{"successes":0,"failures":0}', '[]', '[]', NULL, '{}', '{}', '{}', '[]')
+                    `).run(newCharId, parsed.currentHp);
+                    logAction('DM', `Approved import of new character: ${parsed.name}`);
+                }
+            } else {
+                const parsed = JSON.parse(row.incoming_data_json);
+                logAction('DM', `Rejected import/sync for character: ${parsed.name}`);
+            }
+
+            db.prepare('DELETE FROM pending_imports WHERE id = ?').run(id);
+
+            broadcastPartyState();
+            
+            const remaining = db.prepare('SELECT * FROM pending_imports ORDER BY created_at ASC').all().map(r => ({
+                id: r.id,
+                characterId: r.character_id,
+                playerName: r.player_name,
+                url: r.url,
+                flags: JSON.parse(r.diff_json || '{}').flags || [],
+                diff: JSON.parse(r.diff_json || '{}').diff || {},
+                incomingData: JSON.parse(r.incoming_data_json)
+            }));
+            io.emit('pending_imports_sync', remaining);
+        } catch (err) {
+            console.error('Error resolving pending import:', err);
+        }
+    });
+
+    socket.on('apply_effect_preset', async ({ presetId, targetIds }) => {
+        if (!socket.dmAuthenticated) return;
+        try {
+            const preset = db.prepare('SELECT * FROM effect_presets WHERE id = ?').get(presetId);
+            if (!preset) return;
+
+            const effects = JSON.parse(preset.effects_json || '[]');
+            if (effects.length === 0) return;
+
+            const targetNames = [];
+            const promises = targetIds.map(async (target) => {
+                if (target.type === 'character') {
+                    const charRow = db.prepare('SELECT name FROM characters WHERE id = ?').get(target.id);
+                    const charName = charRow ? charRow.name : 'Unknown Character';
+                    targetNames.push(charName);
+
+                    for (const effect of effects) {
+                        const effectToApply = { ...effect, characterId: target.id };
+                        const res = applyEffect(effectToApply);
+                        if (res.success) {
+                            writeAuditEvent(db, {
+                                sessionRound: currentCombatRound,
+                                turnIndex: currentTurnIndex,
+                                eventType: effect.type === 'buff' ? 'buff_applied' : (effect.type === 'condition' ? 'condition_applied' : effect.type),
+                                actor: 'DM',
+                                targetId: target.id,
+                                targetType: 'character',
+                                targetName: charName,
+                                payload: effectToApply,
+                                description: `${charName}: Applied preset ${preset.name} - ${res.logMessage}`,
+                                sourcePresetId: preset.id
+                            });
+                        }
+                    }
+                } else {
+                    const entity = db.prepare('SELECT * FROM initiative_tracker WHERE id = ?').get(target.id);
+                    if (entity) {
+                        targetNames.push(entity.entity_name);
+                        for (const effect of effects) {
+                            let result = { success: false, logMessage: '' };
+                            let eventType = 'unknown';
+
+                            if (effect.type === 'condition') {
+                                result = { success: true, logMessage: `${entity.entity_name}: ${effect.condition} applied (noted)` };
+                                eventType = 'condition_applied';
+                            } else if (effect.type === 'buff') {
+                                result = { success: true, logMessage: `${entity.entity_name}: Buff ${effect.buffData?.name} applied (noted)` };
+                                eventType = 'buff_applied';
+                            }
+
+                            if (result.success) {
+                                writeAuditEvent(db, {
+                                    sessionRound: currentCombatRound,
+                                    turnIndex: currentTurnIndex,
+                                    eventType,
+                                    actor: 'DM',
+                                    targetId: target.id,
+                                    targetType: 'monster',
+                                    targetName: entity.entity_name,
+                                    payload: effect,
+                                    description: `${entity.entity_name}: Applied preset ${preset.name} - ${result.logMessage}`,
+                                    sourcePresetId: preset.id
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+
+            await Promise.all(promises);
+            broadcastPartyState();
+            broadcastTimelineImmediate();
+            logAction('DM', `Applied preset ${preset.name} to targets: ${targetNames.join(', ')}`);
+        } catch (err) {
+            console.error('Error applying effect preset:', err);
+        }
     });
 
     socket.on('update_hp', ({ characterId, delta, actor, damageType, skipConcentrationAutoRoll, requestId }) => {

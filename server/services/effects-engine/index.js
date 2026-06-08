@@ -125,17 +125,17 @@ function writeEventRecord(db, { sessionRound, turnIndex, phase, eventType, actor
  * Write an audit event from a manual socket handler (not effectEngine automation).
  * Returns the event ID, or null if the requestId was already processed (idempotent skip).
  */
-function writeAuditEvent(db, { sessionRound, turnIndex, eventType, actor, targetId, targetName, payload, requestId, description, groupId }) {
+function writeAuditEvent(db, { sessionRound, turnIndex, eventType, actor, targetId, targetType, targetName, payload, requestId, description, groupId, sourcePresetId }) {
     return writeEventRecord(db, {
         sessionRound: sessionRound || 0,
         turnIndex: turnIndex || 0,
         phase: 'manual',
         eventType,
         actor,
-        target: { id: targetId || null, type: 'character', name: targetName || null },
+        target: { id: targetId || null, type: targetType || 'character', name: targetName || null },
         payloadJson: JSON.stringify(payload || {}),
         parentEventId: null,
-        sourcePresetId: null,
+        sourcePresetId: sourcePresetId || null,
         requestId,
         description,
         groupId,

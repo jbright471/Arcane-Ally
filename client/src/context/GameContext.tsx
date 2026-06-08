@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, Rea
 import socket from '../socket';
 import { Character, Party, ActionLogEntry, SharedLootItem, SpellSlots, LootVoteState } from '../types/character';
 import { EffectEvent } from '../types/effects';
+import { toast } from 'sonner';
 
 interface Note {
   id: number;
@@ -34,6 +35,7 @@ interface GameState {
   isDm: boolean;
   dmToken: string | null;
   permissions: ResourcePermissions;
+  pendingImports: any[];
 }
 
 function mergeSpellSlots(maxMap: Record<string, number> | undefined, usedMap: Record<string, number> | undefined): SpellSlots {
@@ -110,6 +112,7 @@ const GameContext = createContext<{
     isDm: false,
     dmToken: null,
     permissions: { loot_claim: 'open', cross_player_effects: 'open', inventory_transfer: 'open', view_monster_hp: 'open', edit_party_notes: 'open', condition_self_apply: 'open' },
+    pendingImports: [],
   },
   socket: null,
   setDmAuth: () => {},
@@ -125,6 +128,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [isApprovalMode, setIsApprovalMode] = useState(false);
   const [effectEvents, setEffectEvents] = useState<EffectEvent[]>([]);
   const [sharedLoot, setSharedLoot] = useState<SharedLootItem[]>([]);
+  const [pendingImports, setPendingImports] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<ResourcePermissions>({ loot_claim: 'open', cross_player_effects: 'open', inventory_transfer: 'open', view_monster_hp: 'open', edit_party_notes: 'open', condition_self_apply: 'open' });
   const [isDm, setIsDm] = useState<boolean>(() => {
     return !!localStorage.getItem('dm_token');
@@ -191,6 +195,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setRoundNumber(data.round);
     });
 
+    socket.on('pending_imports_sync', (data: any[]) => {
+      setPendingImports(data);
+    });
+
+    socket.on('pending_import_created', (data: any) => {
+      setPendingImports(prev => {
+        const exists = prev.some(item => item.id === data.id);
+        if (exists) {
+          return prev.map(item => item.id === data.id ? data : item);
+        }
+        return [...prev, data];
+      });
+      const token = localStorage.getItem('dm_token');
+      if (token) {
+        toast.info(`New character import pending: ${data.playerName}`);
+      }
+    });
+
     // Re-join DM room on reconnect
     socket.on('connect', () => {
       const token = localStorage.getItem('dm_token');
@@ -226,6 +248,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('party_loot_state');
       socket.off('permissions_state');
       socket.off('combat_state_sync');
+      socket.off('pending_imports_sync');
+      socket.off('pending_import_created');
       socket.off('connect');
     };
   }, []);
@@ -259,6 +283,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     isDm,
     dmToken,
     permissions,
+    pendingImports,
   };
 
   return (

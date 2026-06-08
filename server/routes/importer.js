@@ -5,6 +5,7 @@ const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const db = require('../db');
 const { parseCharacterPdfLLM } = require('../ollama');
+const { validateImportDiff } = require('../lib/importValidator');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -33,6 +34,47 @@ router.post('/', async (req, res) => {
         if (!json.data) throw new Error('No data in DDB response');
 
         const character = parseCharacterData(json.data);
+
+        // --- Import Guardrail ---
+        const validation = validateImportDiff(null, character);
+        const isDm = isDmRequest(req);
+        
+        const approvalRow = db.prepare("SELECT value FROM campaign_state WHERE key = 'approval_mode'").get();
+        const isApprovalMode = approvalRow ? approvalRow.value === '1' : false;
+
+        if (!isDm && (validation.requiresApproval || isApprovalMode)) {
+            const stmt = db.prepare(`
+                INSERT INTO pending_imports (character_id, player_name, url, incoming_data_json, diff_json)
+                VALUES (NULL, ?, ?, ?, ?)
+            `);
+            const result = stmt.run(
+                character.name,
+                url,
+                JSON.stringify(character),
+                JSON.stringify(validation)
+            );
+            
+            const io = req.app.get('io');
+            if (io) {
+                io.emit('pending_import_created', {
+                    id: result.lastInsertRowid,
+                    characterId: null,
+                    playerName: character.name,
+                    url,
+                    flags: validation.flags,
+                    diff: validation.diff,
+                    incomingData: character
+                });
+            }
+
+            return res.status(202).json({
+                status: 'pending',
+                pendingId: result.lastInsertRowid,
+                diff: validation.diff,
+                flags: validation.flags
+            });
+        }
+
         const newChar = insertCharacter(character);
         
         // Init session state
@@ -73,7 +115,49 @@ router.put('/:id/sync', async (req, res) => {
         const json = await response.json();
         if (!json.data) throw new Error('No data in D&D Beyond response');
 
-        const parsed = parseCharacterData(json.data);
+        const existing = db.prepare('SELECT * FROM characters WHERE id = ?').get(id);
+        if (!existing) return res.status(404).json({ error: 'Character not found' });
+
+        // --- Import Guardrail ---
+        const validation = validateImportDiff(existing, parsed);
+        const isDm = isDmRequest(req);
+        
+        const approvalRow = db.prepare("SELECT value FROM campaign_state WHERE key = 'approval_mode'").get();
+        const isApprovalMode = approvalRow ? approvalRow.value === '1' : false;
+
+        if (!isDm && (validation.requiresApproval || isApprovalMode)) {
+            const stmt = db.prepare(`
+                INSERT INTO pending_imports (character_id, player_name, url, incoming_data_json, diff_json)
+                VALUES (?, ?, ?, ?, ?)
+            `);
+            const result = stmt.run(
+                id,
+                parsed.name,
+                url,
+                JSON.stringify(parsed),
+                JSON.stringify(validation)
+            );
+            
+            const io = req.app.get('io');
+            if (io) {
+                io.emit('pending_import_created', {
+                    id: result.lastInsertRowid,
+                    characterId: id,
+                    playerName: parsed.name,
+                    url,
+                    flags: validation.flags,
+                    diff: validation.diff,
+                    incomingData: parsed
+                });
+            }
+
+            return res.status(202).json({
+                status: 'pending',
+                pendingId: result.lastInsertRowid,
+                diff: validation.diff,
+                flags: validation.flags
+            });
+        }
         
         db.prepare(`
             UPDATE characters SET
@@ -132,6 +216,45 @@ router.post('/pdf', upload.single('pdf'), async (req, res) => {
             raw_dndbeyond_json: '', 
             data_json: JSON.stringify(parsed)
         };
+
+        // --- Import Guardrail ---
+        const validation = validateImportDiff(null, charObj);
+        const isDm = isDmRequest(req);
+        
+        const approvalRow = db.prepare("SELECT value FROM campaign_state WHERE key = 'approval_mode'").get();
+        const isApprovalMode = approvalRow ? approvalRow.value === '1' : false;
+
+        if (!isDm && (validation.requiresApproval || isApprovalMode)) {
+            const stmt = db.prepare(`
+                INSERT INTO pending_imports (character_id, player_name, url, incoming_data_json, diff_json)
+                VALUES (NULL, ?, 'PDF Upload', ?, ?)
+            `);
+            const result = stmt.run(
+                charObj.name,
+                JSON.stringify(charObj),
+                JSON.stringify(validation)
+            );
+            
+            const io = req.app.get('io');
+            if (io) {
+                io.emit('pending_import_created', {
+                    id: result.lastInsertRowid,
+                    characterId: null,
+                    playerName: charObj.name,
+                    url: 'PDF Upload',
+                    flags: validation.flags,
+                    diff: validation.diff,
+                    incomingData: charObj
+                });
+            }
+
+            return res.status(202).json({
+                status: 'pending',
+                pendingId: result.lastInsertRowid,
+                diff: validation.diff,
+                flags: validation.flags
+            });
+        }
 
         const newChar = insertCharacter(charObj);
         db.prepare(`
@@ -450,6 +573,18 @@ function insertCharacter(charObj) {
     );
 
     return db.prepare('SELECT * FROM characters WHERE id = ?').get(result.lastInsertRowid);
+}
+
+function isDmRequest(req) {
+    const token = req.headers['x-dm-token'];
+    if (token) {
+        const row = db.prepare("SELECT value FROM campaign_state WHERE key = 'dm_token'").get();
+        if (row && row.value && row.value === token) return true;
+    }
+    const pin = req.headers['x-dm-pin'];
+    const masterPin = process.env.DM_PIN || '1234';
+    if (pin && pin === masterPin) return true;
+    return false;
 }
 
 module.exports = router;
