@@ -39,6 +39,23 @@ export function Layout({ children }: { children: ReactNode }) {
           <main className="flex-1 p-6 overflow-y-auto overflow-x-hidden">
             {children}
           </main>
+          <footer className="border-t border-border/10 py-4 px-6 text-center text-[10px] md:text-xs text-muted-foreground/40 bg-card/20 shrink-0">
+            <p className="max-w-3xl mx-auto leading-normal">
+              If you have features, bugs or general inquiry please reach out to{' '}
+              <a href="mailto:j.bright@gaming-dojo.net" className="text-muted-foreground/60 hover:text-primary transition-colors">
+                j.bright@gaming-dojo.net
+              </a>
+              . If you like this app please support here:{' '}
+              <a
+                href="https://www.paypal.com/donate/?hosted_button_id=NGHCPLVCM4HWN"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:text-primary/80 hover:underline transition-colors font-medium ml-0.5"
+              >
+                Donate
+              </a>
+            </p>
+          </footer>
         </div>
       </div>
     </SidebarProvider>
