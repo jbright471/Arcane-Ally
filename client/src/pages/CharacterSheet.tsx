@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { getAbilityModifier, rollDice, type AbilityScore } from '../types/character';
+import { rollDice, type AbilityScore } from '../types/character';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -17,6 +17,7 @@ import { StatChecks } from '../components/StatChecks';
 import { ActionsPanel } from '../components/ActionsPanel';
 import { ConditionBadges } from '../components/ConditionBadges';
 import { SharedLootPool } from '../components/SharedLootPool';
+import { FeaturesPanel } from '../components/FeaturesPanel';
 import { RestManager } from '../components/RestManager';
 import { Spellbook } from '../components/Spellbook';
 import { useState, useEffect } from 'react';
@@ -97,7 +98,7 @@ export default function CharacterSheet() {
 
   // ── Derived values ─────────────────────────────────────────────────────────
   const hpPercent = Math.min(100, (character.hp.current / character.hp.max) * 100);
-  const initMod = character.initiative ?? getAbilityModifier(character.abilityScores.DEX);
+  const initMod = character.initiative ?? character.abilityModifiers?.DEX ?? 0;
   const initModStr = initMod >= 0 ? `+${initMod}` : `${initMod}`;
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -452,7 +453,7 @@ export default function CharacterSheet() {
                     label={ABILITY_LABELS[key]}
                     sublabel={key}
                     score={val}
-                    modifier={getAbilityModifier(val)}
+                    modifier={character.abilityModifiers?.[key] ?? 0}
                     rollType="Ability Check"
                     characterName={character.name}
                     variant="card"
@@ -523,6 +524,9 @@ export default function CharacterSheet() {
 
           {/* Attack Actions */}
           <ActionsPanel character={character} />
+
+          {/* Features */}
+          <FeaturesPanel character={character} />
 
           {/* Spellbook */}
           <Spellbook character={character} />

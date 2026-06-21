@@ -1,16 +1,9 @@
-import { rollDice, type AbilityScore, type ProficiencyLevel } from '../types/character';
+import { type AbilityScore, type ProficiencyLevel, type Character } from '../types/character';
 import socket from '../socket';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { Dices, AlertTriangle, ChevronUp, ChevronDown, Ban } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import {
-  evaluateRoll,
-  rollWithAdvantage,
-  getRollIndicator,
-  type ActionType,
-  type RollIndicator,
-} from '../lib/rollInterceptor';
 
 export interface StatRollResult {
   rollType: string;
@@ -27,7 +20,7 @@ interface RollableStatProps {
   modifier: number;
   /** Log context shown in the effect stream */
   rollType: string;
-  characterName?: string;
+  character: Character;
   /** Short ability abbreviation shown alongside the label (e.g. "DEX") */
   sublabel?: string;
   /** Raw ability score rendered inside card variant */
@@ -40,26 +33,15 @@ interface RollableStatProps {
   variant?: 'card' | 'row';
   className?: string;
   onRoll?: (result: StatRollResult) => void;
-  /** Active conditions on this character — drives advantage/disadvantage */
-  conditions?: string[];
   /** The ability score key for this roll (e.g. 'DEX', 'STR') */
   ability?: AbilityScore;
-}
-
-/** Map user-facing rollType strings to ActionType for the interceptor */
-function toActionType(rollType: string): ActionType {
-  const rt = rollType.toLowerCase();
-  if (rt.includes('attack')) return 'attack';
-  if (rt.includes('saving throw') || rt.includes('save')) return 'saving_throw';
-  if (rt.includes('initiative')) return 'initiative';
-  return 'ability_check';
 }
 
 export function RollableStat({
   label,
   modifier,
   rollType,
-  characterName = 'Unknown',
+  character,
   sublabel,
   score,
   proficient = false,
@@ -67,7 +49,6 @@ export function RollableStat({
   variant = 'card',
   className,
   onRoll,
-  conditions = [],
   ability,
   breakdown,
 }: RollableStatProps & {
@@ -83,17 +64,34 @@ export function RollableStat({
   // Resolve effective proficiency from either prop
   const effectiveProfLevel: ProficiencyLevel | 'none' =
     proficiencyLevel ?? (proficient ? 'proficiency' : 'none');
-  const actionType = toActionType(rollType);
-  const indicator = conditions.length > 0
-    ? getRollIndicator(conditions, actionType, ability)
-    : null;
+  // Determine indicator from server-provided roll modifiers
+  let indicator: 'advantage' | 'disadvantage' | 'auto-fail' | 'incapacitated' | null = null;
+  let modObj: any = null;
+  
+  if (character.rollModifiers) {
+    const rt = rollType.toLowerCase();
+    if (rt.includes('attack')) {
+      modObj = character.rollModifiers.attacks;
+    } else if (rt.includes('initiative')) {
+      modObj = character.rollModifiers.initiative;
+    } else if (rt.includes('saving throw') || rt.includes('save')) {
+      modObj = ability ? character.rollModifiers.saving_throws[ability] : null;
+    } else {
+      modObj = ability ? character.rollModifiers.ability_checks[ability] : null;
+    }
+
+    if (modObj) {
+      if (modObj.incapacitated) indicator = 'incapacitated';
+      else if (modObj.autoFail) indicator = 'auto-fail';
+      else if (modObj.advantage === 'disadvantage') indicator = 'disadvantage';
+      else if (modObj.advantage === 'advantage') indicator = 'advantage';
+    }
+  }
 
   const handleClick = () => {
-    const mod = evaluateRoll(conditions, actionType, ability);
-
     // Auto-fail: emit a 0 total with explanation
-    if (mod.autoFail) {
-      const reason = mod.reasons.join('; ');
+    if (modObj?.autoFail) {
+      const reason = modObj.reasons.join('; ');
       socket.emit('dice_roll', {
         actor: characterName,
         sides: 20,
@@ -115,13 +113,28 @@ export function RollableStat({
 
     // Roll with advantage/disadvantage evaluation
     const rollOnce = () => Math.floor(Math.random() * 20) + 1;
-    const { chosen, all, isAdvantage, isDisadvantage } = rollWithAdvantage(rollOnce, mod.advantage);
+    
+    // Inline rollWithAdvantage logic since we removed it from rollInterceptor
+    let chosen: number, all: [number, number], isAdvantage: boolean, isDisadvantage: boolean;
+    const advantage = modObj?.advantage || 'straight';
+    if (advantage === 'straight') {
+      const r = rollOnce();
+      chosen = r; all = [r, r]; isAdvantage = false; isDisadvantage = false;
+    } else {
+      const r1 = rollOnce();
+      const r2 = rollOnce();
+      chosen = advantage === 'advantage' ? Math.max(r1, r2) : Math.min(r1, r2);
+      all = [r1, r2];
+      isAdvantage = advantage === 'advantage';
+      isDisadvantage = advantage === 'disadvantage';
+    }
+
     const total = chosen + modifier;
     const modStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
 
     // Build reason string for the effect stream
-    const reasonTag = mod.reasons.length > 0
-      ? ` (${isAdvantage ? 'Advantage' : 'Disadvantage'}: ${mod.reasons.map(r => r.split(':')[0]).join(', ')})`
+    const reasonTag = modObj?.reasons?.length > 0
+      ? ` (${isAdvantage ? 'Advantage' : 'Disadvantage'}: ${modObj.reasons.map((r: string) => r.split(':')[0]).join(', ')})`
       : '';
 
     socket.emit('dice_roll', {
@@ -133,8 +146,8 @@ export function RollableStat({
       rolls: isAdvantage || isDisadvantage ? [all[0], all[1]] : [chosen],
       label: `${label}${reasonTag}`,
       rollType,
-      conditionFlags: mod.reasons.length > 0
-        ? { advantage: mod.advantage, reasons: mod.reasons }
+      conditionFlags: modObj?.reasons?.length > 0
+        ? { advantage: modObj.advantage, reasons: modObj.reasons }
         : undefined,
     });
 

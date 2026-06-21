@@ -58,7 +58,8 @@ const {
     saveSessionState,
     getCharacterData,
     applyBuffEvent,
-    removeBuffEvent
+    removeBuffEvent,
+    toggleFeatureEvent
 } = require('./lib/rulesIntegration');
 
 const { createSnapshot, computeDiff, restoreSnapshot } = require('./lib/snapshotEngine');
@@ -274,13 +275,12 @@ app.post('/api/v1/effects/bulk-apply', async (req, res) => {
         }
 
         const groupId = requestId;
+        let flatRecords = [];
 
-        // Map target calculations into concurrent execution promises (Promise.all)
-        const promises = resolved.map(async (target) => {
-            const targetRecords = [];
-            try {
-                // Run database updates for each target in separate nested/independent transactions (using try-catch)
-                db.transaction(() => {
+        try {
+            flatRecords = db.transaction(() => {
+                const records = [];
+                for (const target of resolved) {
                     for (const effect of effects) {
                         const perTargetRequestId = requestId ? `${requestId}-${target.id}-${effect.type}` : undefined;
 
@@ -288,7 +288,7 @@ app.post('/api/v1/effects/bulk-apply', async (req, res) => {
                         if (perTargetRequestId) {
                             const exists = db.prepare('SELECT 1 FROM effect_events WHERE request_id = ?').get(perTargetRequestId);
                             if (exists) {
-                                targetRecords.push({
+                                records.push({
                                     targetId: target.id,
                                     targetName: target.name,
                                     eventType: effect.type,
@@ -300,99 +300,99 @@ app.post('/api/v1/effects/bulk-apply', async (req, res) => {
                         }
 
                         let result, eventType;
-                        if (target.type === 'character') {
-                            switch (effect.type) {
-                                case 'damage':
-                                    result = applyDamageEvent(db, target.id, effect.value || 0, effect.damageType || 'untyped');
+                        try {
+                            if (target.type === 'character') {
+                                switch (effect.type) {
+                                    case 'damage':
+                                        result = applyDamageEvent(db, target.id, effect.value || 0, effect.damageType || 'untyped');
+                                        eventType = 'damage';
+                                        break;
+                                    case 'heal':
+                                        result = applyHealEvent(db, target.id, effect.value || 0);
+                                        eventType = 'heal';
+                                        break;
+                                    case 'condition':
+                                        result = applyConditionEvent(db, target.id, effect.condition);
+                                        eventType = 'condition_applied';
+                                        break;
+                                    case 'remove_condition':
+                                        result = removeConditionEvent(db, target.id, effect.condition);
+                                        eventType = 'condition_removed';
+                                        break;
+                                    default:
+                                        result = { success: false, error: `Unknown effect: ${effect.type}` };
+                                        eventType = 'unknown';
+                                }
+                            } else {
+                                // Monster — damage/heal only (conditions noted but not stored in schema)
+                                const entity = db.prepare('SELECT * FROM initiative_tracker WHERE id = ?').get(target.id);
+                                if (!entity) {
+                                    records.push({
+                                        targetId: target.id,
+                                        targetName: target.name,
+                                        eventType: effect.type,
+                                        logMessage: 'Monster not found',
+                                        success: false
+                                    });
+                                    continue;
+                                }
+                                if (effect.type === 'damage') {
+                                    const dmg = Math.max(0, effect.value || 0);
+                                    const newHp = Math.max(0, entity.current_hp - dmg);
+                                    db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
+                                    result = { success: true, logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)` };
                                     eventType = 'damage';
-                                    break;
-                                case 'heal':
-                                    result = applyHealEvent(db, target.id, effect.value || 0);
+                                } else if (effect.type === 'heal') {
+                                    const heal = Math.max(0, effect.value || 0);
+                                    const newHp = Math.min(entity.max_hp, entity.current_hp + heal);
+                                    db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
+                                    result = { success: true, logMessage: `${entity.entity_name} healed ${heal} HP (${newHp}/${entity.max_hp} HP)` };
                                     eventType = 'heal';
-                                    break;
-                                case 'condition':
-                                    result = applyConditionEvent(db, target.id, effect.condition);
-                                    eventType = 'condition_applied';
-                                    break;
-                                case 'remove_condition':
-                                    result = removeConditionEvent(db, target.id, effect.condition);
-                                    eventType = 'condition_removed';
-                                    break;
-                                default:
-                                    result = { success: false, error: `Unknown effect: ${effect.type}` };
-                                    eventType = 'unknown';
+                                } else {
+                                    result = { success: true, logMessage: `${target.name}: ${effect.condition || effect.type} (noted)` };
+                                    eventType = effect.type === 'condition' ? 'condition_applied' : 'condition_removed';
+                                }
                             }
-                        } else {
-                            // Monster — damage/heal only (conditions noted but not stored in schema)
-                            const entity = db.prepare('SELECT * FROM initiative_tracker WHERE id = ?').get(target.id);
-                            if (!entity) {
-                                targetRecords.push({
+
+                            if (result.success) {
+                                writeAuditEvent(db, {
+                                    sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
+                                    eventType,
+                                    actor: actor || 'DM',
                                     targetId: target.id,
                                     targetName: target.name,
-                                    eventType: effect.type,
-                                    logMessage: 'Monster not found',
-                                    success: false
+                                    payload: { ...effect },
+                                    requestId: perTargetRequestId,
+                                    description: result.logMessage,
+                                    groupId,
                                 });
-                                continue;
                             }
-                            if (effect.type === 'damage') {
-                                const dmg = Math.max(0, effect.value || 0);
-                                const newHp = Math.max(0, entity.current_hp - dmg);
-                                db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
-                                result = { success: true, logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)` };
-                                eventType = 'damage';
-                            } else if (effect.type === 'heal') {
-                                const heal = Math.max(0, effect.value || 0);
-                                const newHp = Math.min(entity.max_hp, entity.current_hp + heal);
-                                db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
-                                result = { success: true, logMessage: `${entity.entity_name} healed ${heal} HP (${newHp}/${entity.max_hp} HP)` };
-                                eventType = 'heal';
-                            } else {
-                                result = { success: true, logMessage: `${target.name}: ${effect.condition || effect.type} (noted)` };
-                                eventType = effect.type === 'condition' ? 'condition_applied' : 'condition_removed';
-                            }
-                        }
 
-                        if (result.success) {
-                            writeAuditEvent(db, {
-                                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                                eventType,
-                                actor: actor || 'DM',
+                            records.push({
                                 targetId: target.id,
                                 targetName: target.name,
-                                payload: { ...effect },
-                                requestId: perTargetRequestId,
-                                description: result.logMessage,
-                                groupId,
+                                eventType,
+                                logMessage: result.logMessage || result.error,
+                                success: result.success
+                            });
+                        } catch (err) {
+                            console.error(`Error processing effect ${effect.type} for target ${target.name}:`, err);
+                            records.push({
+                                targetId: target.id,
+                                targetName: target.name,
+                                eventType: effect.type,
+                                logMessage: err.message,
+                                success: false
                             });
                         }
-
-                        targetRecords.push({
-                            targetId: target.id,
-                            targetName: target.name,
-                            eventType,
-                            logMessage: result.logMessage || result.error,
-                            success: result.success
-                        });
                     }
-                })();
-            } catch (err) {
-                console.error(`Error processing bulk-apply target ${target.name}:`, err);
-                for (const effect of effects) {
-                    targetRecords.push({
-                        targetId: target.id,
-                        targetName: target.name,
-                        eventType: effect.type,
-                        logMessage: err.message,
-                        success: false
-                    });
                 }
-            }
-            return targetRecords;
-        });
-
-        const results = await Promise.all(promises);
-        const flatRecords = results.flat();
+                return records;
+            })();
+        } catch (err) {
+            console.error('Error executing bulk-apply transaction:', err);
+            return res.status(500).json({ error: 'Failed to execute bulk apply: ' + err.message });
+        }
 
         // Broadcast state updates
         broadcastPartyState();
@@ -1353,6 +1353,24 @@ io.on('connection', (socket) => {
                 targetId: characterId, targetName: charName,
                 payload: { buffId }, requestId,
                 description: `${actor || 'System'} removed buff from ${charName}`,
+            });
+            logAction(actor || 'System', result.logMessage);
+            broadcastPartyState();
+            broadcastTimeline();
+        }
+    });
+
+    socket.on('toggle_feature', ({ characterId, featureName, actor, requestId }) => {
+        const result = toggleFeatureEvent(db, characterId, featureName);
+        if (result.success) {
+            const charData = getCharacterData(db, characterId);
+            const charName = charData?.name ?? `Character ${characterId}`;
+            writeAuditEvent(db, {
+                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
+                eventType: 'feature_toggled', actor: actor || 'System',
+                targetId: characterId, targetName: charName,
+                payload: { featureName, isActive: result.isActive }, requestId,
+                description: `${actor || 'System'} ${result.isActive ? 'activated' : 'deactivated'} ${featureName} on ${charName}`,
             });
             logAction(actor || 'System', result.logMessage);
             broadcastPartyState();

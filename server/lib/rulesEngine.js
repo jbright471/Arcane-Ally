@@ -162,9 +162,18 @@ const KNOWN_CONCENTRATION_SPELLS = new Set([
 // LOGIC
 // ---------------------------------------------------------------------------
 
-function resolveDamage(currentState, rawDamage, damageType = 'untyped', resistances = [], immunities = [], vulnerabilities = [], activeConditions = []) {
+function resolveDamage(currentState, rawDamage, damageType = 'untyped', resistances = [], immunities = [], vulnerabilities = [], activeConditions = [], activeBuffs = []) {
   const { currentHp, tempHp = 0, maxHp: _maxHp } = currentState;
   const type = damageType.toLowerCase().trim();
+
+  let finalResistances = [...resistances];
+  for (const buff of activeBuffs) {
+    const buffName = (buff.name || '').toLowerCase();
+    const effect = BUFF_EFFECTS[buffName];
+    if (effect && effect.damageResistance) {
+      finalResistances.push(...effect.damageResistance);
+    }
+  }
 
   if (immunities.map(i => i.toLowerCase()).includes(type)) {
     return { newCurrentHp: currentHp, newTempHp: tempHp, damageDealt: 0, absorbed: 0, overkill: 0, modifier: 'immune' };
@@ -172,7 +181,7 @@ function resolveDamage(currentState, rawDamage, damageType = 'untyped', resistan
 
   const isPetrified = activeConditions.map(c => c.toLowerCase()).includes('petrified');
   const isVulnerable = vulnerabilities.map(v => v.toLowerCase()).includes(type);
-  const isResistant = !isPetrified && resistances.map(r => r.toLowerCase()).includes(type);
+  const isResistant = !isPetrified && finalResistances.map(r => r.toLowerCase()).includes(type);
 
   let effectiveDamage = rawDamage;
   if (isPetrified || isResistant) {

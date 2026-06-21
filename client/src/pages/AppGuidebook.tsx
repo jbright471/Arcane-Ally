@@ -342,7 +342,11 @@ If you're concentrating on a spell:
 - A **glowing indicator** shows the spell name on your character card
 - Taking damage triggers an automatic **Concentration Check** (CON save, DC = max(10, damage/2))
 - If you fail, concentration drops and the DM is notified
-- Casting another concentration spell automatically drops the current one`,
+- Casting another concentration spell automatically drops the current one
+
+## Class Feature Toggles (Grim-Rage)
+
+Interactive toggles for character-specific states (e.g., Barbarian's Rage, Blood Hunter rites) are available in your Features Panel. Toggling these states automatically broadcasts defensive adjustments (such as damage resistances or immunities) directly to the server's core rules parser.`,
   },
   {
     id: 'session-state',
@@ -567,6 +571,10 @@ The **Player Miniature Sidebar** (toggled via the **Miniatures** button in the h
 - **Visual Status Telemetry**: View real-time HP stats, Armor Class, Speed, ability modifiers, and conditions.
 - **Interactive Spell Slots**: Display slot pips. Clicking pips allows DMs and players to quickly use (fill) or restore (clear) spell slots, emitting a WebSocket event to keep all views synchronized.
 - **Quick Adjustments**: Hit points can be modified instantly with \`-5\` and \`+5\` quick update buttons.
+
+## Encounter Cast View
+
+For an immersive in-person table experience, Arcane Ally provides a standalone read-only cast window at \`/encounter/:id/cast\`. Designed with a dark-fantasy aesthetic, it displays the live party state and initiative order without any interactive clutter, making it perfect for casting to a secondary monitor or TV screen.
 
 ## AoE / Multi-Target Effects (REST API)
 

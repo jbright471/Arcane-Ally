@@ -18,7 +18,7 @@ Every HP change, condition, spell slot, buff, and dice roll broadcasts instantly
 Client emit → Server handler → DB mutation → broadcastPartyState() → All screens update
 ```
 
-HP changes flash red (damage) or green (healing) on character cards. Latency is typically 50-100ms on local networks.
+HP changes flash red (damage) or green (healing) on character cards. Latency is typically 50-100ms on local networks. Decoupled rendering ensures that ongoing local UI animations (like drag-and-drop dice rolling) are never interrupted by incoming external state mutations.
 
 ### Character Management
 - **D&D Beyond Import** — paste a character URL to pull stats, equipment, spells, and inventory from the DDB API
@@ -35,6 +35,7 @@ HP changes flash red (damage) or green (healing) on character cards. Latency is 
 - **Condition Badges** — real-time condition display with DM-applied/removed states and duration countdown
 - **Rest Management** — Short Rest (hit dice spending dialog) and Long Rest (full HP/slot/feature restoration)
 - **Offline HP Queue** — HP changes made while offline are queued in IndexedDB and replayed automatically on reconnect
+- **Global Feature Toggles (Grim-Rage)** — interactive toggles for character-specific states (e.g., Barbarian's Rage, Blood Hunter rites) that automatically broadcast defensive adjustments (resistances/immunities) to the server's core rules parser.
 
 ### Compendium & Homebrew Manager
 - **Split-pane layout** with searchable entity index (left) and stat block inspector/editor (right)
@@ -53,6 +54,7 @@ HP changes flash red (damage) or green (healing) on character cards. Latency is 
 **Initiative Tracker** — automatic initiative rolling (auto-roll d20 + DEX mod for all combatants), turn advancement, visibility toggles, HP tracking, and manual reordering. Three spawn methods: Quick Spawn, Compendium, and AI Lore Console.
 - **Smart Encounter Recovery** — total persistence for encounter flow. The active combat round and turn index are continuously synced to the SQLite database. Initiative automatically resumes on server restart or client reconnect.
 - **Player Miniature Sidebar** — a slide-out drawer on the left side of the screen containing connected player miniatures, enabling visual status telemetry (HP, AC, Speed, conditions) and interactive spell slot pips (click to consume/restore slots via WebSockets) with quick +/-5 HP adjusters.
+- **Encounter Cast View** — a standalone read-only cast window located at `/encounter/:id/cast` designed with a dark-fantasy aesthetic. It displays the live party state and initiative order without interactive clutter, perfect for a secondary monitor or TV screen.
 
 - **AoE Multi-Target Effects** — select multiple combatants with checkboxes, then click the AoE button to open a multi-row effect builder (damage, heal, add/remove condition). Targets are processed concurrently using the `/api/v1/effects/bulk-apply` REST API. If one target validation fails, its nested transaction rolls back independently, keeping other targets updated.
 - **Quick Encounter Automations** — one-click "Dismiss Dead" removes all dead tracker entries; "Clear All Conditions" wipes conditions from every PC. Both accessible from the DM-only Quick Actions popover.

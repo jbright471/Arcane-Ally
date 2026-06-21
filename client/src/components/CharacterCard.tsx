@@ -197,7 +197,7 @@ export function CharacterCard({ character, onClick, selected, compact }: Charact
                 <div className="text-[10px] text-muted-foreground font-display">{key}</div>
                 <div className="text-sm font-bold">{val}</div>
                 <div className="text-[10px] text-primary">
-                  {getAbilityModifier(val) >= 0 ? '+' : ''}{getAbilityModifier(val)}
+                  {character.formattedModifiers?.[key] ?? '+0'}
                 </div>
               </div>
             ))}

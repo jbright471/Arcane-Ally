@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Character, getAbilityModifier } from '../types/character';
+import { Character } from '../types/character';
 import { backend } from '../integrations/backend';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
@@ -41,7 +41,7 @@ export function RestManager({ character }: RestManagerProps) {
   const [rollLog, setRollLog] = useState<HitDieResult[]>([]);
   const [isRolling, setIsRolling] = useState(false);
 
-  const conMod = getAbilityModifier(character.abilityScores.CON);
+  const conMod = character.abilityModifiers?.CON ?? 0;
 
   // Compute available hit dice
   const hitDiceEntries = Object.entries(character.hitDice || {}).map(([die, total]) => {

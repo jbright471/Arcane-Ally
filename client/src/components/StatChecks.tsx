@@ -44,19 +44,12 @@ interface StatChecksProps {
 export function StatChecks({ character }: StatChecksProps) {
   const { abilityScores, conditions, name, skillProficiencies, saveProficiencies, proficiencyBonus } = character;
 
-  /** Compute total modifier: ability mod + proficiency contribution. */
-  const skillModifier = (label: string, ability: keyof typeof abilityScores): number => {
-    const base = getAbilityModifier(abilityScores[ability]);
-    const prof = skillProficiencies[label];
-    if (prof === 'expertise')   return base + proficiencyBonus * 2;
-    if (prof === 'proficiency') return base + proficiencyBonus;
-    if (prof === 'half')        return base + Math.floor(proficiencyBonus / 2);
-    return base;
+  const getSkillModifier = (label: string): number => {
+    return character.skills?.[label] ?? 0;
   };
 
-  const saveModifier = (ability: keyof typeof abilityScores): number => {
-    const base = getAbilityModifier(abilityScores[ability]);
-    return saveProficiencies[ability] ? base + proficiencyBonus : base;
+  const getSaveModifier = (ability: keyof typeof abilityScores): number => {
+    return character.savingThrows?.[ability] ?? 0;
   };
 
   return (
@@ -75,7 +68,7 @@ export function StatChecks({ character }: StatChecksProps) {
               key={ability}
               label={label}
               sublabel={ability}
-              modifier={saveModifier(ability)}
+              modifier={getSaveModifier(ability)}
               rollType="Saving Throw"
               characterName={name}
               variant="row"
@@ -102,7 +95,7 @@ export function StatChecks({ character }: StatChecksProps) {
               key={label}
               label={label}
               sublabel={ability}
-              modifier={skillModifier(label, ability)}
+              modifier={getSkillModifier(label)}
               rollType="Skill Check"
               characterName={name}
               variant="row"
