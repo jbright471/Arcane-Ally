@@ -25,6 +25,7 @@ import WorldMap from "./pages/WorldMap";
 import AppGuidebook from "./pages/AppGuidebook";
 import BattleMap from "./pages/BattleMap";
 import CompanionPage from "./pages/CompanionPage";
+import EncounterCastView from "./pages/EncounterCastView";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -159,6 +160,7 @@ const App = () => (
           <Routes>
             {/* Standalone — no sidebar/header */}
             <Route path="/companion/:characterId" element={<CompanionPage />} />
+            <Route path="/encounter/:id/cast" element={<EncounterCastView />} />
 
             {/* Main app shell */}
             <Route path="/*" element={

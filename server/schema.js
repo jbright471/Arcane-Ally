@@ -419,6 +419,9 @@ function runMigrations() {
     );
   `);
 
+  // ---- Phase 23.0: Active Features ----
+  addColumnSafe('session_states', 'active_features_json', "TEXT DEFAULT '[]'");
+
   // Seed default effect presets
   const seedPresets = [
     {

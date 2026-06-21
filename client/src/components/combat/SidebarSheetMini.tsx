@@ -188,11 +188,6 @@ export function SidebarSheetMini({ open, onClose }: SidebarSheetMiniProps) {
     });
   };
 
-  const getAbilityMod = (score: number) => {
-    const mod = Math.floor((score - 10) / 2);
-    return mod >= 0 ? `+${mod}` : `${mod}`;
-  };
-
   return (
     <Sheet open={open} onOpenChange={(val) => { if (!val) onClose(); }}>
       <SheetContent
@@ -293,7 +288,7 @@ export function SidebarSheetMini({ open, onClose }: SidebarSheetMiniProps) {
                   <div className="grid grid-cols-6 gap-1 bg-zinc-950/20 p-1 rounded-md border border-zinc-900/50">
                     {(['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as const).map((ab) => {
                       const score = char.abilityScores?.[ab] ?? 10;
-                      const mod = getAbilityMod(score);
+                      const mod = char.formattedModifiers?.[ab] ?? '+0';
                       return (
                         <div key={ab} className="flex flex-col items-center py-1 bg-zinc-950/40 rounded border border-zinc-900/40">
                           <span className="text-[10px] text-zinc-500 font-display font-semibold">{ab}</span>

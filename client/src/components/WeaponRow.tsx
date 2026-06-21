@@ -3,22 +3,32 @@ import socket from '../socket';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { AlertTriangle, Crosshair, Dices, Swords, Target } from 'lucide-react';
-import { evaluateRoll, rollWithAdvantage } from '../lib/rollInterceptor';
 
 interface WeaponRowProps {
   weapon: WeaponAttack;
-  characterName?: string;
-  /** Active conditions — drives advantage/disadvantage on attack rolls */
-  conditions?: string[];
+  character: import('../types/character').Character;
 }
 
-export function WeaponRow({ weapon, characterName = 'Unknown', conditions = [] }: WeaponRowProps) {
+export function WeaponRow({ weapon, character }: WeaponRowProps) {
   // ── Attack Roll ───────────────────────────────────────────────────────────
   const handleAttackRoll = () => {
-    const mod = evaluateRoll(conditions, 'attack');
+    const modObj = character.rollModifiers?.attacks || { advantage: 'straight', autoFail: false, incapacitated: false, reasons: [] };
 
     const rollOnce = () => Math.floor(Math.random() * 20) + 1;
-    const { chosen, all, isAdvantage, isDisadvantage } = rollWithAdvantage(rollOnce, mod.advantage);
+    
+    let chosen: number, all: [number, number], isAdvantage: boolean, isDisadvantage: boolean;
+    const advantage = modObj.advantage || 'straight';
+    if (advantage === 'straight') {
+      const r = rollOnce();
+      chosen = r; all = [r, r]; isAdvantage = false; isDisadvantage = false;
+    } else {
+      const r1 = rollOnce();
+      const r2 = rollOnce();
+      chosen = advantage === 'advantage' ? Math.max(r1, r2) : Math.min(r1, r2);
+      all = [r1, r2];
+      isAdvantage = advantage === 'advantage';
+      isDisadvantage = advantage === 'disadvantage';
+    }
     const total = chosen + weapon.attackBonus;
     const nat = chosen;
     const isCrit = nat === 20;
@@ -26,12 +36,12 @@ export function WeaponRow({ weapon, characterName = 'Unknown', conditions = [] }
     const modStr = weapon.attackBonus >= 0 ? `+${weapon.attackBonus}` : `${weapon.attackBonus}`;
 
     // Build reason tag for the effect stream
-    const reasonTag = mod.reasons.length > 0
-      ? ` (${isAdvantage ? 'Advantage' : 'Disadvantage'}: ${mod.reasons.map(r => r.split(':')[0]).join(', ')})`
+    const reasonTag = modObj.reasons.length > 0
+      ? ` (${isAdvantage ? 'Advantage' : 'Disadvantage'}: ${modObj.reasons.map((r: string) => r.split(':')[0]).join(', ')})`
       : '';
 
     socket.emit('dice_roll', {
-      actor: characterName,
+      actor: character.name,
       sides: 20,
       count: isAdvantage || isDisadvantage ? 2 : 1,
       modifier: weapon.attackBonus,
@@ -40,8 +50,8 @@ export function WeaponRow({ weapon, characterName = 'Unknown', conditions = [] }
       label: `${weapon.name}${reasonTag}`,
       rollType: 'Attack Roll',
       source: weapon.name,
-      conditionFlags: mod.reasons.length > 0
-        ? { advantage: mod.advantage, reasons: mod.reasons }
+      conditionFlags: modObj.reasons.length > 0
+        ? { advantage: modObj.advantage, reasons: modObj.reasons }
         : undefined,
     });
 
@@ -92,7 +102,7 @@ export function WeaponRow({ weapon, characterName = 'Unknown', conditions = [] }
     const diceLabel = `${dieCount}${weapon.damageDice}${modPart}`;
 
     socket.emit('dice_roll', {
-      actor: characterName,
+      actor: character.name,
       sides: parseInt(weapon.damageDice.slice(1)),
       count: dieCount,
       modifier: weapon.damageBonus,
@@ -118,8 +128,7 @@ export function WeaponRow({ weapon, characterName = 'Unknown', conditions = [] }
   };
 
   // ── Derived display strings ───────────────────────────────────────────────
-  const hasAttackDisadvantage = conditions.length > 0 &&
-    evaluateRoll(conditions, 'attack').advantage === 'disadvantage';
+  const hasAttackDisadvantage = character.rollModifiers?.attacks?.advantage === 'disadvantage';
   const attackModStr = weapon.attackBonus >= 0 ? `+${weapon.attackBonus}` : `${weapon.attackBonus}`;
   const damageModStr = weapon.damageBonus > 0
     ? `+${weapon.damageBonus}`

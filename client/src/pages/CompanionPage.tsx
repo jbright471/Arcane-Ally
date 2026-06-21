@@ -11,14 +11,9 @@ import { Button } from '../components/ui/button';
 import { DiceRoller } from '../components/DiceRoller';
 import { toast } from 'sonner';
 import socket from '../socket';
-import { type Character, getAbilityModifier, rollDice } from '../types/character';
+import { type Character, rollDice } from '../types/character';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function abilityMod(score: number): string {
-  const m = Math.floor((score - 10) / 2);
-  return m >= 0 ? `+${m}` : `${m}`;
-}
 
 function hpBarColor(pct: number, dead: boolean) {
   if (dead) return 'bg-muted-foreground/40';
@@ -177,6 +172,8 @@ export default function CompanionPage() {
         ac: raw.ac || 10,
         acBreakdown: [],
         abilityScores: raw.abilityScores || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+        abilityModifiers: raw.abilityModifiers || {},
+        formattedModifiers: raw.formattedModifiers || {},
         conditions: (raw.conditions || []).map((c: string) => {
           const l = (c || '').toLowerCase().trim();
           return l.charAt(0).toUpperCase() + l.slice(1);
@@ -338,7 +335,7 @@ export default function CompanionPage() {
             <div key={key} className="bg-secondary/20 rounded-lg py-2">
               <div className="text-[7px] font-bold text-muted-foreground/50 uppercase">{key}</div>
               <div className="text-sm font-bold text-foreground">{score as number}</div>
-              <div className="text-[10px] text-primary/70">{abilityMod(score as number)}</div>
+              <div className="text-[10px] text-primary/70">{character.formattedModifiers?.[key] ?? '+0'}</div>
             </div>
           ))}
         </div>

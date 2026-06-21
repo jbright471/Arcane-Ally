@@ -13,6 +13,7 @@ import {
   longRestEvent,
   getSessionState,
   getResolvedCharacterState,
+  toggleFeatureEvent,
 } from '../lib/rulesIntegration.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -172,5 +173,36 @@ describe('rulesIntegration', () => {
     expect(s.activeBuffs.length).toBeGreaterThan(0);
     expect(s.tempHp).toBe(5);
     expect(s.concentratingOn).toBe('Bless');
+  });
+
+  // ── 10. toggleFeatureEvent correctly maps feature traits ────────────────────
+  it('toggleFeatureEvent toggles a global feature and applies resistance', () => {
+    const id = insertCharacter(db, { max_hp: 40, current_hp: 40 });
+
+    // Enable Rage feature
+    const result = toggleFeatureEvent(db, id, 'Rage');
+    expect(result.success).toBe(true);
+    expect(state(db, id).activeFeatures).toContain('Rage');
+    
+    // Test that the feature gives resistance (e.g. bludgeoning)
+    const dmgResult = applyDamageEvent(db, id, 20, 'bludgeoning');
+    
+    // Assuming Rage provides resistance to bludgeoning damage
+    // The damage should be halved
+    expect(dmgResult.success).toBe(true);
+    expect(dmgResult.damageDealt).toBe(10);
+    expect(dmgResult.modifier).toBe('resistance');
+    expect(state(db, id).currentHp).toBe(30);
+
+    // Disable Rage feature
+    const offResult = toggleFeatureEvent(db, id, 'Rage');
+    expect(offResult.success).toBe(true);
+    expect(state(db, id).activeFeatures).not.toContain('Rage');
+
+    // Test damage without Rage
+    const dmgResult2 = applyDamageEvent(db, id, 20, 'bludgeoning');
+    expect(dmgResult2.success).toBe(true);
+    expect(dmgResult2.damageDealt).toBe(20);
+    expect(state(db, id).currentHp).toBe(10);
   });
 });

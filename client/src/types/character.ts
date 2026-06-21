@@ -9,6 +9,23 @@ export interface AbilityScores {
   CHA: number;
 }
 
+export type RollAdvantage = 'advantage' | 'disadvantage' | 'straight';
+export type RollIndicator = 'advantage' | 'disadvantage' | 'auto-fail' | 'incapacitated' | null;
+
+export interface RollModification {
+  advantage: RollAdvantage;
+  autoFail: boolean;
+  incapacitated: boolean;
+  reasons: string[];
+}
+
+export interface RollModifiers {
+  attacks: RollModification;
+  initiative: RollModification;
+  ability_checks: Record<string, RollModification>;
+  saving_throws: Record<string, RollModification>;
+}
+
 export type EquipmentSlot = 'head' | 'chest' | 'legs' | 'feet' | 'hands' | 'mainHand' | 'offHand' | 'ring1' | 'ring2' | 'amulet';
 
 export interface StatModifier {
@@ -281,7 +298,12 @@ export interface Character {
   hp: { current: number; max: number; temp: number };
   ac: number;
   acBreakdown?: any[];
-  abilityScores: AbilityScores;
+  abilityScoresBreakdown?: Record<AbilityScore, StatSource[]>;
+  abilityModifiers?: Record<AbilityScore, number>;
+  formattedModifiers?: Record<AbilityScore, string>;
+  rollModifiers?: RollModifiers;
+  savingThrows?: Record<string, number>;
+  skills?: Record<string, number>;
   conditions: string[];
   /** Maps lowercase condition name → remaining rounds. Missing = permanent. */
   conditionDurations: Record<string, number>;
@@ -298,6 +320,7 @@ export interface Character {
   speed: number;
   initiative: number;
   activeBuffs: ActiveBuff[];
+  activeFeatures: string[];
   concentratingOn?: string | null;
   raw_dndbeyond_json?: string;
   /** Structured attack actions — populated from DDB import or manual entry */
@@ -306,6 +329,7 @@ export interface Character {
   hitDice: Record<string, number>;
   /** Hit dice spent this rest cycle, e.g. { "d10": 2 } */
   hitDiceUsed: Record<string, number>;
+  features?: Ability[];
   provenance?: StatProvenance;
 }
 
@@ -364,9 +388,6 @@ export const EQUIPMENT_SLOTS: { value: EquipmentSlot; label: string }[] = [
   { value: 'amulet', label: 'Amulet' },
 ];
 
-export function getAbilityModifier(score: number): number {
-  return Math.floor((score - 10) / 2);
-}
 
 export function rollDie(sides: number): number {
   return Math.floor(Math.random() * sides) + 1;

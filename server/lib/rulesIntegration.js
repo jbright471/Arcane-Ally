@@ -211,6 +211,9 @@ function applyDamageEvent(db, characterId, rawAmount, damageType = 'untyped', re
     const charImmunities = char.immunities || [];
     const charVulnerabilities = char.vulnerabilities || [];
 
+    const featureBuffs = (state.activeFeatures || []).map(f => ({ name: f, isFeature: true }));
+    const combinedBuffs = [...(state.activeBuffs || []), ...featureBuffs];
+
     const damageResult = resolveDamage(
       { currentHp: state.currentHp, tempHp: state.tempHp, maxHp: char.baseMaxHp },
       rawAmount,
@@ -218,7 +221,8 @@ function applyDamageEvent(db, characterId, rawAmount, damageType = 'untyped', re
       charResistances,
       charImmunities,
       charVulnerabilities,
-      state.activeConditions
+      state.activeConditions,
+      combinedBuffs
     );
 
     const concCheck = resolveConcentrationCheckDC(damageResult.damageDealt, state.concentratingOn);
@@ -477,6 +481,33 @@ function spendHitDieEvent(db, characterId, dieType) {
   });
 }
 
+function toggleFeatureEvent(db, characterId, featureName) {
+  return runInImmediateTransaction(db, () => {
+    const char = getCharacterData(db, characterId);
+    const state = getSessionState(db, characterId);
+    if (!char || !state) return { success: false, error: 'Character not found' };
+
+    const activeFeatures = new Set(state.activeFeatures || []);
+    let isActive = false;
+    
+    if (activeFeatures.has(featureName)) {
+      activeFeatures.delete(featureName);
+    } else {
+      activeFeatures.add(featureName);
+      isActive = true;
+    }
+
+    state.activeFeatures = Array.from(activeFeatures);
+    saveSessionState(db, state);
+
+    return { 
+      success: true, 
+      isActive,
+      logMessage: `${char.name} ${isActive ? 'activated' : 'deactivated'} ${featureName}.`
+    };
+  });
+}
+
 function shortRestEvent(db, characterId) {
   return runInImmediateTransaction(db, () => {
     const char = getCharacterData(db, characterId);
@@ -543,7 +574,17 @@ function getResolvedCharacterState(db, characterId) {
     }
   }
 
-  const combinedBuffs = deduplicateCombinedBuffs([...(state.activeBuffs || []), ...auraBuffs]);
+  const featureBuffs = (state.activeFeatures || []).map(featureName => {
+    return {
+      id: `feature-${featureName}`,
+      name: featureName,
+      sourceName: featureName,
+      modifierType: 'feature',
+      isFeature: true
+    };
+  });
+
+  const combinedBuffs = deduplicateCombinedBuffs([...(state.activeBuffs || []), ...auraBuffs, ...featureBuffs]);
   const allInventory = [...char.inventory, ...char.homebrewInventory];
   const { finalScores, breakdown: abilityScoresBreakdown } = resolveFinalAbilityScores(char, allInventory, combinedBuffs, state.activeConditions);
   const currentAC = resolveCurrentAC(char, combinedBuffs, state.activeConditions, allInventory);
@@ -553,6 +594,26 @@ function getResolvedCharacterState(db, characterId) {
   const initResult = resolveInitiative(char, combinedBuffs, state.activeConditions, allInventory);
 
   const proficiencyBonus = Math.floor((char.level - 1) / 4) + 2;
+  const { getFormattedAbilityModifier, calculateAbilityModifier } = require('../engine/calculators/modifiers');
+  const { getAllRollModifiers } = require('../engine/rules-parser');
+  const formattedModifiers = {
+    STR: getFormattedAbilityModifier(finalScores.STR),
+    DEX: getFormattedAbilityModifier(finalScores.DEX),
+    CON: getFormattedAbilityModifier(finalScores.CON),
+    INT: getFormattedAbilityModifier(finalScores.INT),
+    WIS: getFormattedAbilityModifier(finalScores.WIS),
+    CHA: getFormattedAbilityModifier(finalScores.CHA),
+  };
+  const abilityModifiers = {
+    STR: calculateAbilityModifier(finalScores.STR),
+    DEX: calculateAbilityModifier(finalScores.DEX),
+    CON: calculateAbilityModifier(finalScores.CON),
+    INT: calculateAbilityModifier(finalScores.INT),
+    WIS: calculateAbilityModifier(finalScores.WIS),
+    CHA: calculateAbilityModifier(finalScores.CHA),
+  };
+
+  const rollModifiers = getAllRollModifiers(state.activeConditions, combinedBuffs);
 
   return {
     id: char.id,
@@ -568,6 +629,9 @@ function getResolvedCharacterState(db, characterId) {
     acBreakdown: currentAC.breakdown,
     abilityScores: finalScores,
     abilityScoresBreakdown: abilityScoresBreakdown,
+    abilityModifiers,
+    formattedModifiers,
+    rollModifiers,
     savingThrows: savesResult.finalSaves,
     savingThrowsBreakdown: savesResult.breakdown,
     skills: skillsResult.finalSkills,
@@ -661,6 +725,6 @@ module.exports = {
   getSessionState, saveSessionState, getCharacterData, getResolvedCharacterState,
   applyDamageEvent, applyHealEvent, setTempHpEvent, castConcentrationSpellEvent,
   dropConcentrationEvent, applyConditionEvent, removeConditionEvent, tickConditionsEvent,
-  useSpellSlotEvent, spendHitDieEvent, shortRestEvent, longRestEvent, applyBuffEvent, removeBuffEvent,
+  useSpellSlotEvent, spendHitDieEvent, toggleFeatureEvent, shortRestEvent, longRestEvent, applyBuffEvent, removeBuffEvent,
   getCombatStateInspector,
 };

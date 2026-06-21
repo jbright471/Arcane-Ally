@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { DieType, DiceRoll, rollDice } from '../types/character';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -17,7 +17,7 @@ interface DiceRollerProps {
   showPrivateToggle?: boolean;
 }
 
-export function DiceRoller({ onRoll, compact = false, characterName, showPrivateToggle = false }: DiceRollerProps) {
+export const DiceRoller = React.memo(function DiceRoller({ onRoll, compact = false, characterName, showPrivateToggle = false }: DiceRollerProps) {
   const [selectedDie, setSelectedDie] = useState<DieType>('d20');
   const [count, setCount] = useState(1);
   const [modifier, setModifier] = useState(0);
@@ -133,4 +133,4 @@ export function DiceRoller({ onRoll, compact = false, characterName, showPrivate
       )}
     </div>
   );
-}
+});
