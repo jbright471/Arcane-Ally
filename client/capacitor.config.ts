@@ -3,7 +3,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // Mobile configuration for Arcane Ally
 // To build for Android/iOS:
 //   1. Install Capacitor: npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios
-//   2. Set server URL: add VITE_SERVER_URL=http://<homelab-ip>:3002 to .env.local
+//   2. Set server URL: add VITE_SERVER_URL=http://<homelab-ip>:3001 to .env.local
 //   3. Run: npm run cap:android  (or cap:ios)
 //
 // The app will load its web bundle from the device and connect to the homelab backend

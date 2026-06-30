@@ -7,7 +7,7 @@ A high-performance, self-hosted companion application for D&D 5e. Real-time part
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, Radix UI
 - **Backend:** Node.js (Express), Socket.io (real-time sync), Better-SQLite3
 - **AI Layer:** Local Ollama integration for PDF parsing, item stat extraction, homebrew generation, lore generation, and actionable entity creation
-- **Deployment:** Docker & Docker Compose (optimized for Portainer)
+- **Deployment:** Multi-stage Dockerfile, with local dev via Vite + Express and optional external Portainer/Compose stack configuration
 
 ## Core Features
 
@@ -130,23 +130,32 @@ An in-app documentation hub at `/guide` with 17+ searchable guides covering Gett
 
 ## Self-Hosting
 
-The project runs entirely on local hardware with no external cloud dependencies.
+The project runs entirely on local hardware with no external cloud dependencies. The checked-in repo currently ships a production `Dockerfile`, but no `docker-compose.yml`; if you run Arcane Ally through Portainer or Compose, keep that stack configuration alongside your deployment.
 
-1. **Environment Config:**
+1. **Environment Config**
    ```env
+   PORT=3001
+   DM_PIN=1234
    OLLAMA_URL=http://your-ollama-host:11434
+   # Optional: DB_PATH=/absolute/path/to/dnd.db
    ```
 
-2. **Launch:**
+2. **Local Development**
    ```bash
-   docker-compose up --build -d
+   cd server && npm install && npm start
+   cd client && npm install && npm run dev
    ```
 
-3. **Access:**
-   - Frontend: `http://localhost:5173`
-   - Backend API: `http://localhost:3002`
+3. **Access**
+   - Frontend dev server: `http://localhost:5173`
+   - Backend API and Socket.io gateway: `http://localhost:3001`
 
-4. **Container Health & Telemetry:**
+4. **Container / Portainer Notes**
+   - The backend default port is `3001` (`PORT` in `.env`).
+   - The Vite dev server default port is `5173`.
+   - Production Portainer/Compose deployments should map `/api` and `/socket.io` traffic to the backend service on port `3001`.
+
+5. **Container Health & Telemetry**
    - **Telemetry API** — `/api/health` exposes V8 process uptime and memory usage metrics.
    - **Memory Exhaustion Loop Guard** — An automated script (`healthcheck.js`) monitors memory and triggers container exits (exit code 1) if V8 heap utilization exceeds 500MB, preventing memory leak loops.
    - **Lightweight 3-Stage Docker Build** — The container is optimized to strip compiler libraries (`python3`, `make`, `g++`) from the final run image, keeping container size at a bare minimum.
@@ -163,24 +172,31 @@ The project runs entirely on local hardware with no external cloud dependencies.
 
 ## API Surface
 
-| Route Group | Endpoints | Purpose |
-|---|---|---|
-| `/api/characters` | 6 | CRUD, weapons, action log |
-| `/api/characters/import` | 3 | DDB URL import, PDF import, re-sync |
-| `/api/homebrew` | 7 | Compendium CRUD, AI generation, item assignment |
-| `/api/initiative` | 4 | Encounter CRUD, tracker state |
-| `/api/quests` | 3 | Quest lifecycle |
-| `/api/maps` | 10 | Map CRUD, markers, overworld |
-| `/api/npcs` | 4 | NPC CRUD |
-| `/api/notes` | 3 | Party notes |
-| `/api/dm-notes` | 3 | DM-only notes |
-| `/api/automation` | 3 | Automation presets |
-| `/api/world` | 3 | World state, time, weather |
-| `/api/loot` | 3 | Loot generation, archive, assignment |
-| `/api/lore` | 1 | AI lore generation |
-| `/api/chat` | 1 | Rules assistant |
-| `/api/v1/effects` | 1 | Bulk Apply AoE / multi-target damage, healing, or conditions |
-| `/api/health` | 1 | Telemetry endpoint (uptime, RSS, heap memory sizes) |
-| `/api/effect-presets` | 4 | CRUD operations for reusable effect and condition presets |
+| Route Group | Purpose |
+|---|---|
+| `/api/auth/dm` | DM PIN login and session token creation |
+| `/api/characters` | Character CRUD, HP patches, token images, weapon attacks, action log |
+| `/api/characters/import` | D&D Beyond import, PDF import, and character re-sync |
+| `/api/encounters` / `/api/initiative` | Encounter library, tracker state, initiative export/duplicate helpers |
+| `/api/homebrew` | Compendium CRUD, AI generation, item parsing, item assignment |
+| `/api/v1/effects/bulk-apply` | Bulk AoE / multi-target damage, healing, and condition application |
+| `/api/effect-timeline` | Combat effect ledger and per-character provenance |
+| `/api/effect-presets` | Reusable effect and condition preset CRUD |
+| `/api/combat/snapshots` | Combat snapshot creation, diffing, restore, and restore audit logs |
+| `/api/maps` | Battlemap/overworld map CRUD, map files, tokens, and markers |
+| `/api/quests` | Quest lifecycle |
+| `/api/npcs` | NPC CRUD |
+| `/api/notes` | Shared party notes |
+| `/api/dm-notes` | DM-only prep notes |
+| `/api/automation` | Automation presets |
+| `/api/prep-packs` | Portable encounter pack import |
+| `/api/world` | World time and weather state |
+| `/api/loot` | Loot generation, archive, and direct item assignment |
+| `/api/lore` | AI lore generation with actionable entity blocks |
+| `/api/chat` | Rules assistant |
+| `/api/recaps` | Session recap archive and combat recap save |
+| `/api/sync-audit` | DM sync status, connected players, and pending saves/imports |
+| `/api/offline-bundle` | Offline character/effects payload for companion clients |
+| `/api/health` | Telemetry endpoint with uptime and V8/RSS memory metrics |
 
 **70+ Socket.io real-time events** covering character state, combat, dice, loot, voting, world, voice, effects, automation, permissions, and battlemap tokens.

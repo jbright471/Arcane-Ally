@@ -163,22 +163,29 @@ The application uses a lightweight **Client-Server-WebSocket** architectural pip
 
 ## Local Quick Start
 
-To launch the entire stack on your local machine using Docker:
+Arcane Ally can run as a local development pair or behind your own Portainer/Compose/reverse-proxy stack. The checked-in repository currently includes a production \`Dockerfile\`, but no \`docker-compose.yml\`.
 
 1. **Clone the Repository**: Ensure you have downloaded the project files.
-2. **Configure Environment Variables**: Create a \`.env\` file in the root folder:
+2. **Configure Environment Variables**: Create a \`.env\` file for the backend:
    \`\`\`env
-   PORT=3002
+   PORT=3001
+   DM_PIN=1234
    OLLAMA_URL=http://localhost:11434
-   NODE_ENV=production
+   # Optional: DB_PATH=/absolute/path/to/dnd.db
    \`\`\`
-3. **Boot the Containers**: Execute the build and run commands:
+3. **Start the Backend**:
    \`\`\`bash
-   docker-compose up --build -d
+   cd server && npm install && npm start
    \`\`\`
-4. **Access the Interface**:
-   - **Frontend App**: Open your browser to \`http://localhost:5173\` (or \`http://localhost:3000\` depending on your routing setup).
-   - **Backend API**: Running at \`http://localhost:3002\`.
+4. **Start the Frontend**:
+   \`\`\`bash
+   cd client && npm install && npm run dev
+   \`\`\`
+5. **Access the Interface**:
+   - **Frontend App**: Open your browser to \`http://localhost:5173\`.
+   - **Backend API / Socket.io Gateway**: Running at \`http://localhost:3001\`.
+
+For Portainer or Compose deployments, map frontend traffic to the Vite/static frontend service and route \`/api\` plus \`/socket.io\` traffic to the backend service on port \`3001\`.
 
 ## WebRTC Voice Chat Security
 
@@ -193,7 +200,7 @@ If you are hosting Arcane Ally on a home server (e.g. \`http://192.168.1.50:5173
 
 Ensure the following ports are open on your host firewall or proxy:
 - **5173**: Default React frontend client port.
-- **3002**: Backend HTTP/Express API and Socket.io gateway port.
+- **3001**: Backend HTTP/Express API and Socket.io gateway port.
 - **11434**: Default Ollama API port (if running Ollama on the same server).
 
 ## Production Container Telemetry & Health Checks
@@ -1474,7 +1481,7 @@ export default function AppGuidebook() {
         {/* Footer */}
         <div className="px-4 py-3 border-t border-border/20 text-center">
           <p className="text-[9px] text-muted-foreground/30 font-display tracking-widest uppercase">
-            Arcane Ally v1.0
+            Arcane Ally v1.0.1
           </p>
         </div>
       </aside>

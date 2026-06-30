@@ -1,11 +1,37 @@
 node_modules
 client/node_modules
 server/node_modules
+
 .git
 .gemini
 .agents
-data/*.db*
+.claude
+
+# Local environment and private runtime config
+.env
+.env.*
+client/.env
+client/.env.*
+server/.env
+server/.env.*
+
+# Local SQLite/runtime data
+data
+data/**
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+server/*.db*
+
+# Local/private documents and binary inputs
 *.pdf
 *.docx
+*.pem
+*.key
+*.p12
+*.pfx
+
 dist
 client/dist
