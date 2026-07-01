@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -6,29 +6,37 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { GameProvider, useGame } from "./context/GameContext";
 import { Layout } from "./components/Layout";
-import { RulesAssistant } from "./components/RulesAssistant";
-import { VoiceChat } from "./components/VoiceChat";
-import { EffectStream } from "./components/EffectStream";
 import { toast } from "sonner";
 import socket from "./socket";
-import Index from "./pages/Index";
-import CharacterCreate from "./pages/CharacterCreate";
-import CharacterImport from "./pages/CharacterImport";
-import CharacterSheet from "./pages/CharacterSheet";
-import PartyLobby from "./pages/PartyLobby";
-import EquipmentManager from "./pages/EquipmentManager";
-import Compendium from "./pages/Compendium";
-import DmDashboard from "./pages/DmDashboard";
-import PartyNotesPage from "./pages/PartyNotesPage";
-import SessionArchive from "./pages/SessionArchive";
-import WorldMap from "./pages/WorldMap";
-import AppGuidebook from "./pages/AppGuidebook";
-import BattleMap from "./pages/BattleMap";
-import CompanionPage from "./pages/CompanionPage";
-import EncounterCastView from "./pages/EncounterCastView";
-import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+const RulesAssistant = lazy(() =>
+  import("./components/RulesAssistant").then(({ RulesAssistant }) => ({ default: RulesAssistant })),
+);
+const VoiceChat = lazy(() =>
+  import("./components/VoiceChat").then(({ VoiceChat }) => ({ default: VoiceChat })),
+);
+const EffectStream = lazy(() =>
+  import("./components/EffectStream").then(({ EffectStream }) => ({ default: EffectStream })),
+);
+
+const Index = lazy(() => import("./pages/Index"));
+const CharacterCreate = lazy(() => import("./pages/CharacterCreate"));
+const CharacterImport = lazy(() => import("./pages/CharacterImport"));
+const CharacterSheet = lazy(() => import("./pages/CharacterSheet"));
+const PartyLobby = lazy(() => import("./pages/PartyLobby"));
+const EquipmentManager = lazy(() => import("./pages/EquipmentManager"));
+const Compendium = lazy(() => import("./pages/Compendium"));
+const DmDashboard = lazy(() => import("./pages/DmDashboard"));
+const PartyNotesPage = lazy(() => import("./pages/PartyNotesPage"));
+const SessionArchive = lazy(() => import("./pages/SessionArchive"));
+const WorldMap = lazy(() => import("./pages/WorldMap"));
+const AppGuidebook = lazy(() => import("./pages/AppGuidebook"));
+const BattleMap = lazy(() => import("./pages/BattleMap"));
+const CompanionPage = lazy(() => import("./pages/CompanionPage"));
+const EncounterCastView = lazy(() => import("./pages/EncounterCastView"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 function ConcentrationAlerts() {
   useEffect(() => {
@@ -147,6 +155,53 @@ function EffectConsentAlerts() {
   return null;
 }
 
+function RouteLoading({ fullScreen = false }: { fullScreen?: boolean }) {
+  const containerClassName = fullScreen
+    ? "min-h-screen flex items-center justify-center bg-background"
+    : "min-h-[320px] flex items-center justify-center";
+
+  return (
+    <div className={containerClassName}>
+      <div className="text-center" role="status" aria-live="polite">
+        <div className="mx-auto mb-3 h-10 w-10 rounded-full border border-primary/30 bg-primary/10 shadow-sm shadow-primary/10 animate-pulse" />
+        <p className="font-display text-xs uppercase tracking-[0.25em] text-primary/70">Loading</p>
+      </div>
+    </div>
+  );
+}
+
+function MainAppShell() {
+  return (
+    <>
+      <Layout>
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/character/new" element={<CharacterCreate />} />
+            <Route path="/character/import" element={<CharacterImport />} />
+            <Route path="/character/:id" element={<CharacterSheet />} />
+            <Route path="/party" element={<PartyLobby />} />
+            <Route path="/equipment" element={<EquipmentManager />} />
+            <Route path="/compendium" element={<Compendium />} />
+            <Route path="/dm" element={<DmDashboard />} />
+            <Route path="/notes" element={<PartyNotesPage />} />
+            <Route path="/archive" element={<SessionArchive />} />
+            <Route path="/worldmap" element={<WorldMap />} />
+            <Route path="/battlemap" element={<BattleMap />} />
+            <Route path="/guide" element={<AppGuidebook />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </Layout>
+      <Suspense fallback={null}>
+        <RulesAssistant />
+        <VoiceChat />
+        <EffectStream />
+      </Suspense>
+    </>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -157,38 +212,13 @@ const App = () => (
         <SavingThrowAlerts />
         <EffectConsentAlerts />
         <BrowserRouter>
-          <Routes>
-            {/* Standalone — no sidebar/header */}
-            <Route path="/companion/:characterId" element={<CompanionPage />} />
-            <Route path="/encounter/:id/cast" element={<EncounterCastView />} />
-
-            {/* Main app shell */}
-            <Route path="/*" element={
-              <>
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<Index />} />
-                    <Route path="/character/new" element={<CharacterCreate />} />
-                    <Route path="/character/import" element={<CharacterImport />} />
-                    <Route path="/character/:id" element={<CharacterSheet />} />
-                    <Route path="/party" element={<PartyLobby />} />
-                    <Route path="/equipment" element={<EquipmentManager />} />
-                    <Route path="/compendium" element={<Compendium />} />
-                    <Route path="/dm" element={<DmDashboard />} />
-                    <Route path="/notes" element={<PartyNotesPage />} />
-                    <Route path="/archive" element={<SessionArchive />} />
-                    <Route path="/worldmap" element={<WorldMap />} />
-                    <Route path="/battlemap" element={<BattleMap />} />
-                    <Route path="/guide" element={<AppGuidebook />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </Layout>
-                <RulesAssistant />
-                <VoiceChat />
-                <EffectStream />
-              </>
-            } />
-          </Routes>
+          <Suspense fallback={<RouteLoading fullScreen />}>
+            <Routes>
+              <Route path="/companion/:characterId" element={<CompanionPage />} />
+              <Route path="/encounter/:id/cast" element={<EncounterCastView />} />
+              <Route path="/*" element={<MainAppShell />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </GameProvider>
     </TooltipProvider>

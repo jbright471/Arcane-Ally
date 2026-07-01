@@ -1,6 +1,6 @@
-import { Home, UserPlus, Users, Shield, ScrollText, Eye, ClipboardList, BookOpen, Swords, Map, Download, Package, HelpCircle, Crosshair } from 'lucide-react';
+import { Home, UserPlus, Users, ScrollText, Eye, ClipboardList, BookOpen, Map, Download, Package, HelpCircle, Crosshair } from 'lucide-react';
 import { NavLink } from './NavLink';
-import { useLocation } from 'react-router-dom';
+import { BrandMark } from './BrandMark';
 import {
   Sidebar,
   SidebarContent,
@@ -39,7 +39,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-border">
       <SidebarContent>
         <div className="p-4 flex items-center gap-2">
-          <Swords className="h-6 w-6 text-primary shrink-0" />
+          <BrandMark className="border-primary/30 bg-background/80" />
           {!collapsed && (
             <h1 className="font-display text-lg font-bold text-primary tracking-wide">
               Arcane Ally
