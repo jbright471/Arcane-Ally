@@ -1,8 +1,9 @@
 import { ReactNode } from 'react';
 import { SidebarProvider, SidebarTrigger } from './ui/sidebar';
 import { AppSidebar } from './AppSidebar';
-import { Swords, WifiOff } from 'lucide-react';
+import { WifiOff } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { BrandMark } from './BrandMark';
 
 export function Layout({ children }: { children: ReactNode }) {
   const { isOnline } = useOnlineStatus();
@@ -15,7 +16,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <header className="h-14 shrink-0 flex items-center border-b border-border px-4 bg-card/60 backdrop-blur-sm sticky top-0 z-20 shadow-sm shadow-black/30">
             <SidebarTrigger className="mr-4" />
             <div className="flex items-center gap-2">
-              <Swords className="h-5 w-5 text-primary animate-pulse-glow" />
+              <BrandMark size="sm" className="border-primary/30 bg-background/80" />
               <span className="font-display text-sm font-semibold text-primary/80 tracking-widest uppercase">
                 Arcane Ally
               </span>
