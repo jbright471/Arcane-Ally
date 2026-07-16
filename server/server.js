@@ -151,7 +151,7 @@ app.set('io', io);
 
 // --- Middleware ---
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '15mb' }));
 
 // --- REST Routes ---
 app.use('/api/characters', characterRouter);
@@ -264,6 +264,10 @@ function requireDm(token) {
 }
 
 const requireDmHttp = requireDmRequest(db);
+
+app.get('/api/auth/dm/status', requireDmHttp, (_req, res) => {
+    res.json({ authenticated: true });
+});
 
 app.get('/api/health', (req, res) => {
     res.json({
@@ -1788,7 +1792,7 @@ io.on('connection', (socket) => {
         const feedEvent = {
             id: Date.now(),
             actor: actor || 'Someone',
-            characterId: socketInfo?.characterId ?? null,
+            characterId: socketInfo?.characterId ?? (Number(payloadCharacterId) || null),
             label: label || rollType || 'Roll',
             source: source || null,
             rollType: rollType || 'Roll',
@@ -1872,9 +1876,14 @@ io.on('connection', (socket) => {
 
     socket.on('spawn_monster', (monsterData) => {
         if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
-        spawnMonster(monsterData);
-        broadcastInitiative();
-        logAction('DM', `Spawned ${monsterData.name} into initiative.`);
+        try {
+            spawnMonster(monsterData);
+            broadcastInitiative();
+            logAction('DM', `Spawned ${monsterData.name} into initiative.`);
+        } catch (err) {
+            console.error('[Combat] Error spawning monster:', err.message);
+            socket.emit('rules_error', { message: 'Monster could not be spawned.' });
+        }
     });
 
     socket.on('configure_boss_phases', ({ trackerId, phases }) => {
@@ -1954,12 +1963,15 @@ io.on('connection', (socket) => {
     });
 
     socket.on('start_encounter', ({ encounterId }) => {
-        const automationRules = getAutomationRules(db);
-        const partyCharacters = automationRules.initiativeSync ? getAllCharacters() : [];
-        const tracker = startEncounter(encounterId, partyCharacters);
-        if (tracker) {
+        if (!socket.dmAuthenticated) { socket.emit('rules_error', { message: 'DM only' }); return; }
+        try {
+            const automationRules = getAutomationRules(db);
+            const partyCharacters = automationRules.initiativeSync ? getAllCharacters() : [];
+            const tracker = startEncounter(encounterId, partyCharacters);
+            if (!tracker) return;
             const encounterInfo = db.prepare('SELECT name FROM encounters WHERE id = ?').get(encounterId);
-            startCombatSession(db, { encounterId, name: encounterInfo?.name || `Encounter ${encounterId}` });
+            const resolvedEncounterId = encounterInfo ? encounterId : null;
+            startCombatSession(db, { encounterId: resolvedEncounterId, name: encounterInfo?.name || 'Ad Hoc Encounter' });
             currentCombatRound = 1;
             currentTurnIndex = 0;
             saveCombatState();
@@ -1987,6 +1999,9 @@ io.on('connection', (socket) => {
             broadcastInitiative();
             broadcastTimeline();
             broadcastPartyState();
+        } catch (err) {
+            console.error('[Combat] Error starting encounter:', err.message);
+            socket.emit('rules_error', { message: 'Encounter could not be started.' });
         }
     });
 

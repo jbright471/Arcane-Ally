@@ -273,6 +273,9 @@ function runMigrations() {
   `);
 
   // ---- Phase 11.0: World Map & Voice ----
+  addColumnSafe('maps', 'image_path', 'TEXT DEFAULT NULL');
+  addColumnSafe('maps', 'group_id', 'TEXT DEFAULT NULL');
+  addColumnSafe('maps', 'level_order', 'INTEGER DEFAULT 0');
   addColumnSafe('maps', 'is_overworld', 'INTEGER DEFAULT 0');
   addColumnSafe('map_markers', 'description', "TEXT DEFAULT ''");
 
@@ -364,6 +367,7 @@ function runMigrations() {
   db.exec(`INSERT OR IGNORE INTO campaign_state (key, value) VALUES ('automation_rules', '{"automaticUnconscious":true,"clearUnconsciousOnHeal":true,"concentrationCleanup":true,"concentrationChecks":"automatic","conditionDurations":true,"turnTriggers":true,"auras":true,"reactiveHandlers":true,"initiativeSync":true,"bloodiedDetection":true,"bloodiedThresholdPercent":50,"ammunitionTracking":false,"modifierPropagation":true,"timelineRetentionMode":"unlimited","timelineRetentionValue":0}')`);
 
   // ---- Phase 15.1: Compendium — store full stats on spawned monsters ----
+  addColumnSafe('initiative_tracker', 'is_hidden', 'INTEGER NOT NULL DEFAULT 0');
   addColumnSafe('initiative_tracker', 'stats_json', "TEXT DEFAULT NULL");
   addColumnSafe('initiative_tracker', 'conditions_json', "TEXT DEFAULT '[]'");
   addColumnSafe('initiative_tracker', 'buffs_json', "TEXT DEFAULT '[]'");
@@ -400,6 +404,48 @@ function runMigrations() {
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  const snapshotColumns = db.prepare('PRAGMA table_info(combat_snapshots)').all().map(column => column.name);
+  if (snapshotColumns.includes('tracker_state_json') && !snapshotColumns.includes('state_json')) {
+    const legacySnapshots = db.prepare('SELECT * FROM combat_snapshots ORDER BY id').all();
+    db.transaction(() => {
+      db.exec(`
+        ALTER TABLE combat_snapshots RENAME TO combat_snapshots_legacy;
+        CREATE TABLE combat_snapshots (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          label       TEXT NOT NULL,
+          round       INTEGER NOT NULL,
+          turn_index  INTEGER NOT NULL,
+          state_json  TEXT NOT NULL,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+      const insertSnapshot = db.prepare(`
+        INSERT INTO combat_snapshots (id, label, round, turn_index, state_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      for (const snapshot of legacySnapshots) {
+        let tracker = [];
+        let sessions = [];
+        try { tracker = JSON.parse(snapshot.tracker_state_json || '[]'); } catch (_e) {}
+        try { sessions = JSON.parse(snapshot.session_states_json || '[]'); } catch (_e) {}
+        insertSnapshot.run(
+          snapshot.id,
+          snapshot.description || `Legacy Snapshot ${snapshot.id}`,
+          snapshot.combat_round || 0,
+          snapshot.combat_turn_index || 0,
+          JSON.stringify({
+            combat_round: snapshot.combat_round || 0,
+            combat_turn_index: snapshot.combat_turn_index || 0,
+            initiative_tracker: tracker,
+            session_states: sessions,
+          }),
+          snapshot.snapshot_time || new Date().toISOString(),
+        );
+      }
+      db.exec('DROP TABLE combat_snapshots_legacy;');
+    })();
+  }
 
   // ---- Combat Session Archives ----
   db.exec(`

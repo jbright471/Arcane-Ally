@@ -305,6 +305,7 @@ export interface Character {
   isBloodied?: boolean;
   ac: number;
   acBreakdown?: any[];
+  abilityScores: AbilityScores;
   abilityScoresBreakdown?: Record<AbilityScore, StatSource[]>;
   abilityModifiers?: Record<AbilityScore, number>;
   formattedModifiers?: Record<AbilityScore, string>;
@@ -429,6 +430,7 @@ export function createDefaultCharacter(id: string): Character {
     speed: 30,
     initiative: 0,
     activeBuffs: [],
+    activeFeatures: [],
     skillProficiencies: {},
     saveProficiencies: {},
   };

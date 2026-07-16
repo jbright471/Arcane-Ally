@@ -104,6 +104,7 @@ export function WeaponRow({ weapon, character }: WeaponRowProps) {
 
     socket.emit('dice_roll', {
       actor: character.name,
+      characterId: Number(character.id),
       sides: parseInt(weapon.damageDice.slice(1)),
       count: dieCount,
       modifier: weapon.damageBonus,

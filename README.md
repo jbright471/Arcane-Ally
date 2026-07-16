@@ -18,7 +18,6 @@ A high-performance, self-hosted companion application for D&D 5e. Real-time part
 git clone https://github.com/jbright471/Arcane-Ally.git
 cd Arcane-Ally
 
-cp .env.example .env
 cp server/.env.example server/.env
 ```
 
@@ -40,7 +39,8 @@ npm run dev
 
 - Frontend dev server: `http://localhost:5173`
 - Backend API and Socket.io gateway: `http://localhost:3001`
-- Default DM PIN comes from `.env` / `server/.env`; change the sample value before inviting players.
+- Default DM PIN comes from `server/.env`; change the sample value before inviting players.
+- The repository contains no campaign data. The backend creates a blank database on first start.
 
 > **Proxy note:** The checked-in Vite configuration expects the backend to be reachable as `dnd-party-sync-backend:3001`, matching the container-network deployment. For host-only development, point the two proxy targets in `client/vite.config.ts` to `http://localhost:3001`. See [Self-Hosting](./docs/SELF_HOSTING.md) for supported topology details.
 
@@ -187,6 +187,7 @@ An in-app, task-first documentation hub at `/guide` with searchable player, DM, 
 
 ## Documentation
 
+- [First Run](./docs/FIRST_RUN.md)
 - [Documentation Index](./docs/README.md)
 - [Self-Hosting & Upgrades](./docs/SELF_HOSTING.md)
 - [Architecture](./docs/ARCHITECTURE.md)
@@ -206,7 +207,9 @@ Core campaign state, the database, and configured Ollama processing run on your 
    ```env
    PORT=3001
    DM_PIN=1234
+   JSON_BODY_LIMIT=15mb
    OLLAMA_URL=http://your-ollama-host:11434
+   OLLAMA_MODEL=your-installed-model
    # Optional: DB_PATH=/absolute/path/to/dnd.db
    ```
 
@@ -225,6 +228,7 @@ Core campaign state, the database, and configured Ollama processing run on your 
 3. **Access**
    - Frontend dev server: `http://localhost:5173`
    - Backend API and Socket.io gateway: `http://localhost:3001`
+   - Open **DM Dashboard** and enter the configured `DM_PIN`; expired saved sessions return to this login screen.
 
 4. **Container / Portainer Notes**
    - The backend default port is `3001` (`PORT` in `.env`).
@@ -245,7 +249,7 @@ Arcane Ally is intended for self-hosted, local-first play. Before publishing or 
 
 - Keep real `.env` files private; commit only `.env.example` templates.
 - Do not commit SQLite databases, PDFs, private keys, certificates, or character export files.
-- The repo ignore rules exclude `.env`, `*.db`, `*.sqlite`, PDFs, common private key formats, `node_modules`, and build output.
+- The repo ignore rules exclude environment files, databases and journals, runtime data/uploads/backups, PDFs, common private key and certificate formats, character exports, `node_modules`, and build output.
 - Change `DM_PIN` from the sample value before exposing the app outside a trusted LAN.
 - Prefer local Ollama for AI features when campaign privacy matters.
 - Do not expose Arcane Ally directly to the public internet. It is designed for a trusted table network and does not provide user accounts, tenant isolation, rate limiting, or comprehensive authorization on every mutation route.
@@ -268,6 +272,7 @@ Arcane Ally is intended for self-hosted, local-first play. Before publishing or 
 | Route Group | Purpose |
 |---|---|
 | `/api/auth/dm` | DM PIN login and session token creation |
+| `/api/auth/dm/status` | Validate the current DM session token |
 | `/api/characters` | Character CRUD, HP patches, token images, weapon attacks, action log |
 | `/api/characters/import` | D&D Beyond import, PDF import, and character re-sync |
 | `/api/encounters` / `/api/initiative` | Encounter library, tracker state, initiative export/duplicate helpers |

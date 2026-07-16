@@ -220,11 +220,17 @@ export function DmAutomationPanel({ open, onClose }: DmAutomationPanelProps) {
   const [saveOnFailEffects, setSaveOnFailEffects] = useState<EffectDef[]>([{ type: 'condition', condition: 'Poisoned' }]);
 
   const fetchPresets = useCallback(() => {
-    dmFetch('/api/automation').then(r => r.json()).then(setPresets).catch(() => {});
+    dmFetch('/api/automation')
+      .then(async r => r.ok ? r.json() : [])
+      .then(data => setPresets(Array.isArray(data) ? data : []))
+      .catch(() => setPresets([]));
   }, []);
 
   const fetchRules = useCallback(() => {
-    dmFetch('/api/automation/rules').then(r => r.json()).then(setRules).catch(() => {});
+    dmFetch('/api/automation/rules')
+      .then(async r => r.ok ? r.json() : null)
+      .then(data => setRules(data && typeof data === 'object' && !Array.isArray(data) ? data : null))
+      .catch(() => setRules(null));
   }, []);
 
   useEffect(() => {

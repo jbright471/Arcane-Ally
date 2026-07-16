@@ -117,7 +117,7 @@ Start here when you know what you want to do but not where Arcane Ally put the b
 
 > **Where to go:** \`Arcane Codex -> Host/Admin -> Self-Hosting & Deployment\`
 
-Players do not need hosting knowledge. The host should configure \`.env\`, start the backend, start the frontend, and make sure the DM PIN and database storage are safe.`,
+Players do not need hosting knowledge. The host should configure \`server/.env\`, start the backend, start the frontend, and make sure the DM PIN and database storage are safe. A new checkout begins with no characters or campaign data.`,
   },
   {
     id: 'importing',
@@ -232,7 +232,9 @@ Arcane Ally can run as a development pair or behind your own Portainer/Compose/r
    \`\`\`env
    PORT=3001
    DM_PIN=1234
+   JSON_BODY_LIMIT=15mb
    OLLAMA_URL=http://localhost:11434
+   OLLAMA_MODEL=mistral-small:24b
    # Optional: DB_PATH=/absolute/path/to/dnd.db
    \`\`\`
 3. **Start the Backend**:
@@ -246,6 +248,12 @@ Arcane Ally can run as a development pair or behind your own Portainer/Compose/r
 5. **Access the Interface**:
    - **Frontend App**: Open your browser to \`http://localhost:5173\`.
    - **Backend API / Socket.io Gateway**: Running at \`http://localhost:3001\`.
+
+## First Run
+
+The public repository contains no campaign database, characters, maps, notes, loot, or combat history. The backend creates an empty database at \`DB_PATH\` and applies schema migrations when it starts. Create or import the first character, then open **DM Dashboard** and enter the configured DM PIN.
+
+The main **Start Combat** control can create an ad hoc party encounter even when the Encounter Library is empty.
 
 The checked-in Vite proxy expects a backend service named \`dnd-party-sync-backend\`. For host-only development, point both proxy targets in \`client/vite.config.ts\` to \`http://localhost:3001\`.
 
@@ -261,6 +269,7 @@ For Portainer or Compose deployments, serve the frontend separately and route \`
 - Confirm the backend starts on port **3001**.
 - Confirm the frontend loads on port **5173** or your production domain.
 - Confirm Ollama is reachable if you want AI features.
+- Confirm \`OLLAMA_MODEL\` names a model installed on that Ollama host.
 - Use HTTPS if players need browser microphone access for voice chat.
 
 ## DM Authentication Boundary
@@ -274,7 +283,7 @@ Arcane Ally does not provide full user accounts, tenant isolation, rate limiting
 > [!WARNING]
 > WebRTC voice chat utilizes browser-level microphone access. For security, modern browsers **restrict microphone access to secure contexts (HTTPS or localhost)**. 
 
-If you are hosting Arcane Ally on a home server (e.g. \`http://192.168.1.50:5173\`) for remote or local players, you must secure the connection with an HTTPS certificate (such as a reverse proxy with Let's Encrypt or self-signed certs) for WebRTC voice communication to function.
+If you are hosting Arcane Ally on a home server (e.g. \`http://192.168.1.50:5173\`) for remote or local players, you must secure the connection with an HTTPS certificate (such as a reverse proxy with Let's Encrypt or self-signed certs) for WebRTC voice communication to function. On an insecure origin, Arcane Ally explains the requirement and disables **Join Voice**.
 - **Localhost Rule**: Voice chat will work fine on \`http://localhost\` without any additional configuration.
 - **Remote Host Rule**: Remote connections *must* go through \`https://\` to allow microphone prompts.
 
@@ -620,6 +629,8 @@ To prevent rule abuse, the engine intercepts and enforces equipment stacking lim
     content: `# The God-Eye View
 
 The DM Dashboard's **God-Eye View** is your real-time party overview. Every character in the party appears as a compact card showing:
+
+> **Where to go:** Open **DM Dashboard** from the sidebar, then enter the host's DM PIN. Arcane Ally validates saved DM sessions before showing protected controls; if the session has expired, the PIN screen appears again.
 
 - **Name, Class, and Level**
 - **HP Bar** with current/max values — color-coded (green → red as HP drops)
@@ -1006,10 +1017,10 @@ Arcane Ally includes **built-in WebRTC voice communication**—no Discord, TeamS
 
 ## Joining Voice
 
-The Voice Chat widget is accessible on every page from the bottom toolbar or sidebar.
-1. Click the **microphone icon** to join the active voice room.
-2. A voice drawer will expand, showing all connected players, speaking states, and mute controls.
-3. Choose your audio input source and toggle between **Push-to-Talk** (bind a key) or **Open Mic** modes.
+The Voice Chat widget is accessible on every page from the floating microphone button.
+1. Click the **microphone button** to open the voice drawer.
+2. Click **Join Voice** and allow microphone access when the browser asks.
+3. Use **Mute**, **Deafen**, or **Leave Voice** as needed. Each connected player's volume can be adjusted with the slider beneath their name.
 
 ## Browser Microphone Permissions
 
@@ -1020,7 +1031,7 @@ When joining for the first time, your browser will display a permission prompt a
 > [!IMPORTANT]
 > **HTTPS Context Requirement**: Because microphone access is a sensitive browser feature, modern web browsers **strictly block microphone prompts in insecure HTTP contexts** unless accessing the app via \`http://localhost\`.
 > 
-> If you are hosting the server on a home machine (e.g. \`http://192.168.1.100:5173\`) for remote friends, you *must* access the app via a secure **HTTPS** address (utilizing a reverse proxy like Nginx or Caddy with Let's Encrypt certificates) for microphone prompts to appear. If accessed via insecure IP-based HTTP, the microphone will remain locked.
+> If you are hosting the server on a home machine (e.g. \`http://192.168.1.100:5173\`) for remote friends, you *must* access the app via a secure **HTTPS** address (utilizing a reverse proxy like Nginx or Caddy with Let's Encrypt certificates) for microphone prompts to appear. On insecure IP-based HTTP, the drawer explains the requirement and **Join Voice** remains disabled.
 
 ## Visual Speaking Indicators
 
@@ -1323,6 +1334,7 @@ The floating "Rules Sage" chat widget answers D&D 5e rules questions using AI.
 AI features require a running Ollama instance. Set the URL in your environment:
 \`\`\`
 OLLAMA_URL=http://your-ollama-host:11434
+OLLAMA_MODEL=your-installed-model
 \`\`\`
 
 > **Tip:** If Ollama is unavailable, AI features gracefully degrade — the app remains fully functional, you just won't be able to generate content or parse PDFs.`,
@@ -1473,10 +1485,11 @@ Use this section when something does not behave the way you expected.
 
 ## AI Features Do Not Respond
 
-> **Where to go:** \`Host/Admin -> Self-Hosting & Deployment -> OLLAMA_URL\`
+> **Where to go:** \`Host/Admin -> Self-Hosting & Deployment -> OLLAMA_URL and OLLAMA_MODEL\`
 
 - Confirm Ollama is running.
 - Confirm \`OLLAMA_URL\` points to the correct host and port.
+- Confirm \`OLLAMA_MODEL\` exactly matches a model installed on that Ollama host.
 - The rest of Arcane Ally still works if AI is unavailable.
 
 ## Voice Chat Does Not Ask for Microphone Access
@@ -1485,6 +1498,7 @@ Use this section when something does not behave the way you expected.
 
 - Voice works on \`localhost\` without HTTPS.
 - For LAN or remote IP addresses, browsers usually require **HTTPS**.
+- On insecure IP-based HTTP, **Join Voice** is disabled and the voice drawer explains the secure-context requirement.
 - If you blocked the microphone once, reset site permissions in the browser.
 
 ## A Player Cannot Claim Loot or Affect Another Character

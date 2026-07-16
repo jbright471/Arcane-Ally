@@ -64,11 +64,13 @@ The timeline is append-oriented. Undo creates a correction event and marks the o
 
 `POST /api/auth/dm` validates the configured PIN and stores one current DM token. Selected REST routes and DM Socket.io room membership validate that token. A successful login rotates it, invalidating the previous token.
 
+The DM Dashboard first calls `GET /api/auth/dm/status` for a saved token. Protected controls render only after that check succeeds or after a new PIN login. Invalid sessions are cleared client-side and return to the access form.
+
 Some older DM routes still accept a PIN header, and many campaign mutation routes assume a trusted network. Arcane Ally is not a multi-user identity or authorization platform.
 
 ## External Integrations
 
-- Ollama receives AI prompts at `OLLAMA_URL`.
+- Ollama receives AI prompts at `OLLAMA_URL` using the model selected by `OLLAMA_MODEL`.
 - D&D Beyond is contacted for character imports and synchronization.
 - Open5e is contacted directly by the client for SRD searches.
 - WebRTC voice traffic is negotiated between browsers; secure contexts are required outside `localhost` in most browsers.
@@ -88,3 +90,5 @@ server/                 Express and Socket.io backend
 docs/                   Living technical documentation
 files/                  Historical parser/rules prototypes
 ```
+
+Runtime databases, maps, uploads, backups, environment values, and character exports are intentionally absent from the repository. `server/db.js` creates the configured database path on first start, and `server/schema.js` upgrades both current and legacy schemas without bundling user state.

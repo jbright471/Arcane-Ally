@@ -1,4 +1,4 @@
-import { Character, AbilityScore, getAbilityModifier } from '../types/character';
+import { Character, AbilityScore } from '../types/character';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { RollableStat } from './RollableStat';
 import { Shield, BookOpen } from 'lucide-react';
@@ -42,7 +42,7 @@ interface StatChecksProps {
 }
 
 export function StatChecks({ character }: StatChecksProps) {
-  const { abilityScores, conditions, name, skillProficiencies, saveProficiencies, proficiencyBonus } = character;
+  const { abilityScores, skillProficiencies, saveProficiencies } = character;
 
   const getSkillModifier = (label: string): number => {
     return character.skills?.[label] ?? 0;
@@ -70,9 +70,8 @@ export function StatChecks({ character }: StatChecksProps) {
               sublabel={ability}
               modifier={getSaveModifier(ability)}
               rollType="Saving Throw"
-              characterName={name}
+              character={character}
               variant="row"
-              conditions={conditions}
               ability={ability}
               proficiencyLevel={saveProficiencies[ability] ? 'proficiency' : 'none'}
               breakdown={character.provenance?.saves?.[ability]}
@@ -97,9 +96,8 @@ export function StatChecks({ character }: StatChecksProps) {
               sublabel={ability}
               modifier={getSkillModifier(label)}
               rollType="Skill Check"
-              characterName={name}
+              character={character}
               variant="row"
-              conditions={conditions}
               ability={ability}
               proficiencyLevel={skillProficiencies[label] ?? 'none'}
               breakdown={character.provenance?.skills?.[label]}

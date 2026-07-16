@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Added a DM PIN login gate that validates saved sessions before exposing protected dashboard tools.
+- Added a first-run guide that documents blank-state expectations, private runtime storage, and pre-publish privacy checks.
+
+### Changed
+
+- Updated the README, self-hosting guide, security policy, contributor guide, architecture references, environment templates, and in-app Arcane Codex for the current release behavior.
+- Strengthened Git and Docker exclusions for runtime databases, uploads, backups, character exports, environment files, and private key or certificate formats.
+
+### Fixed
+
+- Character Roll History now receives dice, ability, initiative, and weapon-damage rolls from the active character.
+- Newly created characters now normalize malformed spell payloads instead of crashing the Spellbook after a server restart.
+- Map uploads now accept normal image payloads through a configurable JSON request limit instead of failing at Express's small default.
+- New map markers now retain their initial Revealed and DM Only settings.
+- Voice Chat now explains the HTTPS/localhost microphone requirement and disables Join when browser media APIs are unavailable.
+- Existing databases now receive the hidden-monster initiative column, and monster/encounter socket failures no longer terminate the backend.
+- Start Combat now creates an ad hoc party encounter when no saved encounter template exists.
+- Legacy combat snapshot tables are upgraded to the current rollback format so save, preview, and restore work after an update.
+- Ollama model selection is configurable through `OLLAMA_MODEL` for hosts with different local model inventories.
+- Character profile pages no longer crash when rendering ability, saving throw, and skill roll controls.
+- Character normalization now retains calculated modifiers and roll-state data supplied by the server.
+- World Map DM Mode now handles map-list errors safely, and existing databases receive missing map schema upgrades.
+- DM Dashboard timelines and automation controls now handle expired credentials and malformed API responses without crashing the page.
+- The Combat Recovery dialog now closes correctly from its Close control.
+- Companion-view links can now be copied from self-hosted HTTP addresses where the modern Clipboard API is unavailable.
+
 ## [1.0.3] - 2026-07-15
 
 ### Added

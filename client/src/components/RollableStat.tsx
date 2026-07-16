@@ -70,7 +70,7 @@ export function RollableStat({
     autoFails?: string[];
   };
 }) {
-  const characterName = character.name || 'Someone';
+  const characterName = character?.name || 'Someone';
   // Resolve effective proficiency from either prop
   const effectiveProfLevel: ProficiencyLevel | 'none' =
     proficiencyLevel ?? (proficient ? 'proficiency' : 'none');
@@ -78,16 +78,17 @@ export function RollableStat({
   let indicator: 'advantage' | 'disadvantage' | 'auto-fail' | 'incapacitated' | null = null;
   let modObj: any = null;
   
-  if (character.rollModifiers) {
+  const rollModifiers = character?.rollModifiers;
+  if (rollModifiers) {
     const rt = rollType.toLowerCase();
     if (rt.includes('attack')) {
-      modObj = character.rollModifiers.attacks;
+      modObj = rollModifiers.attacks;
     } else if (rt.includes('initiative')) {
-      modObj = character.rollModifiers.initiative;
+      modObj = rollModifiers.initiative;
     } else if (rt.includes('saving throw') || rt.includes('save')) {
-      modObj = ability ? character.rollModifiers.saving_throws[ability] : null;
+      modObj = ability ? rollModifiers.saving_throws?.[ability] : null;
     } else {
-      modObj = ability ? character.rollModifiers.ability_checks[ability] : null;
+      modObj = ability ? rollModifiers.ability_checks?.[ability] : null;
     }
 
     if (modObj) {
@@ -107,6 +108,7 @@ export function RollableStat({
       const reason = modObj.reasons.join('; ');
       socket.emit('dice_roll', {
         actor: characterName,
+        characterId: Number(character.id),
         sides: 20,
         count: 1,
         modifier,
@@ -162,6 +164,7 @@ export function RollableStat({
     if (isHiddenRoll) {
       socket.emit('server_dice_roll', {
         actor: characterName,
+        characterId: Number(character.id),
         sides: 20,
         modifier,
         label: `${label}${reasonTag}`,
@@ -184,6 +187,7 @@ export function RollableStat({
 
     socket.emit('dice_roll', {
       actor: characterName,
+      characterId: Number(character.id),
       sides: 20,
       count: isAdvantage || isDisadvantage ? 2 : 1,
       modifier,

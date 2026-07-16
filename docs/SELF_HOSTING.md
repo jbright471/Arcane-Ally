@@ -21,10 +21,18 @@ Copy `.env.example` or `server/.env.example` to `server/.env` and replace the sa
 |---|---|---|---|
 | `PORT` | No | `3001` | Backend HTTP and Socket.io port |
 | `DM_PIN` | Yes for DM use | `1234` fallback | Replace before inviting players |
+| `JSON_BODY_LIMIT` | No | `15mb` | Maximum JSON payload; map images use base64 JSON |
 | `OLLAMA_URL` | Only for AI features | Code fallback may differ by environment | Set explicitly for predictable behavior |
+| `OLLAMA_MODEL` | Only for AI features | `mistral-small:24b` | Must match a model installed on the configured Ollama host |
 | `DB_PATH` | No | `server/dnd.db` | Use a persistent mounted path in containers |
 
 Never commit a real `.env`, database, character PDF, certificate, private key, or host-specific Compose file.
+
+## First-Run Data
+
+The public repository is a blank slate. It does not contain a database, character records, maps, notes, loot, or combat history. On first backend start, Better-SQLite3 creates the database at `DB_PATH` and `server/schema.js` applies the current schema and safe upgrade migrations.
+
+After the UI loads, create or import the first character. Opening **DM Dashboard** presents the DM PIN login; a missing or expired token does not expose protected dashboard controls. See [First Run](./FIRST_RUN.md) for the complete checklist.
 
 ## Development Topology
 
@@ -78,7 +86,8 @@ Arcane Ally runs schema migrations during backend startup. Keep the pre-upgrade 
 5. Restart the backend and frontend services.
 6. Confirm `/api/health` returns `200`.
 7. Confirm anonymous DM history requests return `401` and a fresh DM login can load Automation and Combat Timeline.
-8. Confirm the repository lockfiles remain unchanged after service restart.
+8. Confirm a normal map image uploads successfully within `JSON_BODY_LIMIT`.
+9. Confirm the repository lockfiles remain unchanged after service restart.
 
 ## Remote Access
 
@@ -91,6 +100,7 @@ Arcane Ally does not provide a complete internet-facing identity system. For rem
 - Use a strong `DM_PIN` and rotate it if it is shared accidentally.
 
 WebRTC microphone access generally requires HTTPS except on `localhost`.
+On an insecure LAN origin, Arcane Ally explains this requirement and disables the unavailable Join Voice action.
 
 ## Health Checks
 

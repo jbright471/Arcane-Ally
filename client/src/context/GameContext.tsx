@@ -64,6 +64,11 @@ function normaliseCharacter(raw: any): Character {
     ac: raw.ac || 10,
     acBreakdown: raw.acBreakdown || [],
     abilityScores: raw.abilityScores || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+    abilityModifiers: raw.abilityModifiers || {},
+    formattedModifiers: raw.formattedModifiers || {},
+    rollModifiers: raw.rollModifiers,
+    savingThrows: raw.savingThrows || {},
+    skills: raw.skills || {},
     // Server stores conditions lowercase; normalise to Title Case to match DND_CONDITIONS.
     // Lowercase first so any mixed-case leakage (e.g. "PRONE") is correctly capitalised.
     conditions: (raw.conditions || []).map((c: string) => {
@@ -77,7 +82,7 @@ function normaliseCharacter(raw: any): Character {
     equipment: raw.inventory || [],
     homebrewInventory: raw.homebrewInventory || [],
     spellSlots: mergeSpellSlots(raw.spellSlotsMax, raw.spellSlotsUsed),
-    spells: raw.spells || [],
+    spells: Array.isArray(raw.spells) ? raw.spells : [],
     abilities: raw.features || [],
     skillProficiencies: raw.skillProficiencies || {},
     saveProficiencies: raw.saveProficiencies || {},
@@ -85,6 +90,7 @@ function normaliseCharacter(raw: any): Character {
     speed: raw.speed || 30,
     initiative: raw.initiativeBonus || 0,
     activeBuffs: raw.buffs || [],
+    activeFeatures: raw.activeFeatures || [],
     concentratingOn: raw.concentratingOn,
     attacks: raw.attacks || [],
     raw_dndbeyond_json: raw.raw_dndbeyond_json,
@@ -239,8 +245,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const storedToken = localStorage.getItem('dm_token');
     if (storedToken) {
       fetch('/api/effect-timeline', { headers: { 'X-DM-Token': storedToken } })
-        .then(r => r.json())
-        .then(setEffectEvents)
+        .then(async r => r.ok ? r.json() : [])
+        .then(data => setEffectEvents(Array.isArray(data) ? data : []))
         .catch(() => {});
       socket.emit('dm_join_room', { dmToken: storedToken });
     } else {

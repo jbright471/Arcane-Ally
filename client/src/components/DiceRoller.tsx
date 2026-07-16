@@ -27,6 +27,7 @@ interface DiceRollerProps {
   onRoll?: (roll: DiceRoll) => void;
   compact?: boolean;
   characterName?: string;
+  characterId?: string | number;
   /** Show roll visibility controls. Kept for compatibility with the old DM private toggle prop. */
   showPrivateToggle?: boolean;
   showVisibilityControls?: boolean;
@@ -36,6 +37,7 @@ export const DiceRoller = React.memo(function DiceRoller({
   onRoll,
   compact = false,
   characterName,
+  characterId,
   showPrivateToggle = false,
   showVisibilityControls = false,
 }: DiceRollerProps) {
@@ -64,6 +66,7 @@ export const DiceRoller = React.memo(function DiceRoller({
       if (isHiddenRoll) {
         socket.emit('server_dice_roll', {
           actor: characterName || 'Someone',
+          characterId: characterId == null ? undefined : Number(characterId),
           sides: parseInt(selectedDie.slice(1)),
           count,
           modifier,
@@ -84,6 +87,7 @@ export const DiceRoller = React.memo(function DiceRoller({
 
       socket.emit('dice_roll', {
         actor: characterName || 'Someone',
+        characterId: characterId == null ? undefined : Number(characterId),
         sides: parseInt(roll.die.slice(1)),
         count: roll.count,
         modifier: roll.modifier,

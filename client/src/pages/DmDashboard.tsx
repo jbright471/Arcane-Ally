@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -49,8 +49,56 @@ const LORE_PRESETS = [
 ];
 
 export default function DmDashboard() {
-  const { state } = useGame();
+  const { state, setDmAuth, clearDmAuth } = useGame();
   const party = state.characters;
+
+  const [authStatus, setAuthStatus] = useState<'checking' | 'required' | 'authenticated'>('checking');
+  const [dmPin, setDmPin] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('dm_token');
+    if (!token) {
+      setAuthStatus('required');
+      return;
+    }
+
+    fetch('/api/auth/dm/status', { headers: { 'X-DM-Token': token } })
+      .then(response => {
+        if (!response.ok) throw new Error('Session expired');
+        setAuthStatus('authenticated');
+      })
+      .catch(() => {
+        clearDmAuth();
+        setAuthStatus('required');
+      });
+  }, [clearDmAuth]);
+
+  const authenticateDm = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!dmPin.trim()) return;
+
+    setIsAuthenticating(true);
+    setAuthError('');
+    try {
+      const response = await fetch('/api/auth/dm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: dmPin }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.token) throw new Error(data.error || 'Invalid PIN');
+      setDmAuth(data.token);
+      setDmPin('');
+      setAuthStatus('authenticated');
+      toast.success('DM access granted');
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'DM login failed');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
 
   // HP flash effects — tracks which character cards are flashing (damage/heal)
   const hpFlashes = useHpFlash();
@@ -87,6 +135,45 @@ export default function DmDashboard() {
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  if (authStatus !== 'authenticated') {
+    return (
+      <div className="min-h-[65vh] flex items-center justify-center px-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-primary" />
+              DM Access
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {authStatus === 'checking' ? (
+              <p className="text-sm text-muted-foreground">Checking DM session...</p>
+            ) : (
+              <form onSubmit={authenticateDm} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dm-pin">DM PIN</Label>
+                  <Input
+                    id="dm-pin"
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="current-password"
+                    value={dmPin}
+                    onChange={event => setDmPin(event.target.value)}
+                    autoFocus
+                  />
+                </div>
+                {authError && <p role="alert" className="text-sm text-destructive">{authError}</p>}
+                <Button type="submit" className="w-full" disabled={!dmPin.trim() || isAuthenticating}>
+                  {isAuthenticating ? 'Verifying...' : 'Enter DM Dashboard'}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const handleImportPack = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -176,7 +263,7 @@ export default function DmDashboard() {
         onStartEncounter={handleStartEncounter}
       />
       <DmAutomationPanel open={showAutomation} onClose={() => setShowAutomation(false)} />
-      <CombatRecoveryModal open={showRecovery} onClose={() => setShowRecovery(false)} />
+      <CombatRecoveryModal open={showRecovery} onOpenChange={setShowRecovery} />
       <Compendium open={showCompendium} onClose={() => setShowCompendium(false)} />
       <EffectPresetLibrary open={showPresets} onClose={() => setShowPresets(false)} />
       <ImportDiffModal open={showImportDiff} onClose={() => setShowImportDiff(false)} />

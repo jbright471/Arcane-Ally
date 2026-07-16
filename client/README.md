@@ -58,6 +58,8 @@ Bloodied detection and modifier propagation are enabled by default. Ammunition t
 
 Automation and DM history requests use `dmFetch()`, which attaches the current `dm_token` as `X-DM-Token`. A new DM login rotates that token and can require other DM tabs to sign in again.
 
+The DM route validates a stored token through `/api/auth/dm/status` before rendering the command center. Missing or expired sessions show the DM PIN form instead of loading protected panels with empty error responses.
+
 ## Combat History
 
 `EffectTimeline.tsx` shows the active combat session by default. When combat ends, the server archives that encounter and the timeline selector exposes it as a read-only history view. Archived events remain searchable and exportable; clear and reversal actions stay scoped to the current timeline. Retention policies prune archived encounters only.
@@ -74,6 +76,10 @@ npm run cap:sync
 npm run cap:android
 npm run cap:ios
 ```
+
+## Browser Permissions
+
+Voice Chat requires `navigator.mediaDevices.getUserMedia`, which browsers expose on HTTPS and `localhost`. On an insecure LAN HTTP origin, the client shows the secure-context requirement and disables **Join Voice**. Other app features remain available.
 
 ## Validation
 

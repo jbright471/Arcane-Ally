@@ -60,6 +60,16 @@ Before committing, confirm that the diff does not contain:
 - Personal filesystem paths, LAN addresses, hostnames, or infrastructure names
 - Private keys, certificates, or production Compose/Portainer configuration
 
+Also confirm no runtime artifact is tracked:
+
+```bash
+git status --short --ignored
+git ls-files | grep -E '(\.db|\.sqlite|\.sqlite3|\.pdf|\.pem|\.key|\.p12|\.pfx)$'
+git diff --cached --check
+```
+
+The tracked-file scan should print nothing. Do not stage ignored runtime data merely to bypass this safeguard.
+
 Use generic placeholders in public examples.
 
 ## Commit and Pull Request Notes

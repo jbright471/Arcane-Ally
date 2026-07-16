@@ -22,6 +22,8 @@ Interactive rolls turn Arcane Ally character sheets into live tabletop controls.
 
 The client persists the selected roll visibility in `localStorage` under `arcane_roll_visibility`.
 
+Character-originated dice, ability, save, skill, initiative, attack, and damage events include the active character ID. This lets the character sheet retain its last 30 rolls without relying on a companion socket registration.
+
 Both workflows support hidden rolls: a player may voluntarily choose a secret mode, and the DM may request a save with a hidden visibility mode.
 
 ## Server-Side Hidden Rolls

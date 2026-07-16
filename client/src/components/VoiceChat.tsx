@@ -19,6 +19,7 @@ const SPEAKING_THRESHOLD = 20; // RMS amplitude threshold (0-255)
 const SPEAKING_CHECK_MS = 100;
 
 export function VoiceChat() {
+  const canUseMicrophone = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
   const [isOpen, setIsOpen] = useState(false);
   const [inVoice, setInVoice] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -96,6 +97,10 @@ export function VoiceChat() {
   }, []);
 
   const joinVoice = useCallback(async (playerName = 'Adventurer', characterId: number | null = null) => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error('Voice chat requires HTTPS or localhost for microphone access.');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       localStreamRef.current = stream;
@@ -302,6 +307,11 @@ export function VoiceChat() {
                 No one in voice yet
               </p>
             )}
+            {!canUseMicrophone && (
+              <p className="text-[10px] text-amber-400/80 text-center px-2 pb-2">
+                Microphone access requires HTTPS or localhost.
+              </p>
+            )}
           </div>
 
           {/* Controls */}
@@ -341,6 +351,7 @@ export function VoiceChat() {
                 size="sm"
                 className="w-full h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => joinVoice()}
+                disabled={!canUseMicrophone}
               >
                 <Phone className="h-3 w-3 mr-1" /> Join Voice
               </Button>

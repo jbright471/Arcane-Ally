@@ -5,7 +5,7 @@ const { validateCharacter } = require('./lib/validator');
 // Configuration
 // ---------------------------------------------------------------------------
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://ollama-p40:11434';
-const DEFAULT_MODEL = 'mistral-small:24b';
+const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'mistral-small:24b';
 const DEFAULT_TIMEOUT = 120000;   // 2 minutes
 const PDF_TIMEOUT = 600000;       // 10 minutes for large PDF parsing
 const DEFAULT_RETRIES = 1;

@@ -151,12 +151,22 @@ router.post('/:id/activate', (req, res) => {
 // ---- Overworld Markers ----
 
 router.post('/:id/markers', (req, res) => {
-    const { name, type, x, y, linked_map_id, description } = req.body;
+    const { name, type, x, y, linked_map_id, description, is_discovered, is_hidden } = req.body;
     try {
         const result = db.prepare(`
-            INSERT INTO map_markers (parent_map_id, linked_map_id, name, type, x, y, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(req.params.id, linked_map_id || null, name, type || 'location', x, y, description || '');
+            INSERT INTO map_markers (parent_map_id, linked_map_id, name, type, x, y, description, is_discovered, is_hidden)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            req.params.id,
+            linked_map_id || null,
+            name,
+            type || 'location',
+            x,
+            y,
+            description || '',
+            is_discovered ? 1 : 0,
+            is_hidden ? 1 : 0,
+        );
         res.status(201).json({ id: result.lastInsertRowid });
     } catch (err) {
         res.status(500).json({ error: err.message });

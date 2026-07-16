@@ -20,6 +20,7 @@ The DM PIN and session token protect selected DM workflows. Role-safe socket pro
 
 - Replace the sample `DM_PIN` before inviting players.
 - Keep `.env`, SQLite databases, character PDFs, private keys, certificates, and deployment files with real addresses out of Git.
+- Keep runtime `data/`, `uploads/`, `backups/`, maps, and character exports outside public commits.
 - Use HTTPS and a VPN, identity-aware proxy, or reverse-proxy authentication for remote play.
 - Do not directly expose the backend port, SQLite storage, or Ollama port to the public internet.
 - Restrict file permissions on the database and backups.
@@ -31,6 +32,8 @@ The DM PIN and session token protect selected DM workflows. Role-safe socket pro
 DM-authenticated REST requests use `Authorization: Bearer <token>` or `X-DM-Token: <token>`. A successful `POST /api/auth/dm` login replaces the previous token. This means another DM browser may need to sign in again.
 
 Tokens are stored in browser local storage and in the campaign database. Treat browser profiles and database backups as sensitive.
+
+The DM Dashboard validates a saved token before rendering protected controls. Invalid or expired tokens are removed and the host is returned to the DM PIN login. This protects selected DM features but does not change Arcane Ally's trusted-network deployment model.
 
 ## Data Leaving the Host
 

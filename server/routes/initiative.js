@@ -172,8 +172,13 @@ function spawnMonster(monsterData) {
 function startEncounter(encounterId, partyCharacters) {
     db.prepare('DELETE FROM initiative_tracker').run();
 
-    const encounter = db.prepare('SELECT * FROM encounters WHERE id = ?').get(encounterId);
-    if (!encounter) return null;
+    const encounter = db.prepare('SELECT * FROM encounters WHERE id = ?').get(encounterId) || {
+        id: null,
+        name: 'Ad Hoc Encounter',
+        monsters: '[]',
+        automation_presets_json: '[]',
+    };
+    const resolvedEncounterId = encounter.id ?? null;
 
     const monsters = JSON.parse(encounter.monsters);
     const insertStmt = db.prepare(`
@@ -205,7 +210,7 @@ function startEncounter(encounterId, partyCharacters) {
             insertStmt.run(
                 displayName, 'monster', initRoll,
                 monster.hp || 10, monster.hp || 10, monster.ac || 10,
-                monster.is_hidden ? 1 : 0, sortOrder++, null, encounterId, instanceId,
+                monster.is_hidden ? 1 : 0, sortOrder++, null, resolvedEncounterId, instanceId,
                 monster.stats ? JSON.stringify(monster.stats) : null,
                 JSON.stringify(bossPhases), bossPhases[0]?.name || null,
             );
@@ -216,7 +221,7 @@ function startEncounter(encounterId, partyCharacters) {
         insertStmt.run(
             pc.name, 'pc', 0,
             pc.current_hp, pc.max_hp, pc.ac,
-            0, sortOrder++, pc.id, encounterId, crypto.randomUUID(),
+            0, sortOrder++, pc.id, resolvedEncounterId, crypto.randomUUID(),
             null, '[]', null,
         );
     }
@@ -237,7 +242,7 @@ function startEncounter(encounterId, partyCharacters) {
                 typeof preset.effects_json === 'string' ? preset.effects_json : JSON.stringify(preset.effects_json || []),
                 typeof preset.targets_json === 'string' ? preset.targets_json : JSON.stringify(preset.targets_json || '"party"'),
                 preset.description || '',
-                encounterId
+                resolvedEncounterId
             );
         }
     }

@@ -36,6 +36,28 @@ const ABILITY_LABELS: Record<string, string> = {
   INT: 'Intelligence', WIS: 'Wisdom', CHA: 'Charisma',
 };
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through for self-hosted HTTP origins where Clipboard API access is blocked.
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  return copied;
+}
+
 export default function CharacterSheet() {
   const { id } = useParams<{ id: string }>();
   const { state } = useGame();
@@ -162,6 +184,7 @@ export default function CharacterSheet() {
     const roll = rollDice('d20', 1, initMod);
     socket.emit('dice_roll', {
       actor: character.name,
+      characterId: Number(character.id),
       sides: 20,
       count: 1,
       modifier: initMod,
@@ -202,12 +225,13 @@ export default function CharacterSheet() {
               variant="outline"
               size="sm"
               title="Copy companion view URL for player"
-              onClick={() => {
+              onClick={async () => {
                 const url = `${window.location.origin}/companion/${character.id}`;
-                navigator.clipboard.writeText(url).then(
-                  () => toast.success('Companion URL copied!', { description: url, duration: 4000 }),
-                  () => toast.error('Could not copy — ' + url),
-                );
+                if (await copyText(url)) {
+                  toast.success('Companion URL copied!', { description: url, duration: 4000 });
+                } else {
+                  toast.error('Could not copy — ' + url);
+                }
               }}
             >
               <Smartphone className="h-4 w-4" />
@@ -455,7 +479,8 @@ export default function CharacterSheet() {
                     score={val}
                     modifier={character.abilityModifiers?.[key] ?? 0}
                     rollType="Ability Check"
-                    characterName={character.name}
+                    character={character}
+                    ability={key as AbilityScore}
                     variant="card"
                     breakdown={character.provenance?.abilityScores?.[key as AbilityScore]}
                   />
@@ -478,7 +503,7 @@ export default function CharacterSheet() {
               <CardTitle className="font-display text-sm">Dice Roller</CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <DiceRoller characterName={character.name} compact showVisibilityControls />
+              <DiceRoller characterName={character.name} characterId={character.id} compact showVisibilityControls />
             </CardContent>
           </Card>
 

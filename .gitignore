@@ -25,16 +25,36 @@ dist-ssr
 
 # SQLite databases
 data/
+backups/
+uploads/
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
 
 # Env files
 .env
+.env.*
+!.env.example
+!**/.env.example
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Private campaign exports and credentials
+*.pdf
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.ovpn
+character-export*.json
+dndbeyond-export*.json
 
 # Build artifacts
 server/node_modules/

@@ -107,6 +107,12 @@ function groupByRound(events: EffectEvent[]): Map<number, EffectEvent[]> {
   return map;
 }
 
+async function readJsonArray<T>(response: Response): Promise<T[]> {
+  if (!response.ok) return [];
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+}
+
 // ─── Display sequence builder ─────────────────────────────────────────────────
 // Collapses events sharing a group_id into a single group entry (at first occurrence position).
 
@@ -279,7 +285,7 @@ export function EffectTimeline() {
       ? `/api/effect-timeline?limit=${TIMELINE_PAGE_SIZE}`
       : `/api/effect-timeline?sessionId=${selectedSessionId}&limit=${TIMELINE_PAGE_SIZE}`;
     fetchTimeline(timelineUrl)
-      .then(r => r.json())
+      .then(readJsonArray<EffectEvent>)
       .then((data: EffectEvent[]) => {
         setEvents(data);
         setHasEarlierEvents(data.length === TIMELINE_PAGE_SIZE);
@@ -287,16 +293,16 @@ export function EffectTimeline() {
       .catch(() => {});
 
     fetchTimeline('/api/combat-sessions')
-      .then(r => r.json())
+      .then(readJsonArray<CombatSession>)
       .then(setSessions)
       .catch(() => {});
 
     const onTimelineUpdate = (data: EffectEvent[]) => {
-      if (selectedSessionId === 'live') {
+      if (selectedSessionId === 'live' && Array.isArray(data)) {
         setEvents(data);
         setHasEarlierEvents(data.length === TIMELINE_PAGE_SIZE);
       }
-      fetchTimeline('/api/combat-sessions').then(r => r.json()).then(setSessions).catch(() => {});
+      fetchTimeline('/api/combat-sessions').then(readJsonArray<CombatSession>).then(setSessions).catch(() => {});
     };
     socket.on('timeline_update', onTimelineUpdate);
     socket.on('rules_error', ({ message }: { message: string }) => {
@@ -348,7 +354,7 @@ export function EffectTimeline() {
     const params = new URLSearchParams({ beforeId: String(events[0].id), limit: String(TIMELINE_PAGE_SIZE) });
     if (selectedSessionId !== 'live') params.set('sessionId', String(selectedSessionId));
     try {
-      const older: EffectEvent[] = await fetchTimeline(`/api/effect-timeline?${params}`).then(r => r.json());
+      const older = await fetchTimeline(`/api/effect-timeline?${params}`).then(readJsonArray<EffectEvent>);
       setEvents(current => [...older, ...current]);
       setHasEarlierEvents(older.length === TIMELINE_PAGE_SIZE);
     } catch { /* keep the visible page */ }
@@ -364,7 +370,7 @@ export function EffectTimeline() {
         const params = new URLSearchParams({ limit: String(EXPORT_PAGE_SIZE) });
         if (selectedSessionId !== 'live') params.set('sessionId', String(selectedSessionId));
         if (beforeId !== undefined) params.set('beforeId', String(beforeId));
-        page = await fetchTimeline(`/api/effect-timeline?${params}`).then(r => r.json());
+        page = await fetchTimeline(`/api/effect-timeline?${params}`).then(readJsonArray<EffectEvent>);
         exportedEvents = [...page, ...exportedEvents];
         beforeId = page[0]?.id;
       } while (page.length === EXPORT_PAGE_SIZE && beforeId !== undefined);

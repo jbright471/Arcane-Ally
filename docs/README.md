@@ -9,6 +9,7 @@ Use the in-app **Arcane Codex** at `/guide` for player and DM workflows. The fil
 
 ## For Self-Hosters
 
+- [First Run](./FIRST_RUN.md)
 - [Self-Hosting & Upgrades](./SELF_HOSTING.md)
 - [Security Policy](../SECURITY.md)
 - [Environment Template](../.env.example)

@@ -11,9 +11,10 @@ Completed encounters are stored as read-only timeline archives. The live table r
 ### Configure Automation
 
 1. Open **DM Dashboard**.
-2. Click **Automation** in the header.
-3. Select **Policies**.
-4. Change a switch or concentration-check mode.
+2. Enter the host's DM PIN when prompted.
+3. Click **Automation** in the header.
+4. Select **Policies**.
+5. Change a switch or concentration-check mode.
 
 Changes save immediately and apply to the next matching action. Disabling a policy does not reverse state already applied.
 
@@ -77,6 +78,8 @@ Returns the normalized campaign policy object.
 This and the other DM history/automation endpoints require the current DM token as `Authorization: Bearer <token>` or `X-DM-Token: <token>`.
 
 `POST /api/auth/dm` creates that token after a valid PIN login. Each successful login replaces the previously stored token, so another DM tab may receive `401 Unauthorized` until it signs in again.
+
+`GET /api/auth/dm/status` validates a stored token when the DM Dashboard opens. An invalid token returns `401`, is removed by the client, and shows the PIN form instead of partially loading protected panels.
 
 ### `PATCH /api/automation/rules`
 

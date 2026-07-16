@@ -18,6 +18,10 @@ server/.env.*
 # Local SQLite/runtime data
 data
 data/**
+backups
+backups/**
+uploads
+uploads/**
 *.db
 *.db-shm
 *.db-wal
@@ -32,6 +36,12 @@ server/*.db*
 *.key
 *.p12
 *.pfx
+*.crt
+*.cer
+*.der
+*.ovpn
+character-export*.json
+dndbeyond-export*.json
 
 dist
 client/dist

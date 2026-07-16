@@ -78,7 +78,10 @@ export default function WorldMapPage() {
 
   useEffect(() => {
     fetchWorldMap();
-    fetch('/api/maps').then(r => r.json()).then(setAllMaps).catch(() => {});
+    fetch('/api/maps')
+      .then(async r => r.ok ? r.json() : [])
+      .then(data => setAllMaps(Array.isArray(data) ? data : []))
+      .catch(() => setAllMaps([]));
 
     socket.on('world_map_state', (data: WorldMapData | null) => setWorldMap(data));
     return () => { socket.off('world_map_state'); };
@@ -117,6 +120,8 @@ export default function WorldMapPage() {
           y: editing.pendingY,
           linked_map_id: editing.linked_map_id || null,
           description: editing.description || '',
+          is_discovered: editing.is_discovered ?? 0,
+          is_hidden: editing.is_hidden ?? 0,
         }),
       });
       toast.success('Marker placed on the map.');

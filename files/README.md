@@ -16,9 +16,10 @@ Arcane Ally is designed for self-hosted play. PDF parsing and item/rules extract
 
 ```env
 OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=mistral-small:24b
 ```
 
-Do not commit real API keys, private PDFs, character exports, or local database files. The repo ignore rules already exclude `.env`, PDFs, local SQLite files, private key formats, `node_modules`, and build output.
+Do not commit real API keys, private PDFs, character exports, or local database files. The repo ignore rules exclude environment files, PDFs, SQLite files and journals, runtime data/uploads/backups, private key and certificate formats, `node_modules`, and build output.
 
 ## Historical Flow Captured Here
 
