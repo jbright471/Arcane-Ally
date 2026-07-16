@@ -14,13 +14,13 @@ React/Vite frontend for Arcane Ally, the player and DM-facing tabletop companion
 ## Common Commands
 
 ```bash
-npm install
+npm ci --legacy-peer-deps
 npm run dev
 npm run lint
 npm run build
 ```
 
-The Vite dev server runs on `http://localhost:5173` by default. It expects the backend API and Socket.io gateway to be available on the server port, normally `3001`.
+The Vite dev server runs on `http://localhost:5173` by default. Its checked-in proxy targets `http://dnd-party-sync-backend:3001`, the backend service name used on the container network. For host-only development, change both proxy targets in `vite.config.ts` to `http://localhost:3001`.
 
 ## App Entry Points
 
@@ -50,13 +50,17 @@ Secret and super-secret rolls use the `server_dice_roll` socket event so the res
 
 ## Automation Policies
 
-DMs configure campaign behavior from **DM Dashboard -> Automation -> Policies**. The panel reads and updates `/api/automation/rules`; changes save immediately and existing behavior remains enabled by default.
+DMs configure campaign behavior from **DM Dashboard -> Automation -> Policies**. The panel reads and updates `/api/automation/rules`; changes save immediately.
 
-Policies cover zero-HP unconscious handling, recovery cleanup, concentration cleanup and check mode, condition duration ticks, initiative synchronization, turn triggers, auras, and curated reactive item handlers.
+Policies cover zero-HP unconscious handling, recovery cleanup, concentration behavior, bloodied detection, modifier propagation, ammunition tracking, condition duration ticks, initiative synchronization, turn triggers, auras, curated reactive handlers, and combat-history retention.
+
+Bloodied detection and modifier propagation are enabled by default. Ammunition tracking is disabled until the DM enables it and a manual weapon explicitly names its inventory ammunition. Combat history defaults to unlimited retention.
+
+Automation and DM history requests use `dmFetch()`, which attaches the current `dm_token` as `X-DM-Token`. A new DM login rotates that token and can require other DM tabs to sign in again.
 
 ## Combat History
 
-`EffectTimeline.tsx` shows the active combat session by default. When combat ends, the server archives that encounter and the timeline selector exposes it as a read-only history view. Archived events remain searchable and exportable; destructive clear and reversal actions stay scoped to the current timeline.
+`EffectTimeline.tsx` shows the active combat session by default. When combat ends, the server archives that encounter and the timeline selector exposes it as a read-only history view. Archived events remain searchable and exportable; clear and reversal actions stay scoped to the current timeline. Retention policies prune archived encounters only.
 
 Timeline requests accept `sessionId`, `beforeId`, `limit`, `targetId`, and `eventType` query parameters. The timeline browser loads 200 events per page and prepends earlier pages on request; Markdown export retrieves the complete selected history in batches of 500.
 

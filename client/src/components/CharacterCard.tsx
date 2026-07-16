@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import socket from '../socket';
 import { CombatStateInspectorModal } from './CombatStateInspectorModal';
+import { dmFetch } from '../lib/dmFetch';
 
 interface CharacterCardProps {
   character: Character;
@@ -33,7 +34,7 @@ export function CharacterCard({ character, onClick, selected, compact }: Charact
     if (!historyOpen) {
       setIsLoadingHistory(true);
       try {
-        const res = await fetch(`/api/effect-timeline/character/${character.id}?limit=5`);
+        const res = await dmFetch(`/api/effect-timeline/character/${character.id}?limit=5`);
         if (res.ok) {
           setHistoryEvents(await res.json());
         }
@@ -188,6 +189,12 @@ export function CharacterCard({ character, onClick, selected, compact }: Charact
               Conc: {character.concentratingOn}
             </span>
           </div>
+        )}
+
+        {character.isBloodied && (
+          <Badge variant="destructive" className="w-fit text-[10px] px-1.5 py-0.5">
+            Bloodied
+          </Badge>
         )}
 
         {!compact && (

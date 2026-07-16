@@ -5,6 +5,7 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { useGame } from '../context/GameContext';
+import { dmFetch } from '../lib/dmFetch';
 import socket from '../socket';
 
 export interface EffectEvent {
@@ -55,6 +56,9 @@ const EVENT_META: Record<string, { label: string; color: string; bg: string }> =
   automation_trigger:    { label: 'AUTO',  color: 'text-orange-400',  bg: 'bg-orange-950/40 border-orange-800/40' },
   concentration_check:   { label: 'CON✓', color: 'text-violet-400',  bg: 'bg-violet-950/40 border-violet-800/40' },
   concentration_broken:  { label: 'CONC!', color: 'text-rose-300',   bg: 'bg-rose-950/60 border-rose-600/60' },
+  bloodied_entered:       { label: 'BLOOD', color: 'text-red-300',    bg: 'bg-red-950/50 border-red-700/50' },
+  bloodied_exited:        { label: '-BLOOD', color: 'text-green-300', bg: 'bg-green-950/40 border-green-700/40' },
+  ammunition_used:        { label: 'AMMO',  color: 'text-yellow-300', bg: 'bg-yellow-950/40 border-yellow-700/40' },
   undo:                  { label: 'UNDO',  color: 'text-slate-300',   bg: 'bg-slate-900/60 border-slate-600/40' },
   unknown:               { label: '???',   color: 'text-muted-foreground', bg: 'bg-secondary/20 border-border/40' },
 };
@@ -79,6 +83,12 @@ function getEventSummary(event: EffectEvent): string {
         return `${event.target_name} Con save — ${p.passed ? 'PASS' : 'FAIL'} (rolled ${p.total} vs DC ${p.dc}) on ${p.spellName}`;
       case 'concentration_broken':
         return `${event.target_name} lost concentration on ${p.spellName} (rolled ${p.total} vs DC ${p.dc})`;
+      case 'bloodied_entered':
+        return `${event.target_name} became bloodied at ${p.currentHp} HP`;
+      case 'bloodied_exited':
+        return `${event.target_name} recovered above the bloodied threshold`;
+      case 'ammunition_used':
+        return `${p.weaponName}: ${p.remaining} ${p.ammunitionName} remaining`;
       default:
         return event.target_name ? `→ ${event.target_name}` : event.actor;
     }
@@ -249,7 +259,7 @@ export function EffectTimeline() {
   const { state } = useGame();
   const isDm = state.isDm;
   const fetchTimeline = useCallback(
-    (url: string) => fetch(url, state.dmToken ? { headers: { 'X-DM-Token': state.dmToken } } : undefined),
+    (url: string) => dmFetch(url),
     [state.dmToken],
   );
 
@@ -276,7 +286,7 @@ export function EffectTimeline() {
       })
       .catch(() => {});
 
-    fetch('/api/combat-sessions')
+    fetchTimeline('/api/combat-sessions')
       .then(r => r.json())
       .then(setSessions)
       .catch(() => {});
@@ -286,7 +296,7 @@ export function EffectTimeline() {
         setEvents(data);
         setHasEarlierEvents(data.length === TIMELINE_PAGE_SIZE);
       }
-      fetch('/api/combat-sessions').then(r => r.json()).then(setSessions).catch(() => {});
+      fetchTimeline('/api/combat-sessions').then(r => r.json()).then(setSessions).catch(() => {});
     };
     socket.on('timeline_update', onTimelineUpdate);
     socket.on('rules_error', ({ message }: { message: string }) => {

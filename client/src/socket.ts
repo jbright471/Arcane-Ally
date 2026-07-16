@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 
-// In dev/production Docker: VITE_SERVER_URL is unset → connects to same origin (Vite proxy / Nginx)
-// In Capacitor mobile builds: set VITE_SERVER_URL=http://192.168.x.x:3001 in .env.local
+// Browser builds use the same origin and rely on the host to proxy /socket.io.
+// Direct/mobile builds may set VITE_SERVER_URL, but REST /api traffic still needs a reachable proxy.
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || '';
 
 const socket: Socket = io(SERVER_URL, {

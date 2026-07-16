@@ -4,6 +4,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { useGame } from '../context/GameContext';
+import { dmFetch } from '../lib/dmFetch';
 
 interface ConnectedPlayer {
   characterId: number;
@@ -40,7 +41,7 @@ export function SyncAuditView() {
   const fetchAudit = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/sync-audit');
+      const res = await dmFetch('/api/sync-audit');
       const data: AuditData = await res.json();
       setAudit(data);
       setLastRefreshed(new Date().toLocaleTimeString());

@@ -8,7 +8,7 @@ const pdfParse = require('pdf-parse');
 const { parseCharacterPdfLLM } = require('../ollama');
 
 async function testParser() {
-    const pdfPath = process.argv[2] || path.join(__dirname, '../../brightgamer_141818457.pdf');
+    const pdfPath = process.argv[2] || path.join(__dirname, '../../character-sheet.pdf');
 
     if (!fs.existsSync(pdfPath)) {
         console.error(`Error: File not found at ${pdfPath}`);

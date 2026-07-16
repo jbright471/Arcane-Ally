@@ -229,6 +229,8 @@ export function ManualItemForm({ characterId, characterName, onSaved, initialVal
           range: form.range || (form.attackType === 'Melee' ? '5 ft reach' : ''),
           notes: buildNotes() || undefined,
           isMelee: form.attackType === 'Melee',
+          ammunitionName: form.properties.includes('Ammunition') ? form.ammunitionName.trim() || undefined : undefined,
+          ammunitionPerAttack: form.properties.includes('Ammunition') ? form.ammunitionPerAttack : undefined,
         };
 
         const res = await fetch(`/api/characters/${characterId}/weapons`, {
@@ -480,6 +482,29 @@ export function ManualItemForm({ characterId, characterName, onSaved, initialVal
           <FieldRow label="Weapon Properties">
             <PropertyChips selected={form.properties} onChange={v => set('properties', v)} />
           </FieldRow>
+
+          {form.properties.includes('Ammunition') && (
+            <TwoCol>
+              <FieldRow label="Inventory Ammunition Name" hint="Must exactly match an inventory item, such as Arrows or Bolts.">
+                <Input
+                  value={form.ammunitionName}
+                  onChange={e => set('ammunitionName', e.target.value)}
+                  placeholder="Arrows"
+                  className="bg-background/50 h-8 text-xs"
+                />
+              </FieldRow>
+              <FieldRow label="Used Per Attack">
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={form.ammunitionPerAttack}
+                  onChange={e => set('ammunitionPerAttack', Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
+                  className="bg-background/50 h-8 text-xs"
+                />
+              </FieldRow>
+            </TwoCol>
+          )}
 
           <FieldRow
             label="Weapon Mastery (2024)"

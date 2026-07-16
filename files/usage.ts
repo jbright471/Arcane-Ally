@@ -143,7 +143,7 @@ async function parseWithOpenAI(pdfPath: string) {
 // Quick test runner — run with: npx ts-node examples/usage.ts
 // ---------------------------------------------------------------------------
 
-const PDF_PATH = process.argv[2] ?? './brightgamer_141818457.pdf';
+const PDF_PATH = process.argv[2] ?? './character-sheet.pdf';
 
 console.log(`Parsing: ${PDF_PATH}`);
 console.log('Using: Claude API (set ANTHROPIC_API_KEY env var)\n');

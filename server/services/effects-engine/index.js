@@ -19,6 +19,8 @@ const {
     getCharacterData,
 } = require('../../lib/rulesIntegration');
 const { getAutomationRules } = require('../../lib/automationRules');
+const { getBloodiedTransition } = require('../../lib/bloodiedState');
+const { pruneCombatHistory } = require('../combatHistoryRetention');
 const crypto = require('crypto');
 
 const REACTION_DEPTH_LIMIT = 2;
@@ -87,7 +89,13 @@ function applyToMonster(db, trackerId, effect) {
             const newHp = Math.max(0, entity.current_hp - dmg);
             db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, trackerId);
             return {
-                result: { success: true, logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)` },
+                result: {
+                    success: true,
+                    previousHp: entity.current_hp,
+                    newHp,
+                    bloodiedTransition: getBloodiedTransition(entity.current_hp, newHp, entity.max_hp, getAutomationRules(db)),
+                    logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)`,
+                },
                 eventType: 'damage',
             };
         }
@@ -96,7 +104,13 @@ function applyToMonster(db, trackerId, effect) {
             const newHp = Math.min(entity.max_hp, entity.current_hp + heal);
             db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, trackerId);
             return {
-                result: { success: true, logMessage: `${entity.entity_name} healed for ${heal} HP (${newHp}/${entity.max_hp} HP)` },
+                result: {
+                    success: true,
+                    previousHp: entity.current_hp,
+                    newHp,
+                    bloodiedTransition: getBloodiedTransition(entity.current_hp, newHp, entity.max_hp, getAutomationRules(db)),
+                    logMessage: `${entity.entity_name} healed for ${heal} HP (${newHp}/${entity.max_hp} HP)`,
+                },
                 eventType: 'heal',
             };
         }
@@ -342,6 +356,24 @@ function applyPartyEffect(db, effects, targetsSpec, actor, sessionRound, turnInd
                         sourcePresetId,
                         groupId: groupId || null,
                     });
+                    if (result.bloodiedTransition) {
+                        writeEventRecord(db, {
+                            sessionRound,
+                            turnIndex,
+                            phase: 'automation',
+                            eventType: `bloodied_${result.bloodiedTransition}`,
+                            actor: 'Automation',
+                            target,
+                            payloadJson: JSON.stringify({
+                                previousHp: result.previousHp,
+                                currentHp: result.newHp,
+                                thresholdPercent: getAutomationRules(db).bloodiedThresholdPercent,
+                            }),
+                            parentEventId: eventId,
+                            sourcePresetId,
+                            groupId: groupId || null,
+                        });
+                    }
                     applyReactiveHealing(db, { effect, result, target, eventId, records, sessionRound, turnIndex, phase, groupId, depth });
                 }
 
@@ -477,6 +509,7 @@ function getActiveCombatSession(db) {
 
 function startCombatSession(db, { encounterId = null, name = 'Ad Hoc Encounter' } = {}) {
     db.prepare("UPDATE combat_sessions SET status = 'archived', ended_at = COALESCE(ended_at, datetime('now')) WHERE status = 'active'").run();
+    pruneCombatHistory(db);
     const result = db.prepare(`
         INSERT INTO combat_sessions (encounter_id, name, status)
         VALUES (?, ?, 'active')
@@ -492,7 +525,9 @@ function archiveActiveCombatSession(db, totalRounds = 0) {
         SET status = 'archived', ended_at = datetime('now'), total_rounds = ?
         WHERE id = ?
     `).run(totalRounds, active.id);
-    return db.prepare('SELECT * FROM combat_sessions WHERE id = ?').get(active.id);
+    const archived = db.prepare('SELECT * FROM combat_sessions WHERE id = ?').get(active.id);
+    pruneCombatHistory(db);
+    return archived;
 }
 
 function listCombatSessions(db, limit = 50) {

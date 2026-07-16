@@ -22,11 +22,15 @@ Interactive rolls turn Arcane Ally character sheets into live tabletop controls.
 
 The client persists the selected roll visibility in `localStorage` under `arcane_roll_visibility`.
 
+Both workflows support hidden rolls: a player may voluntarily choose a secret mode, and the DM may request a save with a hidden visibility mode.
+
 ## Server-Side Hidden Rolls
 
 Secret and super-secret rolls are generated through `server_dice_roll` rather than client-side dice math. The backend validates the dice shape, rolls the dice, applies advantage/disadvantage when requested, and then routes the event through `server/lib/rollVisibility.js`.
 
 This prevents hidden totals from being visible in browser state or developer tools before the DM receives them.
+
+Secret rolls protect table information from other connected clients. They do not replace transport security; remote deployments should use HTTPS and perimeter access controls.
 
 ## Pending Save Resolution
 

@@ -6,7 +6,13 @@
 
 A high-performance, self-hosted companion application for D&D 5e. Real-time party management, AI-powered content generation, and a full DM command center — all running on your local hardware.
 
-## Quick Start
+## Requirements
+
+- Node.js 20 or newer
+- npm with lockfile support
+- Ollama only when using AI-assisted imports or generation
+
+## Development Quick Start
 
 ```bash
 git clone https://github.com/jbright471/Arcane-Ally.git
@@ -16,30 +22,34 @@ cp .env.example .env
 cp server/.env.example server/.env
 ```
 
-# Terminal 1: backend
+Backend terminal:
+
 ```bash
 cd server
-npm install
+npm ci
 npm start
 ```
 
-# Terminal 2: frontend
+Frontend terminal:
+
 ```bash
 cd client
-npm install
+npm ci --legacy-peer-deps
 npm run dev
 ```
 
 - Frontend dev server: `http://localhost:5173`
 - Backend API and Socket.io gateway: `http://localhost:3001`
-- Default DM PIN comes from `.env` / `server/.env`; change it before exposing the app beyond your LAN.
+- Default DM PIN comes from `.env` / `server/.env`; change the sample value before inviting players.
+
+> **Proxy note:** The checked-in Vite configuration expects the backend to be reachable as `dnd-party-sync-backend:3001`, matching the container-network deployment. For host-only development, point the two proxy targets in `client/vite.config.ts` to `http://localhost:3001`. See [Self-Hosting](./docs/SELF_HOSTING.md) for supported topology details.
 
 ## The Stack
 
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, Radix UI
 - **Backend:** Node.js (Express), Socket.io (real-time sync), Better-SQLite3
 - **AI Layer:** Local Ollama integration for PDF parsing, item stat extraction, homebrew generation, lore generation, and actionable entity creation
-- **Deployment:** Multi-stage Dockerfile, with local dev via Vite + Express and optional external Portainer/Compose stack configuration
+- **Deployment:** Multi-stage backend image plus an externally served frontend/reverse proxy; local development uses Vite + Express
 
 ## Core Features
 
@@ -50,7 +60,7 @@ Every HP change, condition, spell slot, buff, and dice roll broadcasts instantly
 Client emit → Server handler → DB mutation → broadcastPartyState() → All screens update
 ```
 
-HP changes flash red (damage) or green (healing) on character cards. Latency is typically 50-100ms on local networks. Decoupled rendering ensures that ongoing local UI animations (like drag-and-drop dice rolling) are never interrupted by incoming external state mutations.
+HP changes flash red for damage and green for healing on character cards. Incoming server state is normalized before rendering so connected screens converge on the same campaign state.
 
 Dice rolls can be public, private, secret, or super-secret. Secret modes are generated server-side and routed only to the DM, with optional masked acknowledgement for the rolling player.
 
@@ -95,7 +105,7 @@ Dice rolls can be public, private, secret, or super-secret. Secret modes are gen
 - **Multi-Phase Bosses** — configure phase-specific HP and AC from a monster's initiative row, choose how HP carries into each phase, and preserve or explicitly clear active conditions and buffs.
 - **Linked Concentration Effects** — concentration buffs remember their caster and spell instance, then clear from every affected character or monster when concentration ends.
 
-- **AoE Multi-Target Effects** — select multiple combatants with checkboxes, then click the AoE button to open a multi-row effect builder (damage, heal, add/remove condition). Targets are processed concurrently using the `/api/v1/effects/bulk-apply` REST API. If one target validation fails, its nested transaction rolls back independently, keeping other targets updated.
+- **AoE Multi-Target Effects** — select multiple combatants with checkboxes, then click the AoE button to open a multi-row effect builder (damage, heal, add/remove condition). The authenticated `/api/v1/effects/bulk-apply` endpoint reports a result for each target and groups related timeline records under one action ID.
 - **Quick Encounter Automations** — one-click "Dismiss Dead" removes all dead tracker entries; "Clear All Conditions" wipes conditions from every PC. Both accessible from the DM-only Quick Actions popover.
 - **DM-Requested Hidden Saves** — pending saving throws can be requested as public, private, secret, or super-secret rolls. Hidden saves still auto-resolve pass/fail effects without leaking totals to players.
 
@@ -108,13 +118,13 @@ Buttons disable after use to prevent duplicate spawns.
 
 **DMRollFeed** — aggregated live feed of all player dice rolls with filter toggles (ATK / DMG / SKILL / SAVE / INIT / HP / LOOT / PRIV). Private, secret, and super-secret rolls are grouped as non-public while still showing full context to the DM.
 
-**Campaign Automation Policies** — open **Automation -> Policies** to enable or disable automatic unconscious handling, concentration cleanup and roll behavior, condition duration ticks, initiative sync, turn triggers, auras, and curated reactive item handlers. Existing automation remains enabled by default after upgrades.
+**Campaign Automation Policies** — open **Automation -> Policies** to control unconscious handling, concentration behavior, bloodied detection, modifier propagation, ammunition use, condition ticks, initiative sync, turn triggers, auras, curated reactions, and combat-history retention. Existing behavior remains enabled after upgrades; ammunition tracking is deliberately opt-in.
 
 **Encounter Builder & Prep Packs** — pre-plan encounters with named monster groups. DMs can now import complete "Prep Packs" (JSON bundles containing monsters, maps, notes, and sandboxed automation triggers) by pasting them directly into the Encounter Library.
 
 **DM Prep Panel** — per-character and per-encounter sticky notes accessible from the God-Eye View.
 
-- **Effect Preset Library** — Reusable, DM-created templates for spells, conditions, monster auras, and environmental modifiers. Allows searching, editing, and quick-applying modifiers concurrently to target PCs and monsters from a dedicated side-panel drawer.
+- **Effect Preset Library** — reusable DM-created templates for spells, conditions, monster auras, and environmental modifiers, with search, editing, and multi-target application from a dedicated drawer.
 - **Import Guardrails & Safety Diffs** — Real-time validation layer analyzing incoming character stats (Level, HP, AC, ability scores) from D&D Beyond or PDFs. Flags rule anomalies (Danger/Warning/Info) and holds player-initiated updates in a staged DM approval queue (`pending_imports`) with side-by-side comparative views.
 
 ### Party Loot Pool
@@ -125,8 +135,11 @@ Buttons disable after use to prevent duplicate spawns.
 
 ### Audit Log & Event System
 - **Effect Preview & Consent** — DMs can dry-run effects before committing. Players get a real-time toast to **[Accept]** or **[Reject]** incoming state mutations.
-- **Effect Timeline** — immutable event store grouped by combat round, tracking damage, healing, conditions, buffs, rests, spell slots, and loot claims
+- **Effect Timeline** — append-oriented combat ledger grouped by round. Undo adds a correction event and marks the original record as reversed instead of deleting it
 - **Encounter Archives** — ending combat preserves its timeline under the encounter name. DMs can browse, search, paginate, and export completed encounters without mixing them into the current live timeline
+- **Explainable Character Automation** — configurable bloodied thresholds add visible status and timeline events, while modifier propagation can be paused without removing the displayed buffs
+- **Linked Ammunition Tracking** — optional per-campaign tracking consumes only the inventory item explicitly named on a manual weapon, avoiding guesses or silent resource loss
+- **Archive Retention** — keep every encounter by default, or retain a chosen number of encounters or days from **Automation -> Policies -> Combat History**
 - **Curated Reactive Automation** — built-in reaction handlers can respond to effect events; the current handler set includes `retributive_healing` for self-healing reactions triggered by outgoing healing
 - **Audit Log** — human-readable descriptions of every mutation with DM-accessible undo (event reversal)
 - **Idempotency Guards** — every mutation carries a unique request ID; duplicate events from websocket reconnects are automatically deduplicated
@@ -174,15 +187,20 @@ An in-app, task-first documentation hub at `/guide` with searchable player, DM, 
 
 ## Documentation
 
+- [Documentation Index](./docs/README.md)
+- [Self-Hosting & Upgrades](./docs/SELF_HOSTING.md)
+- [Architecture](./docs/ARCHITECTURE.md)
 - [Interactive Rolls & Roll Visibility](./docs/PHASE_7.1_INTERACTIVE_ROLLS.md)
 - [Automation Policies & Combat History](./docs/AUTOMATION_AND_COMBAT_HISTORY.md)
 - [Client README](./client/README.md)
 - [Legacy Parser References](./files/README.md)
+- [Security Policy](./SECURITY.md)
+- [Contributing](./CONTRIBUTING.md)
 - [Changelog](./CHANGELOG.md)
 
 ## Self-Hosting
 
-Core campaign state, the database, and configured AI processing run on your hardware. D&D Beyond import and Open5e compendium searches require internet access when used. The checked-in repo ships a production `Dockerfile`, but no `docker-compose.yml`; keep private Portainer or Compose configuration alongside your deployment rather than committing host-specific paths and addresses.
+Core campaign state, the database, and configured Ollama processing run on your hardware. D&D Beyond imports and Open5e searches use external services when invoked. The repository ships a multi-stage `Dockerfile`, but no public `docker-compose.yml`; keep host paths, addresses, and real secrets in private deployment configuration.
 
 1. **Environment Config**
    ```env
@@ -196,12 +214,12 @@ Core campaign state, the database, and configured AI processing run on your hard
 
    Backend terminal:
    ```bash
-   cd server && npm install && npm start
+   cd server && npm ci && npm start
    ```
 
    Frontend terminal, from the repository root:
    ```bash
-   cd client && npm install && npm run dev
+   cd client && npm ci --legacy-peer-deps && npm run dev
    ```
 
 3. **Access**
@@ -211,9 +229,10 @@ Core campaign state, the database, and configured AI processing run on your hard
 4. **Container / Portainer Notes**
    - The backend default port is `3001` (`PORT` in `.env`).
    - The Vite dev server default port is `5173`.
-   - Production Portainer/Compose deployments should map `/api` and `/socket.io` traffic to the backend service on port `3001`.
+   - Production Portainer/Compose deployments should route `/api` and `/socket.io` traffic to the backend service on port `3001`.
+   - The current Docker image starts the backend. Although it builds and copies `client/dist`, Express does not serve those files; serve the frontend with a separate static web service or reverse proxy.
    - If the entire `server/` directory is bind-mounted into an Alpine-based container, mount `/app/server/node_modules` as a separate container volume. Native `better-sqlite3` binaries cannot be shared safely between host Linux and Alpine runtimes.
-   - Avoid running `npm install` on every container start. Build dependencies into the image and use `npm start` in the runtime container.
+   - Avoid resolving dependencies on every container start. Build them into the image, or use `npm ci` with the committed lockfile for a development container.
 
 5. **Container Health & Telemetry**
    - **Telemetry API** — `/api/health` exposes V8 process uptime and memory usage metrics.
@@ -229,6 +248,8 @@ Arcane Ally is intended for self-hosted, local-first play. Before publishing or 
 - The repo ignore rules exclude `.env`, `*.db`, `*.sqlite`, PDFs, common private key formats, `node_modules`, and build output.
 - Change `DM_PIN` from the sample value before exposing the app outside a trusted LAN.
 - Prefer local Ollama for AI features when campaign privacy matters.
+- Do not expose Arcane Ally directly to the public internet. It is designed for a trusted table network and does not provide user accounts, tenant isolation, rate limiting, or comprehensive authorization on every mutation route.
+- For remote play, put the app behind HTTPS and an additional access layer such as a VPN, identity-aware proxy, or reverse-proxy authentication.
 
 ## Project Structure
 
@@ -252,8 +273,8 @@ Arcane Ally is intended for self-hosted, local-first play. Before publishing or 
 | `/api/encounters` / `/api/initiative` | Encounter library, tracker state, initiative export/duplicate helpers |
 | `/api/homebrew` | Compendium CRUD, AI generation, item parsing, item assignment |
 | `/api/v1/effects/bulk-apply` | Bulk AoE / multi-target damage, healing, and condition application |
-| `/api/effect-timeline` | Active or archived combat ledger with session, cursor, target, and event-type filters |
-| `/api/combat-sessions` | Active and archived encounter metadata with event counts |
+| `/api/effect-timeline` | DM-authenticated active or archived combat ledger with session, cursor, target, and event-type filters |
+| `/api/combat-sessions` | DM-authenticated active and archived encounter metadata with event counts |
 | `/api/effect-presets` | Reusable effect and condition preset CRUD |
 | `/api/combat/snapshots` | Combat snapshot creation, diffing, restore, and restore audit logs |
 | `/api/maps` | Battlemap/overworld map CRUD, map files, tokens, and markers |
@@ -261,18 +282,20 @@ Arcane Ally is intended for self-hosted, local-first play. Before publishing or 
 | `/api/npcs` | NPC CRUD |
 | `/api/notes` | Shared party notes |
 | `/api/dm-notes` | DM-only prep notes |
-| `/api/automation` | Automation presets; `/api/automation/rules` reads or updates campaign-wide policies |
+| `/api/automation` | DM-authenticated automation presets; `/api/automation/rules` reads or updates campaign-wide policies |
 | `/api/prep-packs` | Portable encounter pack import |
 | `/api/world` | World time and weather state |
 | `/api/loot` | Loot generation, archive, and direct item assignment |
 | `/api/lore` | AI lore generation with actionable entity blocks |
 | `/api/chat` | Rules assistant |
 | `/api/recaps` | Session recap archive and combat recap save |
-| `/api/sync-audit` | DM sync status, connected players, and pending saves/imports |
+| `/api/sync-audit` | DM-authenticated sync status, connected players, and pending saves/imports |
 | `/api/offline-bundle` | Offline character/effects payload for companion clients |
 | `/api/health` | Telemetry endpoint with uptime and V8/RSS memory metrics |
 
 **70+ Socket.io real-time events** covering character state, combat, dice, loot, voting, world, voice, effects, automation, permissions, battlemap tokens, server-side hidden rolls, and pending save resolution.
+
+DM-authenticated REST routes accept the session token as either `Authorization: Bearer <token>` or `X-DM-Token: <token>`. A successful DM login replaces the previous token, so another DM browser may need to enter the PIN again. This token protects selected DM surfaces; it is not a substitute for perimeter authentication on an internet-facing host.
 
 ## Contributing
 

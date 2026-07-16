@@ -678,7 +678,9 @@ function resolveCurrentAC(character, activeBuffs = [], activeConditions = [], al
   for (const buff of dedupedBuffs) {
     const name = (buff.name || '').toLowerCase();
     const effect = BUFF_EFFECTS[name];
-    if (effect && effect.acBonus) {
+    const hasExplicitAcModifier = buff.modifierType === 'flatBonus'
+      && (buff.statAffected || '').toLowerCase().includes('ac');
+    if (effect?.acBonus && !hasExplicitAcModifier) {
       acFlatBonus += effect.acBonus;
       breakdown.push({ source: name, type: 'buff', value: effect.acBonus });
     }

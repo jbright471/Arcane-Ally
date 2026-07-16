@@ -8,6 +8,12 @@ const DEFAULT_AUTOMATION_RULES = Object.freeze({
     auras: true,
     reactiveHandlers: true,
     initiativeSync: true,
+    bloodiedDetection: true,
+    bloodiedThresholdPercent: 50,
+    ammunitionTracking: false,
+    modifierPropagation: true,
+    timelineRetentionMode: 'unlimited',
+    timelineRetentionValue: 0,
 });
 
 const BOOLEAN_RULES = [
@@ -19,6 +25,9 @@ const BOOLEAN_RULES = [
     'auras',
     'reactiveHandlers',
     'initiativeSync',
+    'bloodiedDetection',
+    'ammunitionTracking',
+    'modifierPropagation',
 ];
 
 function normalizeAutomationRules(value = {}) {
@@ -28,6 +37,17 @@ function normalizeAutomationRules(value = {}) {
     }
     if (value.concentrationChecks === 'automatic' || value.concentrationChecks === 'prompt') {
         normalized.concentrationChecks = value.concentrationChecks;
+    }
+    const bloodiedThreshold = Number(value.bloodiedThresholdPercent);
+    if (Number.isFinite(bloodiedThreshold)) {
+        normalized.bloodiedThresholdPercent = Math.min(99, Math.max(1, Math.round(bloodiedThreshold)));
+    }
+    if (['unlimited', 'encounters', 'days'].includes(value.timelineRetentionMode)) {
+        normalized.timelineRetentionMode = value.timelineRetentionMode;
+    }
+    const retentionValue = Number(value.timelineRetentionValue);
+    if (Number.isFinite(retentionValue)) {
+        normalized.timelineRetentionValue = Math.min(3650, Math.max(0, Math.round(retentionValue)));
     }
     return normalized;
 }

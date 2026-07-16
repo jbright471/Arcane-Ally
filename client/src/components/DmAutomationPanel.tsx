@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { useGame } from '../context/GameContext';
 import socket from '../socket';
 import type { RollVisibility } from '../types/effects';
+import { dmFetch } from '../lib/dmFetch';
 
 const CONDITIONS = [
   'Blinded','Charmed','Deafened','Exhaustion','Frightened','Grappled',
@@ -74,6 +75,12 @@ interface AutomationRules {
   auras: boolean;
   reactiveHandlers: boolean;
   initiativeSync: boolean;
+  bloodiedDetection: boolean;
+  bloodiedThresholdPercent: number;
+  ammunitionTracking: boolean;
+  modifierPropagation: boolean;
+  timelineRetentionMode: 'unlimited' | 'encounters' | 'days';
+  timelineRetentionValue: number;
 }
 
 function PolicyToggle({ checked, label, description, onChange }: {
@@ -213,11 +220,11 @@ export function DmAutomationPanel({ open, onClose }: DmAutomationPanelProps) {
   const [saveOnFailEffects, setSaveOnFailEffects] = useState<EffectDef[]>([{ type: 'condition', condition: 'Poisoned' }]);
 
   const fetchPresets = useCallback(() => {
-    fetch('/api/automation').then(r => r.json()).then(setPresets).catch(() => {});
+    dmFetch('/api/automation').then(r => r.json()).then(setPresets).catch(() => {});
   }, []);
 
   const fetchRules = useCallback(() => {
-    fetch('/api/automation/rules').then(r => r.json()).then(setRules).catch(() => {});
+    dmFetch('/api/automation/rules').then(r => r.json()).then(setRules).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -232,7 +239,7 @@ export function DmAutomationPanel({ open, onClose }: DmAutomationPanelProps) {
     const previous = rules;
     setRules({ ...rules, ...patch });
     try {
-      const response = await fetch('/api/automation/rules', {
+      const response = await dmFetch('/api/automation/rules', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
@@ -285,7 +292,7 @@ export function DmAutomationPanel({ open, onClose }: DmAutomationPanelProps) {
 
   const handleSaveStrikeAsMacro = async () => {
     if (!saveAsName.trim()) return toast.error('Enter a name for the macro.');
-    await fetch('/api/automation', {
+    await dmFetch('/api/automation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -322,7 +329,7 @@ export function DmAutomationPanel({ open, onClose }: DmAutomationPanelProps) {
   // ── Preset actions ──
 
   const handleTogglePreset = async (preset: AutomationPreset) => {
-    await fetch(`/api/automation/${preset.id}`, {
+    await dmFetch(`/api/automation/${preset.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_active: preset.is_active ? 0 : 1 }),
@@ -332,13 +339,13 @@ export function DmAutomationPanel({ open, onClose }: DmAutomationPanelProps) {
 
   const handleDeletePreset = async (preset: AutomationPreset) => {
     if (preset.is_locked) return toast.error('Unlock the preset before deleting.');
-    await fetch(`/api/automation/${preset.id}`, { method: 'DELETE' });
+    await dmFetch(`/api/automation/${preset.id}`, { method: 'DELETE' });
     fetchPresets();
     toast.success('Preset deleted.');
   };
 
   const handleLockPreset = async (preset: AutomationPreset) => {
-    await fetch(`/api/automation/${preset.id}`, {
+    await dmFetch(`/api/automation/${preset.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_locked: preset.is_locked ? 0 : 1 }),
@@ -356,7 +363,7 @@ export function DmAutomationPanel({ open, onClose }: DmAutomationPanelProps) {
 
   const handleSaveNewPreset = async () => {
     if (!newPreset.name?.trim()) return toast.error('Name required.');
-    await fetch('/api/automation', {
+    await dmFetch('/api/automation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -834,6 +841,24 @@ export function DmAutomationPanel({ open, onClose }: DmAutomationPanelProps) {
                       label="Clear Unconscious After Healing" description="Removes the automatic condition when HP rises above 0." />
                     <PolicyToggle checked={rules.concentrationCleanup} onChange={value => updateRules({ concentrationCleanup: value })}
                       label="Concentration Cleanup" description="Drops concentration and linked buffs when a character reaches 0 HP." />
+                    <PolicyToggle checked={rules.bloodiedDetection} onChange={value => updateRules({ bloodiedDetection: value })}
+                      label="Bloodied Detection" description="Marks combatants and records timeline events when they cross the configured HP threshold." />
+                    <div className="flex items-center gap-3 py-2.5 border-b border-border/30">
+                      <div className="min-w-0 flex-1">
+                        <Label className="text-xs font-semibold">Bloodied Threshold</Label>
+                        <p className="text-[10px] leading-snug text-muted-foreground mt-0.5">Percentage of maximum HP that counts as bloodied.</p>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={99}
+                        disabled={!rules.bloodiedDetection}
+                        value={rules.bloodiedThresholdPercent}
+                        onChange={event => updateRules({ bloodiedThresholdPercent: Number(event.target.value) })}
+                        aria-label="Bloodied threshold percentage"
+                        className="h-8 w-20 text-xs"
+                      />
+                    </div>
                   </div>
                 </section>
 
@@ -869,6 +894,57 @@ export function DmAutomationPanel({ open, onClose }: DmAutomationPanelProps) {
                       label="Aura Processing" description="Applies enabled aura effects during their configured phase." />
                     <PolicyToggle checked={rules.reactiveHandlers} onChange={value => updateRules({ reactiveHandlers: value })}
                       label="Reactive Item Handlers" description="Allows curated item reactions such as Retributive Healing." />
+                    <PolicyToggle checked={rules.modifierPropagation} onChange={value => updateRules({ modifierPropagation: value })}
+                      label="Modifier Propagation" description="Applies temporary buffs and auras to calculated stats and rolls. Buffs remain visible when disabled." />
+                    <PolicyToggle checked={rules.ammunitionTracking} onChange={value => updateRules({ ammunitionTracking: value })}
+                      label="Ammunition Tracking" description="Consumes explicitly linked inventory ammunition when a weapon attack is rolled." />
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-[10px] uppercase tracking-wider font-bold text-primary/80 mb-1">Combat History</h3>
+                  <div className="border-y border-border/40">
+                    <div className="flex items-center gap-3 py-2.5 border-b border-border/30">
+                      <div className="min-w-0 flex-1">
+                        <Label className="text-xs font-semibold">Timeline Retention</Label>
+                        <p className="text-[10px] leading-snug text-muted-foreground mt-0.5">Unlimited keeps every archived encounter until the host removes it.</p>
+                      </div>
+                      <Select
+                        value={rules.timelineRetentionMode}
+                        onValueChange={value => updateRules({
+                          timelineRetentionMode: value as AutomationRules['timelineRetentionMode'],
+                          timelineRetentionValue: value === 'unlimited'
+                            ? 0
+                            : rules.timelineRetentionValue || (value === 'encounters' ? 20 : 90),
+                        })}
+                      >
+                        <SelectTrigger aria-label="Timeline retention mode" className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unlimited" className="text-xs">Unlimited</SelectItem>
+                          <SelectItem value="encounters" className="text-xs">Recent encounters</SelectItem>
+                          <SelectItem value="days" className="text-xs">Age in days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {rules.timelineRetentionMode !== 'unlimited' && (
+                      <div className="flex items-center gap-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <Label className="text-xs font-semibold">
+                            {rules.timelineRetentionMode === 'encounters' ? 'Encounters to Keep' : 'Days to Keep'}
+                          </Label>
+                          <p className="text-[10px] leading-snug text-muted-foreground mt-0.5">Pruning runs after encounters are archived and when this value changes.</p>
+                        </div>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={3650}
+                          value={rules.timelineRetentionValue}
+                          onChange={event => updateRules({ timelineRetentionValue: Number(event.target.value) })}
+                          aria-label="Timeline retention value"
+                          className="h-8 w-20 text-xs"
+                        />
+                      </div>
+                    )}
                   </div>
                 </section>
               </div>

@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { normalizeBossPhases } = require('../services/bossPhases');
 const { projectInitiativeState } = require('../lib/clientStateProjection');
 const { getPermissions } = require('../lib/permissions');
+const { getAutomationRules } = require('../lib/automationRules');
 
 // ---- Encounters CRUD ----
 
@@ -253,6 +254,8 @@ function resortTracker() {
 
 function getTrackerState() {
     const tracker = db.prepare('SELECT * FROM initiative_tracker ORDER BY sort_order ASC').all();
+    const automationRules = getAutomationRules(db);
+    const bloodiedThreshold = automationRules.bloodiedThresholdPercent / 100;
     return tracker.map(entity => {
         let conditions = [];
         let buffs = [];
@@ -276,6 +279,10 @@ function getTrackerState() {
         }
         let bossPhases = [];
         try { bossPhases = JSON.parse(entity.boss_phases_json || '[]'); } catch (_e) {}
+        const hpRatio = entity.max_hp > 0 ? entity.current_hp / entity.max_hp : 0;
+        const isBloodied = automationRules.bloodiedDetection
+            && entity.current_hp > 0
+            && hpRatio <= bloodiedThreshold;
 
         return {
             ...entity,
@@ -284,10 +291,12 @@ function getTrackerState() {
             concentrating_on,
             stats_json: parsedStats,
             boss_phases: bossPhases,
+            is_bloodied: isBloodied,
             // HP Ghosting: if hidden or monster, we can flag it for the frontend to obscure
             hp_status: entity.current_hp <= 0 ? 'Dead' :
-                       (entity.current_hp / entity.max_hp <= 0.25) ? 'Critical' :
-                       (entity.current_hp / entity.max_hp <= 0.5) ? 'Bloodied' : 'Healthy'
+                       hpRatio <= 0.25 ? 'Critical' :
+                       isBloodied ? 'Bloodied' :
+                       hpRatio <= 0.5 ? 'Wounded' : 'Healthy'
         };
     });
 }

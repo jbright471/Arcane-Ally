@@ -60,6 +60,7 @@ function normaliseCharacter(raw: any): Character {
       max: raw.maxHp ?? raw.max_hp ?? 1,
       temp: raw.tempHp ?? raw.temp_hp ?? 0,
     },
+    isBloodied: raw.isBloodied ?? false,
     ac: raw.ac || 10,
     acBreakdown: raw.acBreakdown || [],
     abilityScores: raw.abilityScores || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
@@ -213,6 +214,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    socket.on('ammunition_updated', (data: { ammunitionName: string; remaining: number }) => {
+      toast.success(`${data.ammunitionName}: ${data.remaining} remaining`);
+    });
+
+    socket.on('ammunition_error', (data: { error?: string }) => {
+      toast.error(data.error || 'Ammunition could not be consumed.');
+    });
+
     // Re-join DM room on reconnect
     socket.on('connect', () => {
       const token = localStorage.getItem('dm_token');
@@ -250,6 +259,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('combat_state_sync');
       socket.off('pending_imports_sync');
       socket.off('pending_import_created');
+      socket.off('ammunition_updated');
+      socket.off('ammunition_error');
       socket.off('connect');
     };
   }, []);

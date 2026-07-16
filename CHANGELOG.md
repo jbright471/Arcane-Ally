@@ -6,24 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-15
+
 ### Added
 - **Multi-Phase Boss Tracker**: DMs can configure two or more phases on a monster, set phase-specific HP and AC, choose reset/retain/proportional HP transitions, and optionally clear conditions or buffs per phase.
 - **Concentration Ownership**: Concentration effects now retain their casting-character and spell-instance ownership so dropping concentration removes linked buffs from characters and monsters together.
-- **Campaign Automation Policies**: DMs can configure automatic unconscious handling, recovery cleanup, concentration cleanup and check behavior, condition duration ticks, initiative sync, turn triggers, auras, and curated reactive handlers from **DM Dashboard -> Automation -> Policies**.
+- **Campaign Automation Policies**: DMs can configure automatic unconscious handling, recovery cleanup, concentration behavior, bloodied detection and threshold, modifier propagation, opt-in ammunition tracking, condition duration ticks, initiative sync, turn triggers, auras, curated reactive handlers, and archive retention from **DM Dashboard -> Automation -> Policies**.
 - **Encounter Timeline Archives**: Combat events are assigned to named combat sessions and retained when an encounter ends instead of being deleted when the next encounter starts.
 - **Combat History API**: Added combat-session listing and cursor-based timeline queries for active and archived encounters.
-- **Focused Coverage**: Added tests for enabled defaults, partial policy persistence, disabled automation behavior, and encounter history isolation.
+- **Focused Coverage**: Added tests for policy normalization, bloodied transitions, modifier propagation, ammunition consumption, DM HTTP authentication, combat-history pruning, disabled automation behavior, and encounter history isolation.
 
 ### Changed
 - **Role-Safe Live State**: DM, player, public, and cast clients now receive server-projected combat payloads. Hidden monsters stay DM-only, cast displays use monster health labels instead of exact values, and players receive full private details only for their registered character.
 - **Cast View Safety**: The encounter cast socket is read-only at the server boundary and no longer receives future boss phases, monster stat blocks, effect details, action logs, notes, or pending imports.
 - **Timeline Discovery**: The DM timeline now includes a current/archive selector, earlier-event pagination, read-only archived views, and search across actors, targets, descriptions, spells, conditions, and event payloads.
-- **Automation Authority**: HP rules, concentration behavior, condition ticks, initiative synchronization, turn triggers, auras, and reactive handlers now consult the same server-side campaign policy source.
-- **Documentation**: Updated the README, client guide, Arcane Codex, and technical references for policy controls, encounter retention, and container-native dependency isolation.
+- **Automation Authority**: HP rules, concentration behavior, bloodied state, modifier propagation, ammunition use, condition ticks, initiative synchronization, turn triggers, auras, reactive handlers, and archive pruning now consult the same server-side campaign policy source.
+- **DM API Authentication**: Automation settings, combat-session history, effect timeline queries, and sync-audit requests now require the current DM token.
+- **Documentation**: Audited the README, client guide, Arcane Codex, environment templates, and technical references for current policies, authentication, self-hosting topology, external-service privacy, upgrade safety, and lockfile-preserving installs. Added architecture, security, contribution, and self-hosting guides.
 
 ### Fixed
 - **Timeline Retention**: Starting a new encounter no longer destroys the previous encounter's effect history.
 - **Automation Dialog Accessibility**: Added the missing dialog description and accessible labels for the new policy and timeline controls.
+- **AC Modifier Deduplication**: Named AC buffs with explicit modifier fields no longer apply both the built-in value and the explicit value.
 
 ## [1.0.2] - 2026-07-08
 
@@ -60,7 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **🛡️ External Sheet Import Guardrails**: Real-time validation layer analyzing incoming character stats (Level, HP, AC, ability scores) from D&D Beyond or PDFs. Flags standard 5e rules anomalies (Danger/Warning/Info) and holds player-initiated updates in a staged DM approval queue (`pending_imports`).
 - **🗃️ DM Staging Queue Console**: Created `ImportDiffModal.tsx` rendering side-by-side comparative views of level, HP, AC, and ability changes. Displays safety flags and triggers DM approvals/discards.
 - **✨ Effect Preset Library**: Reusable DM-created templates for spells, conditions, monster auras, and environmental modifiers. Pre-seeded with *Bless*, *Haste*, *Shield of Faith*, *Frightened*, and *Poisoned*.
-- **⚡ Bulk Preset Application**: Built `EffectPresetLibrary.tsx` drawer letting DMs search, create custom templates, and select combatants to apply effects concurrently.
+- **⚡ Bulk Preset Application**: Built `EffectPresetLibrary.tsx` drawer letting DMs search, create custom templates, and select combatants for grouped effect application.
 - **⚙️ Persisted Approval Mode State**: Persisted the toggle state of `isApprovalMode` in the SQLite database under key `'approval_mode'` inside `campaign_state` table.
 
 ### Changed
@@ -71,7 +75,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - **🛡️ Player Miniature Sidebar**: Integrated a slide-out drawer on the left side of the combat tracker (`SidebarSheetMini.tsx`) showing live player cards, HP status (+/-5 quick controls), AC/Speed/ability grid, active conditions, and interactive spell slot pips (click to toggle and sync preparation status via WebSockets).
-- **⚡ Bulk AoE REST API**: Added a secure POST `/api/v1/effects/bulk-apply` endpoint for multi-target actions. Loops targets concurrently using `Promise.all` and wraps writes in database savepoint transactions. A single target validation failure rolls back independently without affecting other targets.
+- **⚡ Bulk AoE REST API**: Added an authenticated POST `/api/v1/effects/bulk-apply` endpoint for multi-target actions with per-target results, idempotency keys, grouped timeline records, and a database transaction boundary.
 - **⚙️ V8 Memory Telemetry & Loop Guard**: Exposed a `/api/health` telemetry endpoint displaying uptime and V8 memory usage profiles (`rss`, `heapTotal`, `heapUsed`). Integrated an automated memory monitoring script (`healthcheck.js`) that aborts the process (exit code 1) if memory consumption exceeds 500MB, preventing endless execution loops.
 - **✨ Gothic Scrollbars & Tag Glow Animators**: Added custom CSS scrollbars, `@keyframes gothic-glow`, and `@keyframes flash-tag-glow` to style active state modifications. Floating, color-coded tag flashes temporarily display telemetry feedback (e.g. `+Bless`, `-Prone`, `+2 AC`) when character state updates.
 

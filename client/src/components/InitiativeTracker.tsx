@@ -736,7 +736,7 @@ export function InitiativeTracker() {
             const hasExactHp = ent.entity_type === 'pc' || (ent.current_hp !== null && ent.max_hp !== null);
             const hp = ent.current_hp ?? char?.hp.current ?? 0;
             const maxHp = ent.max_hp ?? char?.hp.max ?? 1;
-            const statusPercent = ent.hp_status === 'Dead' ? 0 : ent.hp_status === 'Critical' ? 20 : ent.hp_status === 'Bloodied' ? 45 : 100;
+            const statusPercent = ent.hp_status === 'Dead' ? 0 : ent.hp_status === 'Critical' ? 20 : ['Bloodied', 'Wounded'].includes(ent.hp_status) ? 45 : 100;
             const hpPercent = hasExactHp ? Math.max(0, (hp / maxHp) * 100) : statusPercent;
             const isDead = hasExactHp ? hp <= 0 : ent.hp_status === 'Dead';
             const conditions: string[] = ent.conditions ?? char?.conditions ?? [];

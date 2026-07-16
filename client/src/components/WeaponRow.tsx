@@ -42,6 +42,7 @@ export function WeaponRow({ weapon, character }: WeaponRowProps) {
 
     socket.emit('dice_roll', {
       actor: character.name,
+      characterId: Number(character.id),
       sides: 20,
       count: isAdvantage || isDisadvantage ? 2 : 1,
       modifier: weapon.attackBonus,

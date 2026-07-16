@@ -20,6 +20,7 @@ function projectPartySummary(character) {
     speed: character.speed ?? 30,
     conditions: character.conditions ?? character.activeConditions ?? [],
     concentratingOn: character.concentratingOn ?? null,
+    isBloodied: character.isBloodied ?? false,
   };
 }
 

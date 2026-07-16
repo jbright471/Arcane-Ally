@@ -133,6 +133,8 @@ export interface WeaponAttack {
   /** Freeform property tags, e.g. "Heavy · Two-Handed · Ranged" */
   notes?: string;
   isMelee?: boolean;
+  ammunitionName?: string;
+  ammunitionPerAttack?: number;
 }
 
 // ── Manual Item Form Schema ───────────────────────────────────────────────────
@@ -179,6 +181,8 @@ export interface ManualItemFormData {
   range: string;
   properties: WeaponProperty[];
   mastery: WeaponMastery;
+  ammunitionName: string;
+  ammunitionPerAttack: number;
 
   // Armor Specifics (shown when category === 'Armor')
   armorCategory: ArmorCategory;
@@ -241,6 +245,8 @@ export const MANUAL_ITEM_DEFAULTS: ManualItemFormData = {
   range: '5 ft reach',
   properties: [],
   mastery: '',
+  ammunitionName: '',
+  ammunitionPerAttack: 1,
   armorCategory: 'Medium',
   baseAc: 14,
   plusBonus: 0,
@@ -296,6 +302,7 @@ export interface Character {
   class: string;
   level: number;
   hp: { current: number; max: number; temp: number };
+  isBloodied?: boolean;
   ac: number;
   acBreakdown?: any[];
   abilityScoresBreakdown?: Record<AbilityScore, StatSource[]>;

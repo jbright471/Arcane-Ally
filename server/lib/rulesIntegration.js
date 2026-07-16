@@ -10,6 +10,7 @@
 
 const crypto = require('crypto');
 const { getAutomationRules } = require('./automationRules');
+const { isBloodied, getBloodiedTransition } = require('./bloodiedState');
 const {
   resolveDamage,
   resolveHeal,
@@ -278,9 +279,12 @@ function applyDamageEvent(db, characterId, rawAmount, damageType = 'untyped', re
     const charResistances = resistances ?? (char.resistances || []);
     const charImmunities = char.immunities || [];
     const charVulnerabilities = char.vulnerabilities || [];
+    const previousHp = state.currentHp;
 
     const featureBuffs = (state.activeFeatures || []).map(f => ({ name: f, isFeature: true }));
-    const combinedBuffs = [...(state.activeBuffs || []), ...featureBuffs];
+    const combinedBuffs = automationRules.modifierPropagation
+      ? [...(state.activeBuffs || []), ...featureBuffs]
+      : featureBuffs;
 
     const damageResult = resolveDamage(
       { currentHp: state.currentHp, tempHp: state.tempHp, maxHp: char.baseMaxHp },
@@ -330,11 +334,13 @@ function applyDamageEvent(db, characterId, rawAmount, damageType = 'untyped', re
     return {
       success: true,
       newHp: state.currentHp,
+      previousHp,
       newTempHp: state.tempHp,
       damageDealt: damageResult.damageDealt,
       modifier: damageResult.modifier,
       concentrationCheck: state.currentHp > 0 && concCheck.required ? { required: true, dc: concCheck.dc } : null,
       concentrationCleanup,
+      bloodiedTransition: getBloodiedTransition(previousHp, state.currentHp, char.baseMaxHp, automationRules),
       droppedToZero: state.currentHp === 0,
       logMessage: logMsg,
     };
@@ -348,6 +354,7 @@ function applyHealEvent(db, characterId, amount) {
     const state = getSessionState(db, characterId);
     if (!char || !state) return { success: false, error: 'Character not found' };
 
+    const previousHp = state.currentHp;
     const result = resolveHeal({ currentHp: state.currentHp, tempHp: state.tempHp, maxHp: char.baseMaxHp }, amount);
     state.currentHp = result.newCurrentHp;
     if (automationRules.clearUnconsciousOnHeal && state.currentHp > 0 && state.activeConditions.includes('unconscious')) {
@@ -355,7 +362,14 @@ function applyHealEvent(db, characterId, amount) {
       delete state.conditionDurations.unconscious;
     }
     saveSessionState(db, state);
-    return { success: true, newHp: state.currentHp, healed: result.healed, logMessage: `${char.name} was healed for ${result.healed} HP. HP: ${state.currentHp}/${char.baseMaxHp}` };
+    return {
+      success: true,
+      previousHp,
+      newHp: state.currentHp,
+      healed: result.healed,
+      bloodiedTransition: getBloodiedTransition(previousHp, state.currentHp, char.baseMaxHp, automationRules),
+      logMessage: `${char.name} was healed for ${result.healed} HP. HP: ${state.currentHp}/${char.baseMaxHp}`,
+    };
   });
 }
 
@@ -719,13 +733,15 @@ function getResolvedCharacterState(db, characterId) {
   });
 
   const combinedBuffs = deduplicateCombinedBuffs([...(state.activeBuffs || []), ...auraBuffs, ...featureBuffs]);
+  const automationRules = getAutomationRules(db);
+  const resolutionBuffs = automationRules.modifierPropagation ? combinedBuffs : featureBuffs;
   const allInventory = [...char.inventory, ...char.homebrewInventory];
-  const { finalScores, breakdown: abilityScoresBreakdown } = resolveFinalAbilityScores(char, allInventory, combinedBuffs, state.activeConditions);
-  const currentAC = resolveCurrentAC(char, combinedBuffs, state.activeConditions, allInventory);
-  const savesResult = resolveSavingThrows(char, combinedBuffs, state.activeConditions, allInventory);
-  const skillsResult = resolveSkills(char, combinedBuffs, state.activeConditions, allInventory);
-  const speedResult = resolveSpeed(char, combinedBuffs, state.activeConditions, allInventory);
-  const initResult = resolveInitiative(char, combinedBuffs, state.activeConditions, allInventory);
+  const { finalScores, breakdown: abilityScoresBreakdown } = resolveFinalAbilityScores(char, allInventory, resolutionBuffs, state.activeConditions);
+  const currentAC = resolveCurrentAC(char, resolutionBuffs, state.activeConditions, allInventory);
+  const savesResult = resolveSavingThrows(char, resolutionBuffs, state.activeConditions, allInventory);
+  const skillsResult = resolveSkills(char, resolutionBuffs, state.activeConditions, allInventory);
+  const speedResult = resolveSpeed(char, resolutionBuffs, state.activeConditions, allInventory);
+  const initResult = resolveInitiative(char, resolutionBuffs, state.activeConditions, allInventory);
 
   const proficiencyBonus = Math.floor((char.level - 1) / 4) + 2;
   const { getFormattedAbilityModifier, calculateAbilityModifier } = require('../engine/calculators/modifiers');
@@ -747,7 +763,7 @@ function getResolvedCharacterState(db, characterId) {
     CHA: calculateAbilityModifier(finalScores.CHA),
   };
 
-  const rollModifiers = getAllRollModifiers(state.activeConditions, combinedBuffs);
+  const rollModifiers = getAllRollModifiers(state.activeConditions, resolutionBuffs);
 
   return {
     id: char.id,
@@ -759,6 +775,7 @@ function getResolvedCharacterState(db, characterId) {
     currentHp: state.currentHp,
     maxHp: char.baseMaxHp,
     tempHp: state.tempHp,
+    isBloodied: isBloodied(state.currentHp, char.baseMaxHp, automationRules),
     ac: currentAC.finalAC,
     acBreakdown: currentAC.breakdown,
     abilityScores: finalScores,
@@ -804,7 +821,8 @@ function getCombatStateInspector(db, characterId) {
   if (!char || !state) return null;
 
   const allInventory = [...(char.inventory || []), ...(char.homebrewInventory || [])];
-  const acResult = require('./rulesEngine').resolveCurrentAC(char, state.activeBuffs, state.activeConditions, allInventory);
+  const activeBuffs = getAutomationRules(db).modifierPropagation ? state.activeBuffs : [];
+  const acResult = require('./rulesEngine').resolveCurrentAC(char, activeBuffs, state.activeConditions, allInventory);
   
   const baseStats = char.abilityScores || { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
   const finalStats = { ...baseStats };

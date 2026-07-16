@@ -44,6 +44,7 @@ const {
 } = require('./services/effects-engine');
 const { getPermissions, setPermissions, checkPermission } = require('./lib/permissions');
 const { getAutomationRules } = require('./lib/automationRules');
+const { isValidDmToken, requireDmRequest } = require('./lib/dmAuth');
 const {
     projectPartyState,
     projectInitiativeState,
@@ -84,6 +85,8 @@ const { createSnapshot, computeDiff, restoreSnapshot } = require('./lib/snapshot
 const { getActiveAuras, clearAllAuras } = require('./services/effects-engine/auras');
 const { getSmartPins, saveSmartPins, clearAllSmartPins } = require('./services/effects-engine/smartPins');
 const { configureBossPhases, transitionBossPhase } = require('./services/bossPhases');
+const { consumeAmmunitionForAttack } = require('./lib/ammunitionTracking');
+const { getBloodiedTransition } = require('./lib/bloodiedState');
 
 function broadcastAuras() {
     io.emit('active_auras_sync', getActiveAuras(db));
@@ -257,10 +260,10 @@ app.post('/api/auth/dm', (req, res) => {
 });
 
 function requireDm(token) {
-    if (!token) return false;
-    const row = db.prepare("SELECT value FROM campaign_state WHERE key = 'dm_token'").get();
-    return row && row.value === token;
+    return isValidDmToken(db, token);
 }
+
+const requireDmHttp = requireDmRequest(db);
 
 app.get('/api/health', (req, res) => {
     res.json({
@@ -358,13 +361,25 @@ app.post('/api/v1/effects/bulk-apply', async (req, res) => {
                                     const dmg = Math.max(0, effect.value || 0);
                                     const newHp = Math.max(0, entity.current_hp - dmg);
                                     db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
-                                    result = { success: true, logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)` };
+                                    result = {
+                                        success: true,
+                                        previousHp: entity.current_hp,
+                                        newHp,
+                                        bloodiedTransition: getBloodiedTransition(entity.current_hp, newHp, entity.max_hp, getAutomationRules(db)),
+                                        logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)`,
+                                    };
                                     eventType = 'damage';
                                 } else if (effect.type === 'heal') {
                                     const heal = Math.max(0, effect.value || 0);
                                     const newHp = Math.min(entity.max_hp, entity.current_hp + heal);
                                     db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
-                                    result = { success: true, logMessage: `${entity.entity_name} healed ${heal} HP (${newHp}/${entity.max_hp} HP)` };
+                                    result = {
+                                        success: true,
+                                        previousHp: entity.current_hp,
+                                        newHp,
+                                        bloodiedTransition: getBloodiedTransition(entity.current_hp, newHp, entity.max_hp, getAutomationRules(db)),
+                                        logMessage: `${entity.entity_name} healed ${heal} HP (${newHp}/${entity.max_hp} HP)`,
+                                    };
                                     eventType = 'heal';
                                 } else {
                                     result = { success: true, logMessage: `${target.name}: ${effect.condition || effect.type} (noted)` };
@@ -383,6 +398,14 @@ app.post('/api/v1/effects/bulk-apply', async (req, res) => {
                                     requestId: perTargetRequestId,
                                     description: result.logMessage,
                                     groupId,
+                                });
+                                writeBloodiedAuditEvent({
+                                    transition: result.bloodiedTransition,
+                                    targetId: target.id,
+                                    targetType: target.type,
+                                    targetName: target.name,
+                                    previousHp: result.previousHp,
+                                    currentHp: result.newHp,
                                 });
                             }
 
@@ -466,7 +489,7 @@ app.get('/api/offline-bundle', (req, res) => {
     }
 });
 
-app.get('/api/effect-timeline', (req, res) => {
+app.get('/api/effect-timeline', requireDmHttp, (req, res) => {
     try {
         const limit = Math.min(Math.max(parseInt(req.query.limit) || 200, 1), 500);
         const active = getActiveCombatSession(db);
@@ -485,16 +508,13 @@ app.get('/api/effect-timeline', (req, res) => {
             targetId: Number.isNaN(targetId) ? undefined : targetId,
             eventType: req.query.eventType || undefined,
         });
-        const authHeader = req.headers.authorization || '';
-        const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
-        const dmToken = req.headers['x-dm-token'] || bearerToken;
-        res.json(requireDm(dmToken) ? events : []);
+        res.json(events);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.get('/api/combat-sessions', (req, res) => {
+app.get('/api/combat-sessions', requireDmHttp, (req, res) => {
     try {
         const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 100);
         res.json(listCombatSessions(db, limit));
@@ -503,7 +523,7 @@ app.get('/api/combat-sessions', (req, res) => {
     }
 });
 
-app.get('/api/effect-timeline/character/:id', (req, res) => {
+app.get('/api/effect-timeline/character/:id', requireDmHttp, (req, res) => {
     try {
         const charId = parseInt(req.params.id);
         const limit = parseInt(req.query.limit) || 100;
@@ -514,7 +534,7 @@ app.get('/api/effect-timeline/character/:id', (req, res) => {
     }
 });
 
-app.get('/api/sync-audit', (req, res) => {
+app.get('/api/sync-audit', requireDmHttp, (req, res) => {
     try {
         const connectedPlayers = [...playerSocketMap.values()];
         const pendingSaves = db.prepare(`
@@ -781,6 +801,22 @@ function logAction(actor, description, status = 'applied', effectsJson = null) {
         "INSERT INTO action_log (timestamp, actor, action_description, status, effects_json) VALUES (datetime('now'), ?, ?, ?, ?)"
     ).run(actor, description, status, effectsJson);
     broadcastLogs();
+}
+
+function writeBloodiedAuditEvent({ transition, targetId, targetType = 'character', targetName, previousHp, currentHp }) {
+    if (!transition) return null;
+    const thresholdPercent = getAutomationRules(db).bloodiedThresholdPercent;
+    return writeAuditEvent(db, {
+        sessionRound: currentCombatRound,
+        turnIndex: currentTurnIndex,
+        eventType: `bloodied_${transition}`,
+        actor: 'Automation',
+        targetId,
+        targetType,
+        targetName,
+        payload: { previousHp, currentHp, thresholdPercent },
+        description: `${targetName} ${transition === 'entered' ? 'became' : 'is no longer'} bloodied`,
+    });
 }
 
 function resolveLootVote(db, lootId, io, broadcastPartyLoot, broadcastPartyState, logAction) {
@@ -1191,6 +1227,13 @@ io.on('connection', (socket) => {
                 actor: actor || 'System', targetId: characterId, targetName: charName,
                 payload: { value: Math.abs(delta), damageType: delta < 0 ? (damageType || 'untyped') : null, newHp: result.newHp },
                 requestId, description: desc,
+            });
+            writeBloodiedAuditEvent({
+                transition: result.bloodiedTransition,
+                targetId: characterId,
+                targetName: charName,
+                previousHp: result.previousHp,
+                currentHp: result.newHp,
             });
             broadcastTimeline();
 
@@ -1689,6 +1732,7 @@ io.on('connection', (socket) => {
             label,
             source,
             damageType,
+            characterId: payloadCharacterId,
         } = payload;
         const rollVisibility = normalizeRollVisibility(payload);
         const safeRolls = Array.isArray(rolls) ? rolls : [];
@@ -1715,6 +1759,32 @@ io.on('connection', (socket) => {
         }
 
         const socketInfo = playerSocketMap.get(socket.id);
+        if (rollType === 'Attack Roll') {
+            const ammunitionCharacterId = socketInfo?.characterId ?? (Number(payloadCharacterId) || null);
+            if (ammunitionCharacterId) {
+                const ammunitionResult = consumeAmmunitionForAttack(db, ammunitionCharacterId, source || label);
+                if (ammunitionResult.consumed > 0) {
+                    const character = db.prepare('SELECT name FROM characters WHERE id = ?').get(ammunitionCharacterId);
+                    writeAuditEvent(db, {
+                        sessionRound: currentCombatRound,
+                        turnIndex: currentTurnIndex,
+                        eventType: 'ammunition_used',
+                        actor: actor || character?.name || 'Player',
+                        targetId: ammunitionCharacterId,
+                        targetName: character?.name || null,
+                        payload: ammunitionResult,
+                        description: `${character?.name || 'Character'} used ${ammunitionResult.consumed} ${ammunitionResult.ammunitionName}`,
+                    });
+                    broadcastPartyState();
+                    broadcastTimeline();
+                    socket.emit('ammunition_updated', ammunitionResult);
+                    socket.to('dm_room').emit('ammunition_updated', { characterId: ammunitionCharacterId, ...ammunitionResult });
+                } else if (!ammunitionResult.success) {
+                    socket.emit('ammunition_error', ammunitionResult);
+                    socket.to('dm_room').emit('ammunition_error', { characterId: ammunitionCharacterId, ...ammunitionResult });
+                }
+            }
+        }
         const feedEvent = {
             id: Date.now(),
             actor: actor || 'Someone',
@@ -2135,7 +2205,18 @@ io.on('connection', (socket) => {
         if (!entity) return;
         const newHp = Math.max(0, Math.min(entity.max_hp, entity.current_hp + delta));
         db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, trackerId);
+        writeBloodiedAuditEvent({
+            transition: getBloodiedTransition(entity.current_hp, newHp, entity.max_hp, getAutomationRules(db)),
+            targetId: entity.entity_type === 'pc' && entity.character_id
+                ? entity.character_id
+                : trackerId,
+            targetType: entity.entity_type === 'pc' ? 'character' : 'monster',
+            targetName: entity.entity_name,
+            previousHp: entity.current_hp,
+            currentHp: newHp,
+        });
         broadcastInitiative();
+        broadcastTimeline();
     });
 
     socket.on('end_encounter', async (callback) => {
@@ -2700,13 +2781,25 @@ io.on('connection', (socket) => {
                             const dmg = Math.max(0, effect.value || 0);
                             const newHp = Math.max(0, entity.current_hp - dmg);
                             db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
-                            result = { success: true, logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)` };
+                            result = {
+                                success: true,
+                                previousHp: entity.current_hp,
+                                newHp,
+                                bloodiedTransition: getBloodiedTransition(entity.current_hp, newHp, entity.max_hp, getAutomationRules(db)),
+                                logMessage: `${entity.entity_name} takes ${dmg} ${effect.damageType || 'untyped'} damage (${newHp}/${entity.max_hp} HP)`,
+                            };
                             eventType = 'damage';
                         } else if (effect.type === 'heal') {
                             const heal = Math.max(0, effect.value || 0);
                             const newHp = Math.min(entity.max_hp, entity.current_hp + heal);
                             db.prepare('UPDATE initiative_tracker SET current_hp = ? WHERE id = ?').run(newHp, target.id);
-                            result = { success: true, logMessage: `${entity.entity_name} healed ${heal} HP (${newHp}/${entity.max_hp} HP)` };
+                            result = {
+                                success: true,
+                                previousHp: entity.current_hp,
+                                newHp,
+                                bloodiedTransition: getBloodiedTransition(entity.current_hp, newHp, entity.max_hp, getAutomationRules(db)),
+                                logMessage: `${entity.entity_name} healed ${heal} HP (${newHp}/${entity.max_hp} HP)`,
+                            };
                             eventType = 'heal';
                         } else {
                             result = { success: true, logMessage: `${target.name}: ${effect.condition || effect.type} (noted)` };
@@ -2725,6 +2818,14 @@ io.on('connection', (socket) => {
                             requestId: perTargetRequestId,
                             description: result.logMessage,
                             groupId,
+                        });
+                        writeBloodiedAuditEvent({
+                            transition: result.bloodiedTransition,
+                            targetId: target.id,
+                            targetType: target.type,
+                            targetName: target.name,
+                            previousHp: result.previousHp,
+                            currentHp: result.newHp,
                         });
                     }
 

@@ -42,9 +42,14 @@ export function Layout({ children }: { children: ReactNode }) {
           </main>
           <footer className="border-t border-border/10 py-4 px-6 text-center text-[10px] md:text-xs text-muted-foreground/40 bg-card/20 shrink-0">
             <p className="max-w-3xl mx-auto leading-normal">
-              If you have features, bugs or general inquiry please reach out to{' '}
-              <a href="mailto:j.bright@gaming-dojo.net" className="text-muted-foreground/60 hover:text-primary transition-colors">
-                j.bright@gaming-dojo.net
+              Report feature requests, bugs, or questions on{' '}
+              <a
+                href="https://github.com/jbright471/Arcane-Ally/issues"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground/60 hover:text-primary transition-colors"
+              >
+                GitHub
               </a>
               . If you like this app please support here:{' '}
               <a

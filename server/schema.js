@@ -361,7 +361,7 @@ function runMigrations() {
 
   // Seed default resource permissions
   db.exec(`INSERT OR IGNORE INTO campaign_state (key, value) VALUES ('resource_permissions', '{"loot_claim":"open","cross_player_effects":"open","inventory_transfer":"open"}')`);
-  db.exec(`INSERT OR IGNORE INTO campaign_state (key, value) VALUES ('automation_rules', '{"automaticUnconscious":true,"clearUnconsciousOnHeal":true,"concentrationCleanup":true,"concentrationChecks":"automatic","conditionDurations":true,"turnTriggers":true,"auras":true,"reactiveHandlers":true,"initiativeSync":true}')`);
+  db.exec(`INSERT OR IGNORE INTO campaign_state (key, value) VALUES ('automation_rules', '{"automaticUnconscious":true,"clearUnconsciousOnHeal":true,"concentrationCleanup":true,"concentrationChecks":"automatic","conditionDurations":true,"turnTriggers":true,"auras":true,"reactiveHandlers":true,"initiativeSync":true,"bloodiedDetection":true,"bloodiedThresholdPercent":50,"ammunitionTracking":false,"modifierPropagation":true,"timelineRetentionMode":"unlimited","timelineRetentionValue":0}')`);
 
   // ---- Phase 15.1: Compendium — store full stats on spawned monsters ----
   addColumnSafe('initiative_tracker', 'stats_json', "TEXT DEFAULT NULL");

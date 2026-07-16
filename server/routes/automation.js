@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { getAutomationRules, setAutomationRules } = require('../lib/automationRules');
+const { requireDmRequest } = require('../lib/dmAuth');
+const { pruneCombatHistory } = require('../services/combatHistoryRetention');
+
+router.use(requireDmRequest(db));
 
 function serialize(v) {
     return typeof v === 'string' ? v : JSON.stringify(v);
@@ -28,7 +32,9 @@ router.get('/rules', (_req, res) => {
 
 router.patch('/rules', (req, res) => {
     try {
-        res.json(setAutomationRules(db, req.body));
+        const rules = setAutomationRules(db, req.body);
+        pruneCombatHistory(db, rules);
+        res.json(rules);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

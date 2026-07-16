@@ -5,6 +5,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Shield, Zap, RotateCcw } from 'lucide-react';
 import { type EffectEvent } from './EffectTimeline';
 import socket from '../socket';
+import { dmFetch } from '../lib/dmFetch';
 
 // Minimal combatant shape — must match InitiativeTracker's Combatant interface
 interface Combatant {
@@ -229,7 +230,7 @@ function EffectTrail({ targetName }: { targetName: string }) {
   const [events, setEvents] = useState<EffectEvent[]>([]);
 
   useEffect(() => {
-    fetch('/api/effect-timeline')
+    dmFetch('/api/effect-timeline')
       .then(r => r.json())
       .then((all: EffectEvent[]) => {
         setEvents(all.filter(e => e.target_name === targetName).slice(-8));

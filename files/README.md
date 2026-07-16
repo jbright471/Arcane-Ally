@@ -30,4 +30,4 @@ The prototype files demonstrate these concepts:
 4. Create initial session state for HP, conditions, spell slots, and resources.
 5. Hand validated data to the live app's server-side importer.
 
-Use the active server routes and tests as the source of truth before reusing any code from this folder.
+Use the active server routes and tests as the source of truth before reusing any code from this folder. Files here are not loaded by the running application and should not be used as deployment instructions.

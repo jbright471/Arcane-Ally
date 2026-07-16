@@ -213,7 +213,7 @@ For deeper help, open **Guide** from the sidebar and search for the task you are
 
 This section is for the person hosting Arcane Ally. Players can skip it and use the app URL their DM provides.
 
-Arcane Ally is designed to run entirely on your local hardware or a home server. All features, databases, and AI processes run locally, ensuring that your campaigns are self-contained and private.
+Arcane Ally is designed for your own hardware or home server. Campaign state and SQLite data stay on that host. AI prompts go to the Ollama endpoint you configure; D&D Beyond imports and Open5e searches contact those external services only when you use them.
 
 ## Architecture Pipeline
 
@@ -225,7 +225,7 @@ The application uses a lightweight **Client-Server-WebSocket** architectural pip
 
 ## Local Quick Start
 
-Arcane Ally can run as a local development pair or behind your own Portainer/Compose/reverse-proxy stack. The checked-in repository currently includes a production \`Dockerfile\`, but no \`docker-compose.yml\`.
+Arcane Ally can run as a development pair or behind your own Portainer/Compose/reverse-proxy stack. The repository includes a multi-stage \`Dockerfile\`, but no public \`docker-compose.yml\`.
 
 1. **Clone the Repository**: Ensure you have downloaded the project files.
 2. **Configure Environment Variables**: Create a \`.env\` file for the backend:
@@ -237,17 +237,19 @@ Arcane Ally can run as a local development pair or behind your own Portainer/Com
    \`\`\`
 3. **Start the Backend**:
    \`\`\`bash
-   cd server && npm install && npm start
+   cd server && npm ci && npm start
    \`\`\`
 4. **Start the Frontend**:
    \`\`\`bash
-   cd client && npm install && npm run dev
+   cd client && npm ci --legacy-peer-deps && npm run dev
    \`\`\`
 5. **Access the Interface**:
    - **Frontend App**: Open your browser to \`http://localhost:5173\`.
    - **Backend API / Socket.io Gateway**: Running at \`http://localhost:3001\`.
 
-For Portainer or Compose deployments, map frontend traffic to the Vite/static frontend service and route \`/api\` plus \`/socket.io\` traffic to the backend service on port \`3001\`.
+The checked-in Vite proxy expects a backend service named \`dnd-party-sync-backend\`. For host-only development, point both proxy targets in \`client/vite.config.ts\` to \`http://localhost:3001\`.
+
+For Portainer or Compose deployments, serve the frontend separately and route \`/api\` plus \`/socket.io\` traffic to the backend service on port \`3001\`. The current Docker image starts the backend; although it builds and copies \`client/dist\`, Express does not serve those files.
 
 ## Host Checklist
 
@@ -255,10 +257,17 @@ For Portainer or Compose deployments, map frontend traffic to the Vite/static fr
 - Keep real \`.env\` files private.
 - Keep SQLite database files out of Git.
 - Back up the database before major updates.
+- Do not port-forward Arcane Ally directly to the public internet. Use a VPN or an authenticated reverse proxy for remote play.
 - Confirm the backend starts on port **3001**.
 - Confirm the frontend loads on port **5173** or your production domain.
 - Confirm Ollama is reachable if you want AI features.
 - Use HTTPS if players need browser microphone access for voice chat.
+
+## DM Authentication Boundary
+
+DM login creates a session token used by selected automation, timeline, sync-audit, and DM-control requests. A successful login replaces the previous token, so another DM tab may need to enter the PIN again.
+
+Arcane Ally does not provide full user accounts, tenant isolation, rate limiting, or authorization on every mutation route. The DM token is not a replacement for VPN or reverse-proxy authentication on a remotely accessible deployment.
 
 ## WebRTC Voice Chat Security
 
@@ -271,7 +280,7 @@ If you are hosting Arcane Ally on a home server (e.g. \`http://192.168.1.50:5173
 
 ## Required Port Configurations
 
-Ensure the following ports are open on your host firewall or proxy:
+Allow only the ports required inside your trusted network or through your authenticated reverse proxy:
 - **5173**: Default React frontend client port.
 - **3001**: Backend HTTP/Express API and Socket.io gateway port.
 - **11434**: Default Ollama API port (if running Ollama on the same server).
@@ -281,7 +290,7 @@ Ensure the following ports are open on your host firewall or proxy:
 For robust deployment monitoring, Arcane Ally comes configured with container health monitoring and telemetry:
 - **Telemetry Endpoint**: The \`/api/health\` endpoint serves server uptime and raw V8 engine memory usage figures (\`rss\`, \`heapTotal\`, \`heapUsed\`).
 - **Memory Loop Guard**: An automated Node-based healthcheck script (\`healthcheck.js\`) queries the telemetry endpoint and exits with code 1 if heap memory consumption exceeds a threshold of 500MB (preventing infinite loop memory exhaustion).
-- **Lightweight 3-Stage Container**: The production \`Dockerfile\` is optimized into three build stages, completely discarding heavy build dependencies like \`g++\`, \`make\`, and \`python3\` from the final stage runner, dropping the final image footprint.`,
+- **Lightweight 3-Stage Container**: The \`Dockerfile\` discards build dependencies such as \`g++\`, \`make\`, and \`python3\` from the final backend runner.`,
   },
 
   // ── Player Guide ───────────────────────────────────────────────────
@@ -628,7 +637,7 @@ HP changes are **bidirectional and instant**:
 4. The character's card flashes **red** (damage) or **green** (healing)
 5. The Event Timeline records the change with actor, target, amount, and damage type
 
-> **Latency:** Changes typically appear on all screens within 50-100ms on a local network.
+Changes are broadcast immediately; observed timing depends on the host, browser, and network.
 
 ## Quick Condition Management
 
@@ -639,7 +648,7 @@ Blinded, Charmed, Deafened, Frightened, Grappled, Incapacitated, Invisible, Para
 ## The Audit Trail
 
 Every action you take is recorded in two places:
-- **Effect Timeline** — the immutable event store, grouped by round
+- **Effect Timeline** — the append-oriented combat ledger, grouped by round; undo adds a correction and marks the original as reversed
 - **Audit Log** — human-readable descriptions of every mutation
 
 You can **reverse** any event from the Audit Log by clicking the undo button. This applies the inverse operation (e.g., reversing damage heals the target for the same amount).`,
@@ -755,7 +764,7 @@ To apply an effect to multiple combatants at once:
 4. Add one or more effect rows: **Damage** (value + type), **Heal**, or **Condition**
 5. Click **Apply** — this invokes the secure POST \`/api/v1/effects/bulk-apply\` REST API, passing the DM Authorization token header.
 
-The server calculates effects concurrently and writes target updates inside nested transaction savepoints. If a condition validation fails on a single target, only its rollback occurs, letting other targets update successfully. Results appear per-target in the modal summary. All events from the same AoE share a **group ID** in the Effect Timeline.
+The server validates the requested targets, applies the effect set in a database transaction, and reports a result for each target. All events from the same AoE share a **group ID** in the Effect Timeline, which supports a grouped undo.
 
 ## Quick Actions (DM)
 
@@ -843,6 +852,8 @@ Click **Automation** in the DM Dashboard header, then choose **Policies**. These
 - **Apply Unconscious at 0 HP** — adds Unconscious when damage reduces a character to 0 HP
 - **Clear Unconscious After Healing** — removes that condition when healing raises HP above 0
 - **Concentration Cleanup** — drops concentration and linked buffs at 0 HP
+- **Bloodied Detection** — marks living combatants and records an event when they cross the configured percentage of maximum HP
+- **Bloodied Threshold** — sets that percentage; the default is 50%
 
 ### Combat Flow
 
@@ -855,8 +866,24 @@ Click **Automation** in the DM Dashboard header, then choose **Policies**. These
 - **Turn Triggers** — enables configured start-of-turn and end-of-turn presets
 - **Aura Processing** — enables configured aura effects
 - **Reactive Item Handlers** — enables curated reactions such as Retributive Healing
+- **Modifier Propagation** — applies temporary buffs and auras to calculated stats and rolls; turning it off leaves the buffs visible but pauses their math
+- **Ammunition Tracking** — consumes only ammunition that a manual weapon explicitly names
 
-All policies are enabled by default so existing campaigns keep their current behavior after upgrading. Turning off a policy affects the next matching action; it does not reverse changes already applied.
+### Combat History
+
+- **Keep All** — stores every archived encounter until the host removes it
+- **Keep Encounters** — retains only the newest number of archived encounters you choose
+- **Keep Days** — removes archived encounters older than the number of days you choose
+
+Pruning never removes the current encounter. It runs after an encounter is archived and when the retention setting changes.
+
+Most existing behavior is enabled by default so campaigns keep working after an upgrade. **Ammunition Tracking is off by default**, and combat history defaults to **Keep All**. Turning off a policy affects the next matching action; it does not reverse changes already applied.
+
+## Link Ammunition Before Enabling Tracking
+
+> **Where to go:** \`Character Sheet -> Actions -> Add/Edit Manual Weapon -> Properties -> Ammunition\`
+
+Enter the **Inventory Ammunition Name** exactly as it appears in the inventory, such as \`Arrows\`, and set **Used per Attack**. Then enable **Automation -> Policies -> Ammunition Tracking**. Unlinked weapons never consume items, and an attack is rejected if the linked quantity is too low.
 
 ## Access Control Matrix
 
@@ -1193,6 +1220,8 @@ The timeline groups events by combat round:
 - **BUFF** (blue) — buff applications and removals
 - **CON✓ / CONC!** (violet/rose) — concentration check results
 - **AUTO** (orange) — automated aura or turn-trigger effects
+- **BLOODIED** (rose) — a living combatant crossed into or out of the configured HP threshold
+- **AMMO** (amber) — an explicitly linked ammunition item was consumed by an attack roll
 - **UNDO** (slate) — corrections
 
 Each event type has a distinct color badge. Use the legend at the top to filter by type — click a badge to show only those events.
@@ -1235,6 +1264,8 @@ This is ideal for session notes, Discord recaps, or archiving what actually happ
 
 Archived timelines are read-only. You can search and export them, while undo and clear controls remain available only for the current timeline.
 
+To control archive size, go to **DM Dashboard -> Automation -> Policies -> Combat History**. **Keep All** is the default. **Keep Encounters** and **Keep Days** prune archived encounters only; they do not delete the active encounter or out-of-combat events.
+
 ## Audit Log
 
 The **Audit Log** (in the DM Dashboard) provides human-readable descriptions of every mutation. Filter by category: **Combat**, **Status**, **Conc.**, **Resources**, **Auto**.`,
@@ -1246,7 +1277,7 @@ The **Audit Log** (in the DM Dashboard) provides human-readable descriptions of 
     icon: Sparkles,
     content: `# AI Features Overview
 
-Arcane Ally integrates with your local **Ollama** instance to provide AI-powered features throughout the app. All AI processing happens on your hardware — no cloud APIs, no data leaves your network.
+Arcane Ally integrates with **Ollama** for AI-powered features. Prompts and generated responses go only to the \`OLLAMA_URL\` you configure. D&D Beyond imports and Open5e compendium searches are separate online features and contact their respective services when used.
 
 ## Where AI Is Used
 
@@ -1389,11 +1420,11 @@ DMs can build reusable presets for homebrew spells, magic item modifications, mo
 4. Save the preset to persist it in the SQLite database.
 
 ## Bulk Applying Presets
-To apply a preset to multiple combatants concurrently:
+To apply a preset to multiple combatants in one grouped action:
 1. Open the **Presets** drawer and select a preset.
 2. Check the boxes next to the target creatures and characters in the active initiative order.
 3. Click **Apply Preset Effect**.
-4. The server runs calculations concurrently and logs the action on both the Roll Feed and the Effect Timeline.`,
+4. The server applies the grouped action and records each resulting change in the Effect Timeline.`,
   },
   {
     id: 'import-guardrails',
@@ -1837,7 +1868,7 @@ export default function AppGuidebook() {
         {/* Footer */}
         <div className="px-4 py-3 border-t border-border/20 text-center">
           <p className="text-[9px] text-muted-foreground/30 font-display tracking-widest uppercase">
-            Arcane Ally v1.0.2
+            Arcane Ally v1.0.3
           </p>
         </div>
       </aside>
