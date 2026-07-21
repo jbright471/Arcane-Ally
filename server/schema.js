@@ -466,6 +466,36 @@ function runMigrations() {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_effect_events_session ON effect_events (combat_session_id, id DESC);`);
   } catch (_e) {}
 
+  // ---- Phase 22.0: Idempotent command processing ----
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS processed_commands (
+      command_id         TEXT PRIMARY KEY,
+      command_type       TEXT NOT NULL,
+      actor_type         TEXT NOT NULL DEFAULT 'unknown',
+      actor_id           TEXT DEFAULT NULL,
+      session_id         TEXT DEFAULT NULL,
+      aggregate_key      TEXT DEFAULT NULL,
+      expected_version   INTEGER DEFAULT NULL,
+      aggregate_version  INTEGER DEFAULT NULL,
+      payload_hash       TEXT NOT NULL,
+      status             TEXT NOT NULL DEFAULT 'processing',
+      result_json        TEXT DEFAULT NULL,
+      created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+      committed_at       TEXT DEFAULT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_processed_commands_created
+      ON processed_commands (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_processed_commands_session
+      ON processed_commands (session_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS aggregate_versions (
+      aggregate_key  TEXT PRIMARY KEY,
+      version        INTEGER NOT NULL DEFAULT 0,
+      updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
   // ---- Phase 21.0: Rollback Audit Log ----
   db.exec(`
     CREATE TABLE IF NOT EXISTS combat_restore_audit (

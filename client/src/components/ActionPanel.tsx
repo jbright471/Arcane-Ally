@@ -11,6 +11,7 @@ import { Heart, Swords, Sparkles, Zap, Shield, ChevronUp, AlertTriangle } from '
 import { toast } from 'sonner';
 import { backend } from '../integrations/backend';
 import socket from '../socket';
+import { generateRequestId } from '../lib/requestId';
 
 type EffectType = 'heal' | 'damage' | 'temp_hp' | 'buff' | 'condition';
 
@@ -168,7 +169,8 @@ export function ActionPanel() {
             stat: spell.buffStat || 'AC',
             modifier: finalVal,
             source: actorChar.name
-          }
+          },
+          requestId: generateRequestId(),
         });
       }
     });

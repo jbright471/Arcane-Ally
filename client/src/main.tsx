@@ -1,6 +1,9 @@
+import { lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App.tsx'
 import './index.css'
+
+const App = lazy(() => import('./App.tsx'));
+const PlayerPreview = lazy(() => import('./pages/PlayerPreview.tsx'));
 
 // Add fonts to document head
 const link1 = document.createElement('link');
@@ -19,7 +22,12 @@ link3.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&f
 link3.rel = 'stylesheet';
 document.head.appendChild(link3);
 
-createRoot(document.getElementById("root")!).render(<App />);
+const isPlayerPreview = window.location.pathname === '/player-preview';
+createRoot(document.getElementById("root")!).render(
+  <Suspense fallback={<div className="min-h-screen bg-background" />}>
+    {isPlayerPreview ? <PlayerPreview /> : <App />}
+  </Suspense>,
+);
 
 // Register Service Worker for offline support
 if ('serviceWorker' in navigator) {

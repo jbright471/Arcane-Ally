@@ -35,6 +35,8 @@ Tokens are stored in browser local storage and in the campaign database. Treat b
 
 The DM Dashboard validates a saved token before rendering protected controls. Invalid or expired tokens are removed and the host is returned to the DM PIN login. This protects selected DM features but does not change Arcane Ally's trusted-network deployment model.
 
+Player-State Preview links require an authenticated DM session to create, expire after 15 minutes, and bind to the first tab that opens them. Their tokens are placed in the URL fragment rather than the HTTP request path. The preview uses a separate read-only Socket.io namespace and receives a server-generated player projection; hidden monsters, undiscovered markers, pending imports, and DM-only controls are not sent to that tab.
+
 ## Data Leaving the Host
 
 | Feature | Destination |

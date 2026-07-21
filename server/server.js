@@ -52,6 +52,16 @@ const {
     canSocketReceiveEvent,
 } = require('./lib/clientStateProjection');
 const {
+    buildPlayerViewSnapshot,
+    projectBattleMapState,
+    projectWorldMapState,
+} = require('./lib/playerViewProjection');
+const {
+    CommandConflictError,
+    executeProcessedCommand,
+    pruneProcessedCommands,
+} = require('./lib/processedCommands');
+const {
     normalizeRollVisibility,
     isPublicRoll,
     buildRollRouting,
@@ -138,6 +148,8 @@ function applyEffect(effect) {
 
 // --- Bootstrap ---
 runMigrations();
+pruneProcessedCommands(db);
+setInterval(() => pruneProcessedCommands(db), 24 * 60 * 60 * 1000).unref();
 
 const app = express();
 const server = http.createServer(app);
@@ -147,6 +159,7 @@ const io = new Server(server, {
         methods: ['GET', 'POST', 'PATCH', 'DELETE'],
     },
 });
+const previewIo = io.of('/player-preview');
 app.set('io', io);
 
 // --- Middleware ---
@@ -264,9 +277,31 @@ function requireDm(token) {
 }
 
 const requireDmHttp = requireDmRequest(db);
+const playerPreviewSessions = new Map();
+const PLAYER_PREVIEW_TTL_MS = 15 * 60 * 1000;
 
 app.get('/api/auth/dm/status', requireDmHttp, (_req, res) => {
     res.json({ authenticated: true });
+});
+
+app.post('/api/player-preview/sessions', requireDmHttp, (req, res) => {
+    const characterId = Number.parseInt(req.body?.characterId, 10);
+    const character = db.prepare('SELECT id, name FROM characters WHERE id = ?').get(characterId);
+    if (!character) return res.status(404).json({ error: 'Character not found' });
+
+    const now = Date.now();
+    for (const [token, session] of playerPreviewSessions) {
+        if (session.expiresAt <= now) playerPreviewSessions.delete(token);
+    }
+
+    const token = randomUUID();
+    const expiresAt = now + PLAYER_PREVIEW_TTL_MS;
+    playerPreviewSessions.set(token, { characterId, expiresAt, clientId: null });
+    return res.status(201).json({
+        token,
+        expiresAt: new Date(expiresAt).toISOString(),
+        character,
+    });
 });
 
 app.get('/api/health', (req, res) => {
@@ -618,6 +653,7 @@ function saveCombatState() {
 
 function broadcastCombatState() {
     io.emit('combat_state_sync', { round: currentCombatRound, turnIndex: currentTurnIndex });
+    broadcastPlayerPreviewSnapshots();
 }
 
 loadCombatState();
@@ -648,6 +684,81 @@ function getResolvedPartyState() {
             homebrewInventory: JSON.parse(char.homebrew_inventory || '[]')
         };
     });
+}
+
+function getWorldStateForPreview() {
+    try {
+        const time = db.prepare('SELECT value FROM campaign_state WHERE key = ?').get('current_time');
+        const weather = db.prepare('SELECT value FROM campaign_state WHERE key = ?').get('current_weather');
+        return {
+            time: JSON.parse(time?.value || '{}'),
+            weather: JSON.parse(weather?.value || '{}'),
+        };
+    } catch {
+        return { time: {}, weather: {} };
+    }
+}
+
+function getWorldMapForPreview() {
+    const map = db.prepare('SELECT * FROM maps WHERE is_overworld = 1').get();
+    if (!map) return null;
+    return {
+        ...map,
+        map_url: map.image_path ? `/api/maps/file/${path.basename(map.image_path)}` : null,
+        markers: db.prepare('SELECT * FROM map_markers WHERE parent_map_id = ?').all(map.id),
+    };
+}
+
+function getBattleMapForPreview() {
+    const map = db.prepare('SELECT * FROM maps WHERE is_active = 1').get();
+    if (!map) return null;
+    return {
+        ...map,
+        map_url: map.image_path ? `/api/maps/file/${path.basename(map.image_path)}` : null,
+        tokens: db.prepare('SELECT * FROM map_tokens WHERE map_id = ?').all(map.id),
+        markers: db.prepare('SELECT * FROM map_markers WHERE parent_map_id = ?').all(map.id),
+    };
+}
+
+let playerPreviewProjectionVersion = 0;
+let playerPreviewBroadcastTimer = null;
+
+function createPlayerPreviewSnapshot(characterId) {
+    return buildPlayerViewSnapshot({
+        characterId,
+        party: getResolvedPartyState(),
+        initiative: getTrackerState(),
+        timeline: getCombatTimeline(db),
+        permissions: getPermissions(db),
+        combatState: { round: currentCombatRound, turnIndex: currentTurnIndex },
+        notes: db.prepare('SELECT * FROM party_notes ORDER BY updated_at DESC').all(),
+        sharedLoot: db.prepare('SELECT * FROM shared_loot ORDER BY created_at DESC').all(),
+        worldState: getWorldStateForPreview(),
+        worldMap: getWorldMapForPreview(),
+        battleMap: getBattleMapForPreview(),
+        version: playerPreviewProjectionVersion,
+    });
+}
+
+function emitPlayerPreviewSnapshot(socket) {
+    const characterId = socket.data?.playerPreviewCharacterId;
+    if (!characterId) return;
+    if (socket.data.playerPreviewExpiresAt <= Date.now()) {
+        socket.emit('player_preview_error', { message: 'Preview session expired. Open a new preview from the DM Dashboard.' });
+        socket.disconnect(true);
+        return;
+    }
+    const snapshot = createPlayerPreviewSnapshot(characterId);
+    if (snapshot) socket.emit('player_preview_state', snapshot);
+}
+
+function broadcastPlayerPreviewSnapshots() {
+    if (playerPreviewBroadcastTimer) clearTimeout(playerPreviewBroadcastTimer);
+    playerPreviewBroadcastTimer = setTimeout(() => {
+        playerPreviewProjectionVersion += 1;
+        for (const socket of previewIo.sockets.values()) emitPlayerPreviewSnapshot(socket);
+        playerPreviewBroadcastTimer = null;
+    }, 50);
 }
 
 function getSocketProjectionContext(socket) {
@@ -691,6 +802,7 @@ function broadcastPartyState() {
         rawBroadcastPartyState();
         partyStateTimer = null;
     }, 50);
+    broadcastPlayerPreviewSnapshots();
 }
 
 function rawBroadcastPartyState() {
@@ -712,13 +824,18 @@ function broadcastPartyLoot() {
         vote_state_json: r.vote_state_json || null,
     }));
     io.emit('party_loot_state', items);
+    broadcastPlayerPreviewSnapshots();
 }
 
 function broadcastLogs() {
     const logs = db.prepare('SELECT * FROM action_log ORDER BY id DESC LIMIT 100').all();
     const orderedLogs = logs.reverse();
     forEachConnectedSocket(socket => {
-        if (!socket.castView) socket.emit('action_logged', orderedLogs);
+        if (socket.castView) return;
+        const projectedLogs = socket.dmAuthenticated
+            ? orderedLogs
+            : orderedLogs.map(({ effects_json: _effectsJson, ...log }) => log);
+        socket.emit('action_logged', projectedLogs);
     });
 }
 
@@ -729,6 +846,7 @@ function broadcastInitiative() {
         rawBroadcastInitiative();
         initiativeTimer = null;
     }, 50);
+    broadcastPlayerPreviewSnapshots();
 }
 
 function rawBroadcastInitiative() {
@@ -741,6 +859,7 @@ function broadcastNotes() {
     forEachConnectedSocket(socket => {
         if (!socket.castView) socket.emit('notes_state', notes);
     });
+    broadcastPlayerPreviewSnapshots();
 }
 
 function broadcastWorldState() {
@@ -751,6 +870,7 @@ function broadcastWorldState() {
             time: JSON.parse(time?.value || '{}'),
             weather: JSON.parse(weather?.value || '{}')
         });
+        broadcastPlayerPreviewSnapshots();
     } catch (_e) {}
 }
 
@@ -762,17 +882,20 @@ function broadcastTimeline() {
         forEachConnectedSocket(socket => emitProjectedTimeline(socket, events));
         _timelineTimer = null;
     }, 100);
+    broadcastPlayerPreviewSnapshots();
 }
 function broadcastTimelineImmediate() {
     if (_timelineTimer) clearTimeout(_timelineTimer);
     _timelineTimer = null;
     const events = getCombatTimeline(db);
     forEachConnectedSocket(socket => emitProjectedTimeline(socket, events));
+    broadcastPlayerPreviewSnapshots();
 }
 
 function broadcastPermissions() {
     const perms = getPermissions(db);
     io.emit('permissions_state', perms);
+    broadcastPlayerPreviewSnapshots();
 }
 
 function broadcastWorldMapState() {
@@ -781,10 +904,14 @@ function broadcastWorldMapState() {
         if (map) {
             const markers = db.prepare('SELECT * FROM map_markers WHERE parent_map_id = ?').all(map.id);
             const map_url = map.image_path ? `/api/maps/file/${path.basename(map.image_path)}` : null;
-            io.emit('world_map_state', { ...map, map_url, markers });
+            const state = { ...map, map_url, markers };
+            forEachConnectedSocket(socket => {
+                socket.emit('world_map_state', socket.dmAuthenticated ? state : projectWorldMapState(state));
+            });
         } else {
             io.emit('world_map_state', null);
         }
+        broadcastPlayerPreviewSnapshots();
     } catch (e) { console.error('[WorldMap] Broadcast error:', e); }
 }
 
@@ -794,10 +921,14 @@ function broadcastMapState() {
         const tokens = db.prepare('SELECT * FROM map_tokens WHERE map_id = ?').all(map.id);
         const markers = db.prepare('SELECT * FROM map_markers WHERE parent_map_id = ?').all(map.id);
         const image_data = map.image_path ? `/api/maps/file/${path.basename(map.image_path)}` : null;
-        io.emit('map_state', { ...map, image_data, tokens, markers });
+        const state = { ...map, image_data, map_url: image_data, tokens, markers };
+        forEachConnectedSocket(socket => {
+            socket.emit('map_state', socket.dmAuthenticated ? state : projectBattleMapState(state));
+        });
     } else {
         io.emit('map_state', null);
     }
+    broadcastPlayerPreviewSnapshots();
 }
 
 function logAction(actor, description, status = 'applied', effectsJson = null) {
@@ -868,7 +999,143 @@ function resolveLootVote(db, lootId, io, broadcastPartyLoot, broadcastPartyState
     logAction('System', `Loot vote resolved: ${item.name} → ${winner ? winner.name + ' (' + winType + ')' : 'No winner (all passed)'}`);
 }
 
+function emitCommandResult(socket, eventName, acknowledge, outcome) {
+    const mutation = outcome.result?.mutation;
+    const successful = mutation ? mutation.success !== false : outcome.result?.success !== false;
+    const response = {
+        success: successful,
+        commandId: outcome.commandId,
+        replayed: outcome.replayed,
+        aggregateVersion: outcome.aggregateVersion,
+        result: outcome.result,
+        ...(successful ? {} : {
+            error: mutation?.error || outcome.result?.error || 'Command was rejected',
+            code: 'COMMAND_REJECTED',
+        }),
+    };
+    if (typeof acknowledge === 'function') acknowledge(response);
+    socket.emit('command_result', response);
+    if (eventName) {
+        const eventResult = outcome.result?.mutation ?? outcome.result;
+        socket.emit(eventName, { ...eventResult, ...response });
+    }
+}
+
+function emitCommandError(socket, eventName, acknowledge, error) {
+    const response = {
+        success: false,
+        error: error.message || 'Command failed',
+        code: error.code || 'COMMAND_FAILED',
+    };
+    if (typeof acknowledge === 'function') acknowledge(response);
+    socket.emit('command_result', response);
+    if (eventName) socket.emit(eventName, response);
+}
+
+function executeCharacterSocketCommand({
+    socket,
+    acknowledge,
+    resultEvent = null,
+    commandType,
+    characterId,
+    requestId,
+    commandId,
+    expectedVersion,
+    actor,
+    payload,
+    execute,
+    buildAudit,
+    afterCommit,
+}) {
+    const resolvedCommandId = commandId || requestId || randomUUID();
+    try {
+        const outcome = executeProcessedCommand(db, {
+            commandId: resolvedCommandId,
+            commandType,
+            actorType: socket.dmAuthenticated ? 'dm' : 'player',
+            actorId: playerSocketMap.get(socket.id)?.characterId ?? null,
+            sessionId: getActiveCombatSession(db)?.id ?? null,
+            aggregateKey: `character:${characterId}`,
+            expectedVersion: expectedVersion ?? null,
+            payload,
+        }, () => {
+            const result = execute();
+            if (!result?.success) return { mutation: result, characterName: null };
+            const charData = getCharacterData(db, characterId);
+            const characterName = charData?.name ?? `Character ${characterId}`;
+            if (result.mutated === false) return { mutation: result, characterName };
+            const audit = buildAudit(result, characterName);
+            writeAuditEvent(db, {
+                sessionRound: currentCombatRound,
+                turnIndex: currentTurnIndex,
+                actor: actor || characterName,
+                targetId: characterId,
+                targetName: characterName,
+                requestId: resolvedCommandId,
+                ...audit,
+            });
+            db.prepare(`
+                INSERT INTO action_log (timestamp, actor, action_description, status)
+                VALUES (datetime('now'), ?, ?, 'applied')
+            `).run(actor || characterName, result.logMessage || audit.description);
+            return { mutation: result, characterName };
+        });
+
+        emitCommandResult(socket, resultEvent, acknowledge, outcome);
+        if (!outcome.replayed && outcome.result?.mutation?.success && outcome.result.mutation.mutated !== false) {
+            broadcastLogs();
+            broadcastPartyState();
+            broadcastTimeline();
+            afterCommit?.(outcome.result.mutation, outcome.result.characterName);
+        } else if (!outcome.result?.mutation?.success && outcome.result?.mutation?.error) {
+            socket.emit('rules_error', { message: outcome.result.mutation.error });
+        }
+        return outcome;
+    } catch (error) {
+        emitCommandError(socket, resultEvent, acknowledge, error);
+        if (!(error instanceof CommandConflictError)) console.error(`[Command] ${commandType} failed:`, error);
+        return null;
+    }
+}
+
 // --- Socket.io ---
+previewIo.on('connection', socket => {
+    const allowedEvents = new Set(['register_player_preview', 'request_player_preview_state']);
+    socket.use(([event], next) => {
+        if (!allowedEvents.has(event)) {
+            socket.emit('player_preview_error', { message: 'Player preview is read-only.' });
+            return next(new Error('Player preview is read-only'));
+        }
+        if (event !== 'register_player_preview' && !socket.data.playerPreviewCharacterId) {
+            socket.emit('player_preview_error', { message: 'Preview session is not registered.' });
+            return next(new Error('Preview session is not registered'));
+        }
+        return next();
+    });
+
+    socket.on('register_player_preview', ({ token, clientId } = {}) => {
+        const session = playerPreviewSessions.get(String(token || ''));
+        const normalizedClientId = String(clientId || '');
+        if (!session || session.expiresAt <= Date.now() || !normalizedClientId) {
+            if (token) playerPreviewSessions.delete(String(token));
+            socket.emit('player_preview_error', { message: 'Preview link is invalid or expired.' });
+            return;
+        }
+        if (session.clientId && session.clientId !== normalizedClientId) {
+            socket.emit('player_preview_error', { message: 'Preview link has already been opened in another tab.' });
+            return;
+        }
+
+        session.clientId = normalizedClientId;
+        socket.data.playerPreviewCharacterId = session.characterId;
+        socket.data.playerPreviewExpiresAt = session.expiresAt;
+        playerPreviewProjectionVersion += 1;
+        emitPlayerPreviewSnapshot(socket);
+    });
+
+    socket.on('request_player_preview_state', () => emitPlayerPreviewSnapshot(socket));
+});
+
 io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);
 
@@ -1111,7 +1378,7 @@ io.on('connection', (socket) => {
                 diff: JSON.parse(r.diff_json || '{}').diff || {},
                 incomingData: JSON.parse(r.incoming_data_json)
             }));
-            io.emit('pending_imports_sync', remaining);
+            io.to('dm_room').emit('pending_imports_sync', remaining);
         } catch (err) {
             console.error('Error resolving pending import:', err);
         }
@@ -1195,7 +1462,34 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('update_hp', ({ characterId, delta, actor, damageType, skipConcentrationAutoRoll, requestId }) => {
+    socket.on('update_hp', (payload, acknowledge) => {
+        const { characterId, delta, actor, damageType, skipConcentrationAutoRoll, requestId, commandId, expectedVersion } = payload || {};
+        const resolvedCommandId = commandId || requestId || randomUUID();
+        const storePendingHpChange = (characterName) => {
+            const actionText = delta < 0
+                ? `${characterName} takes ${Math.abs(delta)} ${damageType || 'untyped'} damage`
+                : `${characterName} is healed for ${delta} HP`;
+            const outcome = executeProcessedCommand(db, {
+                commandId: resolvedCommandId,
+                commandType: 'character.hp.request',
+                actorType: socket.dmAuthenticated ? 'dm' : 'player',
+                actorId: playerSocketMap.get(socket.id)?.characterId ?? null,
+                sessionId: getActiveCombatSession(db)?.id ?? null,
+                payload: { characterId, delta, actor, damageType },
+            }, () => {
+                db.prepare(`
+                    INSERT INTO action_log (timestamp, actor, action_description, status, effects_json)
+                    VALUES (datetime('now'), ?, ?, 'pending', ?)
+                `).run(
+                    actor || 'Player',
+                    actionText,
+                    JSON.stringify({ type: 'hp', characterId, delta, damageType }),
+                );
+                return { success: true, pending: true };
+            });
+            emitCommandResult(socket, 'update_hp_result', acknowledge, outcome);
+            if (!outcome.replayed) broadcastLogs();
+        };
         // Cross-player permission check
         const socketInfo = playerSocketMap.get(socket.id);
         const actorCharId = socketInfo?.characterId;
@@ -1203,8 +1497,7 @@ io.on('connection', (socket) => {
             const perm = checkPermission(db, 'cross_player_effects', socket.dmAuthenticated, actorCharId, characterId);
             if (!perm.allowed) {
                 const char = db.prepare('SELECT name FROM characters WHERE id = ?').get(characterId);
-                logAction(actor || 'Player', `${char?.name || 'Character'}: ${delta < 0 ? 'damage' : 'heal'} ${Math.abs(delta)} HP`, 'pending',
-                    JSON.stringify({ type: 'hp', characterId, delta, damageType }));
+                storePendingHpChange(char?.name || 'Character');
                 socket.emit('rules_error', { message: perm.reason });
                 return;
             }
@@ -1212,75 +1505,115 @@ io.on('connection', (socket) => {
 
         if (isApprovalMode) {
             const char = db.prepare('SELECT name FROM characters WHERE id = ?').get(characterId);
-            if (!char) return;
-            const actionText = delta < 0 ? `${char.name} takes ${Math.abs(delta)} ${damageType || 'untyped'} damage` : `${char.name} is healed for ${delta} HP`;
-            logAction(actor || 'Player', actionText, 'pending', JSON.stringify({ type: 'hp', characterId, delta, damageType }));
+            if (!char) {
+                emitCommandError(socket, 'update_hp_result', acknowledge, new Error('Character not found'));
+                return;
+            }
+            storePendingHpChange(char.name);
             return;
         }
-        let result = delta < 0 ? applyDamageEvent(db, characterId, Math.abs(delta), damageType || 'untyped') : applyHealEvent(db, characterId, delta);
-        if (result?.success) {
-            // Write audit event
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            const desc = delta < 0
-                ? `${actor || 'System'} dealt ${Math.abs(delta)} ${damageType || 'untyped'} damage to ${charName}`
-                : `${actor || 'System'} healed ${charName} for ${delta} HP`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: delta < 0 ? 'damage' : 'heal',
-                actor: actor || 'System', targetId: characterId, targetName: charName,
-                payload: { value: Math.abs(delta), damageType: delta < 0 ? (damageType || 'untyped') : null, newHp: result.newHp },
-                requestId, description: desc,
-            });
-            writeBloodiedAuditEvent({
-                transition: result.bloodiedTransition,
-                targetId: characterId,
-                targetName: charName,
-                previousHp: result.previousHp,
-                currentHp: result.newHp,
-            });
-            broadcastTimeline();
+        try {
+            const outcome = executeProcessedCommand(db, {
+                commandId: resolvedCommandId,
+                commandType: 'character.hp.update',
+                actorType: socket.dmAuthenticated ? 'dm' : 'player',
+                actorId: playerSocketMap.get(socket.id)?.characterId ?? null,
+                sessionId: getActiveCombatSession(db)?.id ?? null,
+                aggregateKey: `character:${characterId}`,
+                expectedVersion: expectedVersion ?? null,
+                payload: { characterId, delta, actor, damageType, skipConcentrationAutoRoll: !!skipConcentrationAutoRoll },
+            }, () => {
+                const result = delta < 0
+                    ? applyDamageEvent(db, characterId, Math.abs(delta), damageType || 'untyped')
+                    : applyHealEvent(db, characterId, delta);
+                if (!result?.success) return { mutation: result, concentration: null };
 
-            const shouldPromptForConcentration = skipConcentrationAutoRoll
-                || getAutomationRules(db).concentrationChecks === 'prompt';
-            if (delta < 0 && result.concentrationCheck && !shouldPromptForConcentration) {
-                const state = getSessionState(db, characterId);
                 const charData = getCharacterData(db, characterId);
-                const conScore = charData?.abilityScores?.CON ?? 10;
-                const conMod = Math.floor((conScore - 10) / 2);
-                const roll = Math.floor(Math.random() * 20) + 1;
-                const total = roll + conMod;
-                const dc = result.concentrationCheck.dc;
-                const passed = total >= dc;
-                const spellName = state?.concentratingOn ?? 'Unknown Spell';
                 const charName = charData?.name ?? `Character ${characterId}`;
+                const desc = delta < 0
+                    ? `${actor || 'System'} dealt ${Math.abs(delta)} ${damageType || 'untyped'} damage to ${charName}`
+                    : `${actor || 'System'} healed ${charName} for ${delta} HP`;
+                writeAuditEvent(db, {
+                    sessionRound: currentCombatRound,
+                    turnIndex: currentTurnIndex,
+                    eventType: delta < 0 ? 'damage' : 'heal',
+                    actor: actor || 'System',
+                    targetId: characterId,
+                    targetName: charName,
+                    payload: {
+                        value: Math.abs(delta),
+                        damageType: delta < 0 ? (damageType || 'untyped') : null,
+                        newHp: result.newHp,
+                    },
+                    requestId: resolvedCommandId,
+                    description: desc,
+                });
+                writeBloodiedAuditEvent({
+                    transition: result.bloodiedTransition,
+                    targetId: characterId,
+                    targetName: charName,
+                    previousHp: result.previousHp,
+                    currentHp: result.newHp,
+                });
 
-                writeConcentrationCheckEvent(
-                    db, characterId, charName, spellName,
-                    roll, conMod, total, dc, passed,
-                    currentCombatRound, currentTurnIndex
-                );
-
-                if (!passed) {
-                    dropConcentrationEvent(db, characterId);
-                    broadcastInitiative();
-                    io.emit('concentration_broken', { characterId, characterName: charName, spellName, roll, total, dc });
-                } else {
-                    io.emit('concentration_maintained', { characterId, characterName: charName, spellName, roll, total, dc });
+                let concentration = null;
+                const shouldPrompt = skipConcentrationAutoRoll
+                    || getAutomationRules(db).concentrationChecks === 'prompt';
+                if (delta < 0 && result.concentrationCheck && shouldPrompt) {
+                    const state = getSessionState(db, characterId);
+                    concentration = {
+                        mode: 'prompt',
+                        characterId,
+                        characterName: charName,
+                        spellName: state?.concentratingOn,
+                        dc: result.concentrationCheck.dc,
+                    };
+                } else if (delta < 0 && result.concentrationCheck) {
+                    const state = getSessionState(db, characterId);
+                    const conScore = charData?.abilityScores?.CON ?? 10;
+                    const conMod = Math.floor((conScore - 10) / 2);
+                    const roll = Math.floor(Math.random() * 20) + 1;
+                    const total = roll + conMod;
+                    const dc = result.concentrationCheck.dc;
+                    const passed = total >= dc;
+                    const spellName = state?.concentratingOn ?? 'Unknown Spell';
+                    writeConcentrationCheckEvent(
+                        db, characterId, charName, spellName,
+                        roll, conMod, total, dc, passed,
+                        currentCombatRound, currentTurnIndex,
+                    );
+                    if (!passed) dropConcentrationEvent(db, characterId);
+                    concentration = {
+                        mode: 'automatic', characterId, characterName: charName,
+                        spellName, roll, total, dc, passed,
+                    };
                 }
-                broadcastTimeline();
-            } else if (delta < 0 && result.concentrationCheck && shouldPromptForConcentration) {
-                // Manual roll mode — let client decide
-                const state = getSessionState(db, characterId);
-                io.emit('concentration_check_required', { characterId, spellName: state?.concentratingOn, dc: result.concentrationCheck.dc });
-            }
-            logAction(actor || 'System', result.logMessage);
+
+                db.prepare(`
+                    INSERT INTO action_log (timestamp, actor, action_description, status)
+                    VALUES (datetime('now'), ?, ?, 'applied')
+                `).run(actor || 'System', result.logMessage);
+
+                return { mutation: result, concentration, characterName: charName };
+            });
+
+            emitCommandResult(socket, 'update_hp_result', acknowledge, outcome);
+            if (outcome.replayed || !outcome.result?.mutation?.success) return;
+
+            const result = outcome.result.mutation;
+            const concentration = outcome.result.concentration;
+            broadcastLogs();
             broadcastPartyState();
-            if (result.concentrationCleanup?.affectedTrackerIds?.length > 0) {
+            broadcastTimeline();
+            if (result.concentrationCleanup?.affectedTrackerIds?.length > 0 || concentration?.passed === false) {
                 broadcastInitiative();
             }
+            if (concentration?.mode === 'prompt') {
+                io.emit('concentration_check_required', concentration);
+            } else if (concentration?.mode === 'automatic') {
+                io.emit(concentration.passed ? 'concentration_maintained' : 'concentration_broken', concentration);
+            }
 
-            // Emit dedicated HP-change event for DM flash effects
             const hpChar = getCharacterData(db, characterId);
             if (hpChar) {
                 io.emit('hp_change_event', {
@@ -1294,144 +1627,153 @@ io.on('connection', (socket) => {
                     actor: actor || 'System',
                     timestamp: new Date().toISOString(),
                 });
-
-                // Also pipe into roll feed so DMEffectStream picks it up
                 io.to('dm_room').emit('roll_feed_event', {
-                    id: Date.now(),
-                    actor: actor || 'System',
-                    characterId: String(characterId),
-                    label: result.logMessage,
-                    source: null,
+                    id: Date.now(), actor: actor || 'System', characterId: String(characterId),
+                    label: result.logMessage, source: null,
                     rollType: delta < 0 ? 'HP Damage' : 'HP Heal',
-                    sides: 0,
-                    count: 0,
-                    modifier: 0,
-                    total: result.newHp,
+                    sides: 0, count: 0, modifier: 0, total: result.newHp,
                     rolls: [Math.abs(delta)],
                     damageType: delta < 0 ? (damageType || 'untyped') : null,
                     isPrivate: false,
                     timestamp: new Date().toISOString(),
                 });
             }
+        } catch (error) {
+            emitCommandError(socket, 'update_hp_result', acknowledge, error);
+            if (!(error instanceof CommandConflictError)) console.error('[Command] update_hp failed:', error);
         }
     });
 
-    socket.on('set_temp_hp', ({ characterId, amount, actor, requestId }) => {
-        const result = setTempHpEvent(db, characterId, amount);
-        if (result.success) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'temp_hp', actor: actor || 'System',
-                targetId: characterId, targetName: charName,
-                payload: { value: amount }, requestId,
-                description: `${actor || 'System'} set ${charName}'s temp HP to ${amount}`,
-            });
-            logAction(actor || 'System', result.logMessage);
-            broadcastPartyState();
-            broadcastTimeline();
-        }
-    });
-
-    // Unified spell cast handler: deducts slot, handles concentration, broadcasts roll + audit event
-    socket.on('cast_spell', ({ characterId, spellName, spellLevel, castAtLevel, isConcentration, damageDice, damageType, actor, requestId }) => {
-        const charData = getCharacterData(db, characterId);
-        const charName = charData?.name ?? `Character ${characterId}`;
-        const effectiveLevel = castAtLevel ?? spellLevel;
-
-        // Cantrips (level 0) skip slot deduction
-        if (effectiveLevel > 0) {
-            const slotResult = useSpellSlotEvent(db, characterId, effectiveLevel);
-            if (!slotResult.success) {
-                socket.emit('rules_error', { message: slotResult.error });
-                return;
-            }
-        }
-
-        // If concentration, set it (drops existing concentration)
-        if (isConcentration) {
-            const concResult = castConcentrationSpellEvent(db, characterId, spellName, effectiveLevel > 0 ? effectiveLevel : null);
-            if (!concResult.success) {
-                socket.emit('rules_error', { message: concResult.error });
-                // Slot already spent — this is correct 5e behavior (slot consumed even if concentration fails)
-            }
-        }
-
-        // Write audit event
-        const levelLabel = effectiveLevel === 0 ? 'cantrip' : `level ${effectiveLevel}`;
-        const upcastNote = castAtLevel && castAtLevel > spellLevel ? ` (upcast from ${spellLevel})` : '';
-        writeAuditEvent(db, {
-            sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-            eventType: 'spell_slot_used', actor: actor || charName,
-            targetId: characterId, targetName: charName,
-            payload: { spellName, spellLevel, castAtLevel: effectiveLevel, isConcentration, damageDice, damageType },
-            requestId,
-            description: `${charName} cast ${spellName} at ${levelLabel}${upcastNote}`,
+    socket.on('set_temp_hp', (command, acknowledge) => {
+        const { characterId, amount, actor, requestId, commandId, expectedVersion } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'set_temp_hp_result',
+            commandType: 'character.temp_hp.set', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, amount, actor },
+            execute: () => setTempHpEvent(db, characterId, amount),
+            buildAudit: (_result, characterName) => ({
+                eventType: 'temp_hp',
+                payload: { value: amount },
+                description: `${actor || 'System'} set ${characterName}'s temp HP to ${amount}`,
+            }),
         });
+    });
 
-        logAction(actor || charName, `${charName} cast ${spellName} at ${levelLabel}${upcastNote}`);
+    // Spell slot use, concentration changes, and audit history commit as one command.
+    socket.on('cast_spell', (command, acknowledge) => {
+        const {
+            characterId, spellName, spellLevel, castAtLevel, isConcentration,
+            damageDice, damageType, actor, requestId, commandId, expectedVersion,
+        } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'cast_spell_result',
+            commandType: 'character.spell.cast', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: {
+                characterId, spellName, spellLevel, castAtLevel,
+                isConcentration, damageDice, damageType, actor,
+            },
+            execute: () => {
+                const effectiveLevel = castAtLevel ?? spellLevel;
+                if (effectiveLevel > 0) {
+                    const slotResult = useSpellSlotEvent(db, characterId, effectiveLevel);
+                    if (!slotResult.success) return slotResult;
+                }
 
-        // Broadcast to DM roll feed
-        io.to('dm_room').emit('dm_roll_feed', {
-            actor: charName,
-            characterId,
-            label: spellName,
-            source: `${levelLabel}${upcastNote}`,
-            rollType: 'Spell Cast',
-            sides: 0,
-            count: 0,
-            modifier: 0,
-            total: 0,
-            rolls: [],
-            damageType: damageType || null,
-            isPrivate: false,
+                let concentrationError = null;
+                if (isConcentration) {
+                    const result = castConcentrationSpellEvent(
+                        db,
+                        characterId,
+                        spellName,
+                        null,
+                    );
+                    if (!result.success) concentrationError = result.error;
+                }
+
+                const levelLabel = effectiveLevel === 0 ? 'cantrip' : `level ${effectiveLevel}`;
+                const upcastNote = castAtLevel && castAtLevel > spellLevel ? ` (upcast from ${spellLevel})` : '';
+                return {
+                    success: true,
+                    effectiveLevel,
+                    levelLabel,
+                    upcastNote,
+                    concentrationChanged: Boolean(isConcentration && !concentrationError),
+                    concentrationError,
+                    logMessage: `${spellName} cast at ${levelLabel}${upcastNote}`,
+                };
+            },
+            buildAudit: (result, characterName) => ({
+                eventType: 'spell_slot_used',
+                payload: {
+                    spellName,
+                    spellLevel,
+                    castAtLevel: result.effectiveLevel,
+                    isConcentration,
+                    damageDice,
+                    damageType,
+                },
+                description: `${characterName} cast ${spellName} at ${result.levelLabel}${result.upcastNote}`,
+            }),
+            afterCommit: (result, characterName) => {
+                io.to('dm_room').emit('dm_roll_feed', {
+                    actor: characterName,
+                    characterId,
+                    label: spellName,
+                    source: `${result.levelLabel}${result.upcastNote}`,
+                    rollType: 'Spell Cast',
+                    sides: 0,
+                    count: 0,
+                    modifier: 0,
+                    total: 0,
+                    rolls: [],
+                    damageType: damageType || null,
+                    isPrivate: false,
+                });
+                if (result.concentrationChanged) broadcastInitiative();
+                if (result.concentrationError) {
+                    socket.emit('rules_error', { message: result.concentrationError });
+                }
+            },
         });
-
-        broadcastPartyState();
-        if (isConcentration) broadcastInitiative();
-        broadcastTimeline();
     });
 
-    socket.on('cast_concentration_spell', ({ characterId, spellName, slotLevel, actor, requestId }) => {
-        const result = castConcentrationSpellEvent(db, characterId, spellName, slotLevel ?? null);
-        if (result.success) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'concentration_start', actor: actor || 'System',
-                targetId: characterId, targetName: charName,
-                payload: { spellName, slotLevel }, requestId,
-                description: `${charName} began concentrating on ${spellName}`,
-            });
-            logAction(actor || 'System', result.logMessage);
-            broadcastPartyState();
-            broadcastInitiative();
-            broadcastTimeline();
-        }
-        else socket.emit('rules_error', { message: result.error });
+    socket.on('cast_concentration_spell', (command, acknowledge) => {
+        const { characterId, spellName, slotLevel, actor, requestId, commandId, expectedVersion } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'concentration_result',
+            commandType: 'character.concentration.start', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, spellName, slotLevel, actor },
+            execute: () => castConcentrationSpellEvent(db, characterId, spellName, slotLevel ?? null),
+            buildAudit: (_result, characterName) => ({
+                eventType: 'concentration_start',
+                payload: { spellName, slotLevel },
+                description: `${characterName} began concentrating on ${spellName}`,
+            }),
+            afterCommit: () => broadcastInitiative(),
+        });
     });
 
-    socket.on('drop_concentration', ({ characterId, actor, requestId }) => {
-        const state = getSessionState(db, characterId);
-        const spellName = state?.concentratingOn ?? 'Unknown';
-        const result = dropConcentrationEvent(db, characterId);
-        if (result.success) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'concentration_dropped', actor: actor || 'System',
-                targetId: characterId, targetName: charName,
-                payload: { spellName }, requestId,
-                description: `${charName} dropped concentration on ${spellName}`,
-            });
-            logAction(actor || 'System', result.logMessage);
-            broadcastPartyState();
-            broadcastInitiative();
-            broadcastTimeline();
-        }
+    socket.on('drop_concentration', (command, acknowledge) => {
+        const { characterId, actor, requestId, commandId, expectedVersion } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'concentration_result',
+            commandType: 'character.concentration.drop', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, actor },
+            execute: () => {
+                const result = dropConcentrationEvent(db, characterId);
+                return { ...result, mutated: Boolean(result.droppedSpell) };
+            },
+            buildAudit: (result, characterName) => ({
+                eventType: 'concentration_dropped',
+                payload: { spellName: result.droppedSpell },
+                description: `${characterName} dropped concentration on ${result.droppedSpell}`,
+            }),
+            afterCommit: () => broadcastInitiative(),
+        });
     });
 
     socket.on('concentration_check_result', ({ characterId, spellName, passed, dc }) => {
@@ -1448,95 +1790,127 @@ io.on('connection', (socket) => {
         logAction(label, `${label} ${passed ? 'maintained' : 'lost'} concentration on ${spellName} (DC ${dc}).`);
     });
 
-    socket.on('apply_condition', ({ characterId, condition, actor, requestId, durationRounds }) => {
-        const result = applyConditionEvent(db, characterId, condition, durationRounds);
-        if (result.success && !result.alreadyPresent) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            const durationStr = durationRounds > 0 ? ` (${durationRounds} rds)` : '';
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'condition_applied', actor: actor || 'System',
-                targetId: characterId, targetName: charName,
-                payload: { condition, durationRounds: durationRounds || null }, requestId,
-                description: `${actor || 'System'} applied ${condition}${durationStr} to ${charName}`,
-            });
-            logAction(actor || 'System', result.logMessage);
-            broadcastPartyState();
-            broadcastTimeline();
-        }
-    });
-
-    socket.on('remove_condition', ({ characterId, condition, actor, requestId }) => {
-        const result = removeConditionEvent(db, characterId, condition);
-        if (result.success) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'condition_removed', actor: actor || 'System',
-                targetId: characterId, targetName: charName,
-                payload: { condition }, requestId,
-                description: `${actor || 'System'} removed ${condition} from ${charName}`,
-            });
-            logAction(actor || 'System', result.logMessage);
-            broadcastPartyState();
-            broadcastTimeline();
-        }
-    });
-
-    socket.on('apply_buff', ({ characterIds, buffData, actor, requestId }) => {
-        const ids = Array.isArray(characterIds) ? characterIds : [characterIds];
-        let resolvedBuffData = { ...(buffData || {}) };
-        if (resolvedBuffData.isConcentration && resolvedBuffData.sourceCharacterId) {
-            const sourceCharacterId = Number(resolvedBuffData.sourceCharacterId);
-            const sourceState = getSessionState(db, sourceCharacterId);
-            if (!sourceState?.concentrationId || sourceState.concentratingOn !== resolvedBuffData.name) {
-                const concentration = castConcentrationSpellEvent(db, sourceCharacterId, resolvedBuffData.name, null);
-                if (!concentration.success) {
-                    socket.emit('rules_error', { message: concentration.error });
-                    return;
-                }
-                resolvedBuffData.concentrationId = concentration.concentrationId;
-            } else {
-                resolvedBuffData.concentrationId = sourceState.concentrationId;
-            }
-        }
-        ids.forEach(id => {
-            const result = applyBuffEvent(db, id, resolvedBuffData);
-            if (result.success) {
-                const charData = getCharacterData(db, id);
-                const charName = charData?.name ?? `Character ${id}`;
-                writeAuditEvent(db, {
-                    sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                    eventType: 'buff_applied', actor: actor || 'System',
-                    targetId: id, targetName: charName,
-                    payload: { buffData: resolvedBuffData }, requestId: requestId ? `${requestId}-buff-${id}` : undefined,
-                    description: `${actor || 'System'} applied ${resolvedBuffData?.name || 'buff'} to ${charName}`,
-                });
-                logAction(actor || 'System', result.logMessage);
-            }
+    socket.on('apply_condition', (command, acknowledge) => {
+        const { characterId, condition, actor, requestId, commandId, expectedVersion, durationRounds } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'condition_result',
+            commandType: 'character.condition.apply', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, condition, durationRounds, actor },
+            execute: () => {
+                const result = applyConditionEvent(db, characterId, condition, durationRounds);
+                return { ...result, mutated: result.success && !result.alreadyPresent && !result.bypassed };
+            },
+            buildAudit: (_result, characterName) => {
+                const durationStr = durationRounds > 0 ? ` (${durationRounds} rds)` : '';
+                return {
+                    eventType: 'condition_applied',
+                    payload: { condition, durationRounds: durationRounds || null },
+                    description: `${actor || 'System'} applied ${condition}${durationStr} to ${characterName}`,
+                };
+            },
         });
-        broadcastPartyState();
-        broadcastTimeline();
     });
 
-    socket.on('remove_buff', ({ characterId, buffId, actor, requestId }) => {
-        const result = removeBuffEvent(db, characterId, buffId);
-        if (result.success) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'buff_removed', actor: actor || 'System',
-                targetId: characterId, targetName: charName,
-                payload: { buffId }, requestId,
-                description: `${actor || 'System'} removed buff from ${charName}`,
+    socket.on('remove_condition', (command, acknowledge) => {
+        const { characterId, condition, actor, requestId, commandId, expectedVersion } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'condition_result',
+            commandType: 'character.condition.remove', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, condition, actor },
+            execute: () => removeConditionEvent(db, characterId, condition),
+            buildAudit: (_result, characterName) => ({
+                eventType: 'condition_removed',
+                payload: { condition },
+                description: `${actor || 'System'} removed ${condition} from ${characterName}`,
+            }),
+        });
+    });
+
+    socket.on('apply_buff', (command, acknowledge) => {
+        const { characterIds, buffData, actor, requestId, commandId, expectedVersion } = command || {};
+        const ids = (Array.isArray(characterIds) ? characterIds : [characterIds])
+            .map(Number)
+            .filter(Number.isInteger);
+        const resolvedCommandId = commandId || requestId || randomUUID();
+        try {
+            const outcome = executeProcessedCommand(db, {
+                commandId: resolvedCommandId,
+                commandType: 'party.buff.apply',
+                actorType: socket.dmAuthenticated ? 'dm' : 'player',
+                actorId: playerSocketMap.get(socket.id)?.characterId ?? null,
+                sessionId: getActiveCombatSession(db)?.id ?? null,
+                aggregateKey: 'party:effects',
+                expectedVersion: expectedVersion ?? null,
+                payload: { characterIds: ids, buffData, actor },
+            }, () => {
+                if (ids.length === 0) return { success: false, error: 'No characters selected' };
+                const resolvedBuffData = { ...(buffData || {}) };
+                if (resolvedBuffData.isConcentration && resolvedBuffData.sourceCharacterId) {
+                    const sourceCharacterId = Number(resolvedBuffData.sourceCharacterId);
+                    const sourceState = getSessionState(db, sourceCharacterId);
+                    if (!sourceState?.concentrationId || sourceState.concentratingOn !== resolvedBuffData.name) {
+                        const concentration = castConcentrationSpellEvent(db, sourceCharacterId, resolvedBuffData.name, null);
+                        if (!concentration.success) throw new Error(concentration.error || 'Unable to start concentration');
+                        resolvedBuffData.concentrationId = concentration.concentrationId;
+                    } else {
+                        resolvedBuffData.concentrationId = sourceState.concentrationId;
+                    }
+                }
+
+                const records = ids.map(id => {
+                    const result = applyBuffEvent(db, id, resolvedBuffData);
+                    if (!result.success) throw new Error(`Unable to apply buff to character ${id}`);
+                    const charData = getCharacterData(db, id);
+                    const characterName = charData?.name ?? `Character ${id}`;
+                    writeAuditEvent(db, {
+                        sessionRound: currentCombatRound,
+                        turnIndex: currentTurnIndex,
+                        eventType: 'buff_applied',
+                        actor: actor || 'System',
+                        targetId: id,
+                        targetName: characterName,
+                        payload: { buffData: resolvedBuffData },
+                        requestId: `${resolvedCommandId}-buff-${id}`,
+                        description: `${actor || 'System'} applied ${resolvedBuffData.name || 'buff'} to ${characterName}`,
+                    });
+                    db.prepare(`
+                        INSERT INTO action_log (timestamp, actor, action_description, status)
+                        VALUES (datetime('now'), ?, ?, 'applied')
+                    `).run(actor || 'System', result.logMessage);
+                    return { characterId: id, characterName, buff: result.buff };
+                });
+                return { success: true, records, concentrationChanged: Boolean(resolvedBuffData.isConcentration) };
             });
-            logAction(actor || 'System', result.logMessage);
-            broadcastPartyState();
-            broadcastTimeline();
+
+            emitCommandResult(socket, 'buff_result', acknowledge, outcome);
+            if (!outcome.replayed && outcome.result?.success) {
+                broadcastLogs();
+                broadcastPartyState();
+                broadcastTimeline();
+                if (outcome.result.concentrationChanged) broadcastInitiative();
+            }
+        } catch (error) {
+            emitCommandError(socket, 'buff_result', acknowledge, error);
+            if (!(error instanceof CommandConflictError)) console.error('[Command] apply_buff failed:', error);
         }
+    });
+
+    socket.on('remove_buff', (command, acknowledge) => {
+        const { characterId, buffId, actor, requestId, commandId, expectedVersion } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'buff_result',
+            commandType: 'character.buff.remove', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, buffId, actor },
+            execute: () => removeBuffEvent(db, characterId, buffId),
+            buildAudit: (_result, characterName) => ({
+                eventType: 'buff_removed',
+                payload: { buffId },
+                description: `${actor || 'System'} removed buff from ${characterName}`,
+            }),
+        });
     });
 
     socket.on('toggle_feature', ({ characterId, featureName, actor, requestId }) => {
@@ -1557,101 +1931,76 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('use_spell_slot', ({ characterId, slotLevel, actor, requestId }) => {
-        const result = useSpellSlotEvent(db, characterId, slotLevel);
-        if (result.success) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'spell_slot_used', actor: actor || 'System',
-                targetId: characterId, targetName: charName,
-                payload: { slotLevel }, requestId,
-                description: `${charName} used a level ${slotLevel} spell slot`,
-            });
-            logAction(actor || 'System', result.logMessage);
-            broadcastPartyState();
-            broadcastTimeline();
-        }
-        else socket.emit('rules_error', { message: result.error });
+    socket.on('use_spell_slot', (command, acknowledge) => {
+        const { characterId, slotLevel, actor, requestId, commandId, expectedVersion } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'use_spell_slot_result',
+            commandType: 'character.spell_slot.use', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, slotLevel, actor },
+            execute: () => useSpellSlotEvent(db, characterId, slotLevel),
+            buildAudit: (_result, characterName) => ({
+                eventType: 'spell_slot_used',
+                payload: { slotLevel },
+                description: `${characterName} used a level ${slotLevel} spell slot`,
+            }),
+        });
     });
 
-    socket.on('spend_hit_die', ({ characterId, dieType, actor, requestId }) => {
-        const result = spendHitDieEvent(db, characterId, dieType);
-        if (result.success) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'heal', actor: actor || charName,
-                targetId: characterId, targetName: charName,
+    socket.on('spend_hit_die', (command, acknowledge) => {
+        const { characterId, dieType, actor, requestId, commandId, expectedVersion } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'hit_die_result',
+            commandType: 'character.hit_die.spend', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, dieType, actor },
+            execute: () => spendHitDieEvent(db, characterId, dieType),
+            buildAudit: (result, characterName) => ({
+                eventType: 'heal',
                 payload: { value: result.healed, dieType, roll: result.roll, conMod: result.conMod, source: 'hit_die' },
-                requestId,
-                description: `${charName} spent a ${dieType}: rolled ${result.roll} + ${result.conMod} CON = ${result.healed} HP healed`,
-            });
-            logAction(actor || charName, result.logMessage);
-
-            // Send roll to DM feed
-            io.to('dm_room').emit('dm_roll_feed', {
-                actor: charName,
-                characterId,
-                label: `Hit Die (${dieType})`,
-                source: 'Short Rest',
-                rollType: 'HP Heal',
-                sides: parseInt(dieType.replace('d', '')),
-                count: 1,
-                modifier: result.conMod,
-                total: result.healAmount,
-                rolls: [result.roll],
-                damageType: null,
-                isPrivate: false,
-            });
-
-            // Notify the spending player
-            socket.emit('hit_die_result', result);
-            broadcastPartyState();
-            broadcastTimeline();
-        } else {
-            socket.emit('rules_error', { message: result.error });
-        }
+                description: `${characterName} spent a ${dieType}: rolled ${result.roll} + ${result.conMod} CON = ${result.healed} HP healed`,
+            }),
+            afterCommit: (result, characterName) => {
+                io.to('dm_room').emit('dm_roll_feed', {
+                    actor: characterName, characterId, label: `Hit Die (${dieType})`, source: 'Short Rest',
+                    rollType: 'HP Heal', sides: parseInt(dieType.replace('d', ''), 10), count: 1,
+                    modifier: result.conMod, total: result.healAmount, rolls: [result.roll],
+                    damageType: null, isPrivate: false,
+                });
+            },
+        });
     });
 
-    socket.on('short_rest', ({ characterId, actor, requestId }) => {
-        const result = shortRestEvent(db, characterId);
-        if (result.success) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'rest', actor: actor || 'System',
-                targetId: characterId, targetName: charName,
-                payload: { restType: 'short' }, requestId,
-                description: `${charName} took a short rest`,
-            });
-            logAction(actor || 'System', result.logMessage);
-            broadcastPartyState();
-            broadcastTimeline();
-            socket.emit('advance_time', { minutes: 60 });
-        }
+    socket.on('short_rest', (command, acknowledge) => {
+        const { characterId, actor, requestId, commandId, expectedVersion } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'short_rest_result',
+            commandType: 'character.rest.short', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, actor },
+            execute: () => shortRestEvent(db, characterId),
+            buildAudit: (_result, characterName) => ({
+                eventType: 'rest', payload: { restType: 'short' },
+                description: `${characterName} took a short rest`,
+            }),
+            afterCommit: () => socket.emit('advance_time', { minutes: 60 }),
+        });
     });
 
-    socket.on('long_rest', ({ characterId, actor, requestId }) => {
-        const result = longRestEvent(db, characterId);
-        if (result.success) {
-            const charData = getCharacterData(db, characterId);
-            const charName = charData?.name ?? `Character ${characterId}`;
-            writeAuditEvent(db, {
-                sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-                eventType: 'rest', actor: actor || 'System',
-                targetId: characterId, targetName: charName,
-                payload: { restType: 'long' }, requestId,
-                description: `${charName} took a long rest`,
-            });
-            logAction(actor || 'System', result.logMessage);
-            broadcastPartyState();
-            broadcastTimeline();
-            socket.emit('advance_time', { minutes: 480 });
-        }
+    socket.on('long_rest', (command, acknowledge) => {
+        const { characterId, actor, requestId, commandId, expectedVersion } = command || {};
+        executeCharacterSocketCommand({
+            socket, acknowledge, resultEvent: 'long_rest_result',
+            commandType: 'character.rest.long', characterId,
+            requestId, commandId, expectedVersion, actor,
+            payload: { characterId, actor },
+            execute: () => longRestEvent(db, characterId),
+            buildAudit: (_result, characterName) => ({
+                eventType: 'rest', payload: { restType: 'long' },
+                description: `${characterName} took a long rest`,
+            }),
+            afterCommit: () => socket.emit('advance_time', { minutes: 480 }),
+        });
     });
 
     socket.on('advance_time', ({ minutes: _minutes }) => {
@@ -2576,68 +2925,108 @@ io.on('connection', (socket) => {
         logAction(droppedBy || 'DM', `dropped ${name} into the party loot pool`);
     });
 
-    socket.on('claim_loot', ({ lootId, characterId, characterName, requestId }) => {
+    socket.on('claim_loot', (command, acknowledge) => {
+        const { lootId, characterId, characterName, requestId, commandId, expectedVersion } = command || {};
+        const resolvedCommandId = commandId || requestId || randomUUID();
         // Permission check
         const perm = checkPermission(db, 'loot_claim', socket.dmAuthenticated, playerSocketMap.get(socket.id)?.characterId, characterId);
         if (!perm.allowed) {
             const item = db.prepare('SELECT name FROM shared_loot WHERE id = ?').get(lootId);
-            logAction(characterName || 'Player', `wants to claim ${item?.name || 'item'} from loot pool`, 'pending',
-                JSON.stringify({ type: 'loot_claim', lootId, characterId, characterName }));
+            const outcome = executeProcessedCommand(db, {
+                commandId: resolvedCommandId,
+                commandType: 'loot.claim.request',
+                actorType: socket.dmAuthenticated ? 'dm' : 'player',
+                actorId: playerSocketMap.get(socket.id)?.characterId ?? null,
+                sessionId: getActiveCombatSession(db)?.id ?? null,
+                payload: { lootId, characterId, characterName },
+            }, () => {
+                db.prepare(`
+                    INSERT INTO action_log (timestamp, actor, action_description, status, effects_json)
+                    VALUES (datetime('now'), ?, ?, 'pending', ?)
+                `).run(
+                    characterName || 'Player',
+                    `wants to claim ${item?.name || 'item'} from loot pool`,
+                    JSON.stringify({ type: 'loot_claim', lootId, characterId, characterName }),
+                );
+                return { success: true, pending: true, itemName: item?.name || 'item' };
+            });
+            emitCommandResult(socket, 'claim_loot_result', acknowledge, outcome);
+            if (!outcome.replayed) broadcastLogs();
             socket.emit('rules_error', { message: perm.reason });
             return;
         }
 
-        const item = db.prepare('SELECT * FROM shared_loot WHERE id = ?').get(lootId);
-        if (!item) { socket.emit('rules_error', { message: 'Item already claimed!' }); return; }
+        try {
+            const outcome = executeProcessedCommand(db, {
+                commandId: resolvedCommandId,
+                commandType: 'loot.claim',
+                actorType: socket.dmAuthenticated ? 'dm' : 'player',
+                actorId: playerSocketMap.get(socket.id)?.characterId ?? null,
+                sessionId: getActiveCombatSession(db)?.id ?? null,
+                aggregateKey: `loot:${lootId}`,
+                expectedVersion: expectedVersion ?? null,
+                payload: { lootId, characterId, characterName },
+            }, () => {
+                const item = db.prepare('SELECT * FROM shared_loot WHERE id = ?').get(lootId);
+                if (!item) return { success: false, error: 'Item already claimed' };
+                const char = db.prepare('SELECT name, homebrew_inventory FROM characters WHERE id = ?').get(characterId);
+                if (!char) return { success: false, error: 'Character not found' };
 
-        // Remove from pool
-        db.prepare('DELETE FROM shared_loot WHERE id = ?').run(lootId);
+                const inventory = JSON.parse(char.homebrew_inventory || '[]');
+                inventory.push({
+                    id: `loot-${item.id}-${resolvedCommandId}`,
+                    name: item.name,
+                    description: item.description,
+                    type: 'item',
+                    stats: JSON.parse(item.stats_json || '{}'),
+                    isHomebrew: true,
+                    equipped: false,
+                    quantity: 1,
+                });
+                db.prepare('UPDATE characters SET homebrew_inventory = ? WHERE id = ?').run(JSON.stringify(inventory), characterId);
+                db.prepare('DELETE FROM shared_loot WHERE id = ?').run(lootId);
 
-        // Add to character's homebrew inventory
-        const char = db.prepare('SELECT homebrew_inventory FROM characters WHERE id = ?').get(characterId);
-        if (!char) return;
+                const resolvedCharacterName = characterName || char.name || 'Player';
+                writeAuditEvent(db, {
+                    sessionRound: currentCombatRound,
+                    turnIndex: currentTurnIndex,
+                    eventType: 'loot_claimed',
+                    actor: resolvedCharacterName,
+                    targetId: characterId,
+                    targetName: resolvedCharacterName,
+                    payload: { itemName: item.name, itemId: item.id, rarity: item.rarity },
+                    requestId: resolvedCommandId,
+                    description: `${resolvedCharacterName} claimed ${item.name} from the party loot pool`,
+                });
+                db.prepare(`
+                    INSERT INTO action_log (timestamp, actor, action_description, status)
+                    VALUES (datetime('now'), ?, ?, 'applied')
+                `).run(resolvedCharacterName, `claimed ${item.name} from the party loot pool`);
+                return { success: true, itemName: item.name, characterName: resolvedCharacterName };
+            });
 
-        const inventory = JSON.parse(char.homebrew_inventory || '[]');
-        inventory.push({
-            id: `loot-${item.id}-${Date.now()}`,
-            name: item.name,
-            description: item.description,
-            type: 'item',
-            stats: JSON.parse(item.stats_json || '{}'),
-            isHomebrew: true,
-            equipped: false,
-            quantity: 1,
-        });
-        db.prepare('UPDATE characters SET homebrew_inventory = ? WHERE id = ?').run(JSON.stringify(inventory), characterId);
-
-        // Audit event
-        writeAuditEvent(db, {
-            sessionRound: currentCombatRound, turnIndex: currentTurnIndex,
-            eventType: 'loot_claimed', actor: characterName || 'Player',
-            targetId: characterId, targetName: characterName,
-            payload: { itemName: item.name, itemId: item.id, rarity: item.rarity },
-            requestId,
-            description: `${characterName || 'Player'} claimed ${item.name} from the party loot pool`,
-        });
-
-        broadcastPartyLoot();
-        broadcastPartyState();
-        broadcastTimeline();
-        logAction(characterName || 'Player', `claimed ${item.name} from the party loot pool`);
-
-        // Pipe to DM effect stream
-        io.to('dm_room').emit('roll_feed_event', {
-            id: Date.now(),
-            actor: characterName || 'Player',
-            characterId: String(characterId),
-            label: `${characterName} looted ${item.name}`,
-            source: null,
-            rollType: 'Loot Claimed',
-            sides: 0, count: 0, modifier: 0, total: 0, rolls: [],
-            damageType: null,
-            isPrivate: false,
-            timestamp: new Date().toISOString(),
-        });
+            emitCommandResult(socket, 'claim_loot_result', acknowledge, outcome);
+            if (outcome.replayed || !outcome.result?.success) return;
+            broadcastLogs();
+            broadcastPartyLoot();
+            broadcastPartyState();
+            broadcastTimeline();
+            io.to('dm_room').emit('roll_feed_event', {
+                id: Date.now(),
+                actor: outcome.result.characterName,
+                characterId: String(characterId),
+                label: `${outcome.result.characterName} looted ${outcome.result.itemName}`,
+                source: null,
+                rollType: 'Loot Claimed',
+                sides: 0, count: 0, modifier: 0, total: 0, rolls: [],
+                damageType: null,
+                isPrivate: false,
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            emitCommandError(socket, 'claim_loot_result', acknowledge, error);
+            if (!(error instanceof CommandConflictError)) console.error('[Command] claim_loot failed:', error);
+        }
     });
 
     socket.on('remove_loot', ({ lootId }) => {

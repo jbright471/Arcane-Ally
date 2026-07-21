@@ -62,6 +62,7 @@ client/node_modules/
 client/dist/
 .vite/
 client/.vite/
+.playwright-cli/
 
 # Antigravity Brain
 .agents/

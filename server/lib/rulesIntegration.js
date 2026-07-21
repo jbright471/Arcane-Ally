@@ -488,7 +488,13 @@ function removeConditionEvent(db, characterId, condition) {
     // Clean up duration tracking
     delete state.conditionDurations[condition.toLowerCase().trim()];
     saveSessionState(db, state);
-    return { success: true, newConditions: state.activeConditions, logMessage: result.wasPresent ? `${char.name} is no longer ${condition}.` : `${char.name} did not have ${condition}.` };
+    return {
+      success: true,
+      mutated: result.wasPresent,
+      wasPresent: result.wasPresent,
+      newConditions: state.activeConditions,
+      logMessage: result.wasPresent ? `${char.name} is no longer ${condition}.` : `${char.name} did not have ${condition}.`,
+    };
   });
 }
 

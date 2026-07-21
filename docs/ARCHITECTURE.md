@@ -18,6 +18,7 @@ flowchart LR
 | Area | Entry point | Role |
 |---|---|---|
 | Client | `client/src/main.tsx` | React bootstrap |
+| Player preview | `client/src/pages/PlayerPreview.tsx` | Isolated read-only player projection; does not load the normal application socket |
 | Routes | `client/src/App.tsx` | Browser routes and application shell |
 | Shared client state | `client/src/context/GameContext.tsx` | Socket lifecycle, normalized party state, DM token |
 | Backend | `server/server.js` | Express routes, Socket.io handlers, broadcasts |
@@ -34,6 +35,8 @@ Arcane Ally separates permanent character data from table-session state.
 - `effect_events` stores the combat ledger and provenance records.
 - `combat_sessions` groups live and archived encounter events.
 - `campaign_state` stores server-wide settings such as automation policies and the current DM session token.
+- `processed_commands` stores command fingerprints and results for deterministic retries.
+- `aggregate_versions` stores optimistic versions for protected state aggregates.
 
 Character resolution happens in `server/lib/rulesIntegration.js` and `server/lib/rulesEngine.js`, which combine the base sheet, session state, equipment, conditions, auras, and enabled automation policies.
 
@@ -46,11 +49,15 @@ Character resolution happens in `server/lib/rulesIntegration.js` and `server/lib
 5. The server projects state for the receiving role.
 6. Socket.io broadcasts the projected state to connected clients.
 
+For migrated high-risk commands, steps 2 through 4 and the command receipt are one immediate SQLite transaction. A retry with the same command ID and payload receives the stored result. Reusing that ID with a different payload is rejected.
+
 Clients do not authoritatively merge campaign mutations. They normalize the server payload and render the resulting state.
 
 ## Role-Safe Projection
 
 `server/lib/clientStateProjection.js` creates DM, player, public, and cast-safe payloads. Hidden monsters remain DM-only, cast views receive broad monster health labels, and a registered player receives private details only for the owned character.
+
+`server/lib/playerViewProjection.js` builds the DM's player-preview snapshot from authoritative state. The preview runs on the `/player-preview` Socket.io namespace, accepts only registration and refresh events, and never joins the normal campaign socket. A DM creates a short-lived link through `POST /api/player-preview/sessions`; the link is bound to the first browser tab that opens it.
 
 This projection protects broadcast visibility. It does not make every REST mutation route authenticated; deployments still require the trusted-network controls described in [SECURITY.md](../SECURITY.md).
 

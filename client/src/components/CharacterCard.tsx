@@ -10,6 +10,7 @@ import { useGame } from '../context/GameContext';
 import socket from '../socket';
 import { CombatStateInspectorModal } from './CombatStateInspectorModal';
 import { dmFetch } from '../lib/dmFetch';
+import { generateRequestId } from '../lib/requestId';
 
 interface CharacterCardProps {
   character: Character;
@@ -54,7 +55,11 @@ export function CharacterCard({ character, onClick, selected, compact }: Charact
 
   const handleBreakConcentration = (e: React.MouseEvent) => {
     e.stopPropagation();
-    socket.emit('drop_concentration', { characterId: parseInt(character.id!), actor: 'DM' });
+    socket.emit('drop_concentration', {
+      characterId: parseInt(character.id!),
+      actor: 'DM',
+      requestId: generateRequestId(),
+    });
   };
 
   return (

@@ -95,6 +95,7 @@ Dice rolls can be public, private, secret, or super-secret. Secret modes are gen
 ### DM Command Center
 
 **God-Eye View** — compact cards for every party member showing HP bars, AC, conditions, and quick +/-5 HP buttons.
+- **Player-State Preview** — click the monitor icon on a God-Eye character card to open a separate, read-only tab containing exactly that player's projected party, encounter, effects, permissions, notes, loot, and revealed map state. Hidden monsters and DM-only payloads are removed on the server.
 - **Combat State Inspector** — real-time, transparent breakdown of a character's state. DM-only glassmorphism modal revealing exact mathematical breakdown of Armor Class, Ability Scores, and Active Conditions.
 
 **Initiative Tracker** — automatic initiative rolling (auto-roll d20 + DEX mod for all combatants), turn advancement, visibility toggles, HP tracking, and manual reordering. Three spawn methods: Quick Spawn, Compendium, and AI Lore Console.
@@ -142,7 +143,7 @@ Buttons disable after use to prevent duplicate spawns.
 - **Archive Retention** — keep every encounter by default, or retain a chosen number of encounters or days from **Automation -> Policies -> Combat History**
 - **Curated Reactive Automation** — built-in reaction handlers can respond to effect events; the current handler set includes `retributive_healing` for self-healing reactions triggered by outgoing healing
 - **Audit Log** — human-readable descriptions of every mutation with DM-accessible undo (event reversal)
-- **Idempotency Guards** — every mutation carries a unique request ID; duplicate events from websocket reconnects are automatically deduplicated
+- **Idempotency Guards** — high-risk character and inventory commands carry a unique request ID and commit their state, audit event, and stored result together. This first rollout covers HP, temporary HP, spell use, concentration, conditions, buffs, rests, hit dice, and loot claims; older administrative routes are being migrated incrementally.
 - **Permission System** — configurable rules for loot claiming, cross-player effects, and inventory transfers
 
 ### Battlemap
@@ -193,6 +194,7 @@ An in-app, task-first documentation hub at `/guide` with searchable player, DM, 
 - [Architecture](./docs/ARCHITECTURE.md)
 - [Interactive Rolls & Roll Visibility](./docs/PHASE_7.1_INTERACTIVE_ROLLS.md)
 - [Automation Policies & Combat History](./docs/AUTOMATION_AND_COMBAT_HISTORY.md)
+- [Player Preview & Command Safety](./docs/PLAYER_PREVIEW_AND_COMMANDS.md)
 - [Client README](./client/README.md)
 - [Legacy Parser References](./files/README.md)
 - [Security Policy](./SECURITY.md)

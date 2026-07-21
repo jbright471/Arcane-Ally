@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { useGame } from '../context/GameContext';
 import { toast } from 'sonner';
 import socket from '../socket';
+import { generateRequestId } from '../lib/requestId';
 import type { LootVote } from '../types/character';
 
 const RARITY_COLORS: Record<string, string> = {
@@ -69,8 +70,16 @@ export function SharedLootPool({ characterId, characterName, isDm }: SharedLootP
       lootId,
       characterId: parseInt(characterId),
       characterName,
+      requestId: generateRequestId(),
+    }, (response: { success?: boolean; error?: string; result?: { pending?: boolean } }) => {
+      if (!response?.success) {
+        toast.error(response?.error || `Could not claim ${itemName}.`);
+      } else if (response.result?.pending) {
+        toast.info(`${itemName} was sent to the DM for approval.`);
+      } else {
+        toast.success(`${characterName} claimed ${itemName}!`);
+      }
     });
-    toast.success(`${characterName} claimed ${itemName}!`);
   };
 
   const handleRemove = (lootId: number) => {

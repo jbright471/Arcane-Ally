@@ -149,6 +149,28 @@ function createTestDb() {
       ended_at      TEXT DEFAULT NULL,
       total_rounds  INTEGER NOT NULL DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS processed_commands (
+      command_id         TEXT PRIMARY KEY,
+      command_type       TEXT NOT NULL,
+      actor_type         TEXT NOT NULL DEFAULT 'unknown',
+      actor_id           TEXT DEFAULT NULL,
+      session_id         TEXT DEFAULT NULL,
+      aggregate_key      TEXT DEFAULT NULL,
+      expected_version   INTEGER DEFAULT NULL,
+      aggregate_version  INTEGER DEFAULT NULL,
+      payload_hash       TEXT NOT NULL,
+      status             TEXT NOT NULL DEFAULT 'processing',
+      result_json        TEXT DEFAULT NULL,
+      created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+      committed_at       TEXT DEFAULT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS aggregate_versions (
+      aggregate_key  TEXT PRIMARY KEY,
+      version        INTEGER NOT NULL DEFAULT 0,
+      updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   return db;

@@ -8,11 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Added a read-only **Player-State Preview** that lets an authenticated DM open the app as any character, including disconnected players, without sending DM-only state to the preview tab.
+- Added transactional command receipts for HP, temporary HP, spell slots and casting, concentration, conditions, buffs, rests, hit dice, and loot claims. Replayed command IDs return the original result without applying the mutation twice.
 - Added a DM PIN login gate that validates saved sessions before exposing protected dashboard tools.
 - Added a first-run guide that documents blank-state expectations, private runtime storage, and pre-publish privacy checks.
 
 ### Changed
 
+- HP writes now remain in the browser's offline queue until the server acknowledges them; lost acknowledgements retry with the same command ID.
+- Player, map, action-log, and pending-import broadcasts now use role-filtered payloads, keeping hidden monsters and DM-only import data out of player clients.
+- Docker builds now use lockfile-preserving installs and compile native SQLite dependencies from the Node headers already included in the official image.
 - Updated the README, self-hosting guide, security policy, contributor guide, architecture references, environment templates, and in-app Arcane Codex for the current release behavior.
 - Strengthened Git and Docker exclusions for runtime databases, uploads, backups, character exports, environment files, and private key or certificate formats.
 
@@ -33,6 +38,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - DM Dashboard timelines and automation controls now handle expired credentials and malformed API responses without crashing the page.
 - The Combat Recovery dialog now closes correctly from its Close control.
 - Companion-view links can now be copied from self-hosted HTTP addresses where the modern Clipboard API is unavailable.
+- Player preview client IDs now work on plain LAN HTTP origins where `crypto.randomUUID` is unavailable.
+- Expanded desktop navigation now reserves its full width under Tailwind 4 instead of covering page controls.
 
 ## [1.0.3] - 2026-07-15
 

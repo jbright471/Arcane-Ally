@@ -550,7 +550,41 @@ This separation keeps mistakes fixable.
 
 ## Offline Replays
 
-If your connection drops, HP changes can queue locally. When you reconnect, Arcane Ally replays those session changes to the server so the table catches up.`,
+If your connection drops, HP changes can queue locally. When you reconnect, Arcane Ally replays those session changes to the server so the table catches up. The queued change stays on your device until the server confirms it was received.`,
+  },
+  {
+    id: 'safe-command-retries',
+    title: 'Safe Retries & Duplicate Protection',
+    category: 'core-mechanics',
+    icon: Shield,
+    content: `# Safe Retries & Duplicate Protection
+
+Arcane Ally protects important actions from running twice when Wi-Fi drops or a browser reconnects.
+
+## What You Need to Do
+
+Nothing special. Click an action once and let Arcane Ally handle delivery.
+
+1. Your browser gives the action a unique command ID.
+2. The server saves the game change and its result together.
+3. If the browser retries that same command, the server returns the saved result instead of applying it again.
+4. If an old command ID arrives with different details, the server rejects it.
+
+> **Example:** You take 12 damage and the server applies it, but the acknowledgement is lost. Your browser retries. Arcane Ally recognizes the command ID and does **not** deal another 12 damage.
+
+## Actions Protected Now
+
+- Damage, healing, and temporary HP
+- Spell slots, spell casting, and concentration
+- Conditions and buffs
+- Hit dice, short rests, and long rests
+- Party-loot claims
+
+The DM's Effect Timeline and Action Log are written in the same transaction as these changes. You will not get a state change with a missing audit entry, or an audit entry for a rolled-back change.
+
+## Offline HP
+
+HP changes made during a disconnect wait in the browser's local queue. Arcane Ally removes each queued change only after the server acknowledges it. A temporary network failure keeps it for another retry; a permanent rules rejection is removed so it does not retry forever.`,
   },
   {
     id: 'equipment-inventory',
@@ -663,6 +697,46 @@ Every action you take is recorded in two places:
 - **Audit Log** — human-readable descriptions of every mutation
 
 You can **reverse** any event from the Audit Log by clicking the undo button. This applies the inverse operation (e.g., reversing damage heals the target for the same amount).`,
+  },
+  {
+    id: 'player-state-preview',
+    title: 'Preview as a Player',
+    category: 'dm-tasks',
+    icon: Eye,
+    content: `# Preview as a Player
+
+Use **Player-State Preview** when a player says something is missing, visible when it should be hidden, or blocked by permissions.
+
+## Open a Preview
+
+> **Where to go:** \`Sidebar -> DM Dashboard -> God-Eye View -> monitor icon on a character card\`
+
+1. Open **DM Dashboard** and enter the DM PIN.
+2. Find the character in **God-Eye View**.
+3. Click the small **monitor icon** beside that character's notes icon.
+4. A separate tab opens with a gold **Previewing as [character]** banner.
+5. Keep both tabs open. The preview updates live while you change the encounter or permissions in the DM tab.
+
+You can preview any character, even when that player is disconnected.
+
+## What the Preview Shows
+
+- The selected player's complete character state
+- The party summaries visible to that player
+- Initiative order and only permitted monster health
+- Effects relevant to that player
+- Current campaign permissions
+- Shared notes, loot, and revealed map information
+
+## What It Never Shows
+
+- Hidden monsters or hidden map tokens
+- Undiscovered or DM-only map markers
+- Monster stat blocks and future boss phases
+- Private DM prep notes or pending character imports
+- Buttons that change campaign state
+
+The server removes protected data before sending the preview. The page is not a DM screen with controls covered up. Preview links expire after 15 minutes; open a fresh one from God-Eye View when needed.`,
   },
   {
     id: 'ai-lore-console',
@@ -922,19 +996,9 @@ Click any cell to activate it. Unavailable combinations (e.g. "Approval" for a b
 
 > **DM actions always bypass all restrictions.** Permission checks only apply to player-initiated socket events.
 
-## Idempotency Guards
+## Safe Command Delivery
 
-Idempotency guards are duplicate-click protection.
-
-Sometimes a browser reconnects, a player double-clicks, or a network message gets resent. Arcane Ally gives each important action a one-time receipt number.
-
-If the same receipt arrives twice, the server ignores the duplicate. This prevents:
-
-- Damage applying twice
-- Buffs being added twice
-- Loot being claimed twice
-
-You do not need to manage this manually. If something still looks wrong, check the Audit Log and undo the event.
+See **Safe Retries & Duplicate Protection** under Core Mechanics for the protected action list, offline HP behavior, and what happens when an acknowledgement is lost. Coverage is intentionally listed there instead of implying every older administrative action has already been migrated.
 
 ## Event Reversal
 

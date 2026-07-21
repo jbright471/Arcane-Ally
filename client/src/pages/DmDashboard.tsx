@@ -36,10 +36,11 @@ import { ActionableLoreMessage } from '../components/ActionableLoreMessage';
 import { parseLoreMessage } from '../lib/loreParser';
 import {
   Eye, Swords, Users, Gem, Scroll, Sparkles, Map,
-  FlagOff, Plus, BookOpen, ShieldAlert, Send, Zap, NotebookPen, StickyNote, History, Upload
+  FlagOff, Plus, BookOpen, ShieldAlert, Send, Zap, NotebookPen, StickyNote, History, Upload, Monitor
 } from 'lucide-react';
 import { toast } from 'sonner';
 import socket from '../socket';
+import { generateRequestId } from '../lib/requestId';
 
 const LORE_PRESETS = [
   { label: 'Room Desc', prompt: 'Describe a room in a dungeon/castle/tavern with vivid sensory details.' },
@@ -115,6 +116,7 @@ export default function DmDashboard() {
   const [showRecovery, setShowRecovery] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
   const [showImportDiff, setShowImportDiff] = useState(false);
+  const [previewingCharacterId, setPreviewingCharacterId] = useState<string | null>(null);
   const [prepContext, setPrepContext] = useState<{ type: string; label?: string } | null>(null);
   const openPrep = (type = 'general', label?: string) => setPrepContext({ type, label });
 
@@ -131,7 +133,42 @@ export default function DmDashboard() {
 
   const handleQuickHp = (charId: string, delta: number) => {
     if (!navigator.onLine) { toast.warning('Offline — HP changes cannot be saved.'); return; }
-    socket.emit('update_hp', { characterId: parseInt(charId), delta, actor: 'DM', damageType: delta < 0 ? 'force' : null });
+    socket.emit('update_hp', {
+      characterId: parseInt(charId),
+      delta,
+      actor: 'DM',
+      damageType: delta < 0 ? 'force' : null,
+      requestId: generateRequestId(),
+    });
+  };
+
+  const openPlayerPreview = async (characterId: string, characterName: string) => {
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      toast.error('Allow pop-ups for Arcane Ally to open player preview.');
+      return;
+    }
+    previewWindow.opener = null;
+    setPreviewingCharacterId(characterId);
+    try {
+      const response = await fetch('/api/player-preview/sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-DM-Token': localStorage.getItem('dm_token') || '',
+        },
+        body: JSON.stringify({ characterId: parseInt(characterId) }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.token) throw new Error(data.error || 'Unable to start player preview');
+      previewWindow.location.replace(`${window.location.origin}/player-preview#token=${encodeURIComponent(data.token)}`);
+      toast.success(`Opened read-only preview for ${characterName}`);
+    } catch (error) {
+      previewWindow.close();
+      toast.error(error instanceof Error ? error.message : 'Unable to open player preview');
+    } finally {
+      setPreviewingCharacterId(null);
+    }
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -429,6 +466,14 @@ export default function DmDashboard() {
                           <span className="text-[9px] text-muted-foreground uppercase">Lv.{char.level} {char.class}</span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => openPlayerPreview(char.id, char.name)}
+                            disabled={previewingCharacterId === char.id}
+                            title={`Preview the app as ${char.name}`}
+                            className="text-muted-foreground/40 hover:text-mana disabled:opacity-30 transition-colors"
+                          >
+                            <Monitor className="h-3.5 w-3.5" />
+                          </button>
                           <button
                             onClick={() => openPrep('general', char.name)}
                             title={`Notes for ${char.name}`}

@@ -7,6 +7,7 @@ import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 import { Sparkles } from 'lucide-react';
 import socket from '../socket';
+import { generateRequestId } from '../lib/requestId';
 
 const PRESET_BUFFS = [
   { name: 'Bless', isConcentration: true, description: '+1d4 to attacks and saves' },
@@ -53,7 +54,8 @@ export function BuffManagerModal({ open, onClose }: BuffManagerModalProps) {
     socket.emit('apply_buff', {
       characterIds: selectedTargets.map(id => parseInt(id)),
       buffData,
-      actor: 'DM'
+      actor: 'DM',
+      requestId: generateRequestId(),
     });
     onClose();
   };

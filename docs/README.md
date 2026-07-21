@@ -6,6 +6,7 @@ Use the in-app **Arcane Codex** at `/guide` for player and DM workflows. The fil
 
 - [Interactive Rolls & Roll Visibility](./PHASE_7.1_INTERACTIVE_ROLLS.md)
 - [Automation Policies & Combat History](./AUTOMATION_AND_COMBAT_HISTORY.md)
+- [Player Preview & Command Safety](./PLAYER_PREVIEW_AND_COMMANDS.md)
 
 ## For Self-Hosters
 
