@@ -6,13 +6,14 @@
   "scripts": {
     "dev": "vite",
     "test": "vitest run",
-    "build": "tsc && vite build",
-    "build:mobile": "tsc && CAPACITOR=true vite build",
+    "build": "npm run typecheck && vite build",
+    "build:mobile": "npm run typecheck && CAPACITOR=true vite build",
     "cap:sync": "npm run build:mobile && npx cap sync",
     "cap:android": "npm run cap:sync && npx cap open android",
     "cap:ios": "npm run cap:sync && npx cap open ios",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

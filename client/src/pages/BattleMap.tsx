@@ -1,3 +1,4 @@
+import { EncounterBoard } from '../components/EncounterBoard';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import { Badge } from '../components/ui/badge';
@@ -5,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { RefreshCw, Map, Users, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
-import socket from '../socket';
+import socket, { accessCredential } from '../socket';
 import { useAuthenticatedResourceUrl } from '../hooks/useAuthenticatedResourceUrl';
 
 // Token data structure from map_state broadcast
@@ -56,7 +57,7 @@ export default function BattleMap() {
   const isDm = state.isDm;
   const initiativeState = (state.initiativeState || []) as InitiativeEntry[];
 
-  const [mapState, setMapState] = useState<MapState | null>(null);
+  const mapState = state.mapState as MapState | null;
   const [showHidden, setShowHidden] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -64,14 +65,6 @@ export default function BattleMap() {
   const dragging = useRef<{ tokenId: number; startX: number; startY: number; origX: number; origY: number } | null>(null);
   const [localPositions, setLocalPositions] = useState<Record<number, { x: number; y: number }>>({});
   const mapImageUrl = useAuthenticatedResourceUrl(mapState?.image_data);
-
-  useEffect(() => {
-    const handler = (data: MapState | null) => setMapState(data);
-    socket.on('map_state', handler);
-    // Request current state on mount
-    socket.emit('sync_map_tokens');
-    return () => { socket.off('map_state', handler); };
-  }, []);
 
   // Resolve HP data for a token from initiative state
   const getHpData = (token: MapToken) => {
@@ -122,23 +115,13 @@ export default function BattleMap() {
   const visibleTokens = isDm && showHidden ? tokens : tokens.filter(t => !t.is_hidden);
 
   if (!mapState) {
-    return (
-      <div className="max-w-7xl mx-auto p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <Map className="h-7 w-7 text-primary" />
-          <h1 className="text-3xl font-display tracking-wider">Battlemap</h1>
-        </div>
-        <div className="flex flex-col items-center justify-center h-64 text-muted-foreground space-y-3 border border-border/20 rounded-xl bg-secondary/5">
-          <Map className="h-12 w-12 opacity-20" />
-          <p className="italic text-sm">No active battlemap. Ask the DM to set one up.</p>
-          {isDm && (
-            <Button size="sm" variant="outline" onClick={handleSyncTokens}>
-              <RefreshCw className="h-4 w-4 mr-2" /> Sync Tokens
-            </Button>
-          )}
-        </div>
-      </div>
-    );
+    if (!state.dmToken && !accessCredential.token) return <div className="space-y-3"><h1 className="text-3xl font-display">Battlemap</h1><p>Sign in as DM or use the player or cast link your DM provided.</p></div>;
+    return <div className="space-y-4"><h1 className="text-3xl font-display">Battlemap</h1>
+      <EncounterBoard party={state.characters} initiative={state.initiativeState} round={state.roundNumber}
+        connected={state.readiness.connected} ready={state.readiness.map && state.readiness.party && state.readiness.initiative && state.readiness.combat}
+        includeHidden={state.readiness.dmAuthenticated} />
+      {state.isDm && <p className="text-sm text-muted-foreground">This is your DM view. Use a read-only cast link from the DM tools for a shared screen.</p>}
+    </div>;
   }
 
   return (

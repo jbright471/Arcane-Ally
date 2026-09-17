@@ -2,7 +2,7 @@
 
 ## Arcane Ally R1-E — REST authorization capsule
 
-Status: implemented and repository-verified; not deployment-released.
+Historical capsule record. The R1-E baseline is deployed; current publication and deployment state belongs in [DEPLOYMENT.md](DEPLOYMENT.md). The exclusions below describe the original capsule scope.
 
 R1-E sits on top of the R1-D Socket.io recipient/capability boundary. It does not redesign sessions or grant companion/cast REST privileges.
 
@@ -28,3 +28,7 @@ R1-E does not add companion/cast REST endpoints, redesign DM sessions, change de
 3. Re-run the production REST matrix against the deployed process, including DM replacement/revocation, map/file blob rendering, authenticated export, access-grant rejection, unclassified denial, audit redaction, and no-side-effect checks.
 4. Confirm the reverse proxy preserves the intended Origin contract and has deployment-side rate limiting/source-address semantics. Terminate HTTPS or constrain access to the approved private overlay before any broader exposure.
 5. Confirm direct backend exposure, host firewall posture, Tailscale policy, backups, audit retention/permissions, and rollback are owned and approved outside this capsule.
+
+## September product extension
+
+The product release retains this authorization boundary. It adds read-only map bootstrap through existing egress projection, client expiry recovery, private linked prep, and mapless display. See [REST access behavior](REST_ACCESS_MATRIX.md#september-product-behavior) and [verification](PRODUCT_PLAN_VERIFICATION_2026-09-17.md).

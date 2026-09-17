@@ -7,6 +7,7 @@ import { EffectEvent } from '../types/effects';
 
 interface CharacterRoundDiff {
   targetId: number | null;
+  targetType: string;
   targetName: string;
   damageTaken: number;
   healReceived: number;
@@ -27,6 +28,7 @@ function computeDiff(events: EffectEvent[], round: number): CharacterRoundDiff[]
     if (!byTarget.has(k)) {
       byTarget.set(k, {
         targetId: e.target_id,
+        targetType: e.target_type,
         targetName: e.target_name ?? e.actor,
         damageTaken: 0,
         healReceived: 0,
@@ -69,7 +71,7 @@ function computeDiff(events: EffectEvent[], round: number): CharacterRoundDiff[]
 
   // Filter out system/automation-only rows with no HP/condition data
   return [...byTarget.values()].filter(
-    d => d.target_type !== 'system' &&
+    d => d.targetType !== 'system' &&
          (d.damageTaken > 0 || d.healReceived > 0 || d.conditionsGained.length > 0 ||
           d.conditionsLost.length > 0 || d.buffsGained.length > 0)
   );

@@ -1,4 +1,4 @@
-import { type AbilityScore, type ProficiencyLevel, type Character } from '../types/character';
+import { type RollIndicator, type AbilityScore, type ProficiencyLevel, type Character } from '../types/character';
 import socket from '../socket';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';

@@ -46,3 +46,11 @@ R1-E is deny-by-default. The central middleware in `server/lib/restAuthorization
 ## Change invariant
 
 `server/test/restAuthorization.test.js` extracts every production `app.use` mount and inline `/api` literal from `server/server.js` and requires an allowlisted policy classification. Additions must deliberately update the policy, this matrix, production-process integration coverage, and any affected client fetch/file flow.
+
+## September product behavior
+
+The route policy is unchanged. Archive still requires DM access; loading/error states never weaken authorization. Private prep uses existing `/api/dm-notes` routes. References are stored as `@[Title](note:ID)` inside note content; marker attachment uses the existing context fields. No schema migration is required.
+
+The client already installs a global same-origin credential wrapper. `dmFetch` reuses it and clears only the matching expired session. Cast/companion entry paths do not request DM history or join the DM room using a stored browser token.
+
+The server adds a read-only `map_state` bootstrap snapshot through the existing egress projection. DM/player projection remains unchanged; public/cast clients do not receive map payloads. Opening Battlemap no longer emits token synchronization. The actual-server integration tests verify audience filtering, reconnect without token writes, and private prep isolation.

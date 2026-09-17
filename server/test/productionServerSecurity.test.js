@@ -354,6 +354,47 @@ describe('actual production server security integration', () => {
     expect(JSON.stringify(rows)).not.toMatch(/RAW_PIN_SENTINEL|OVERSIZED_PIN_SENTINEL|correct-horse-42/);
   });
 
+  it('bootstraps projected maps without synchronizing tokens and keeps prep notes private', async () => {
+    const fixtureDb = new Database(databasePath);
+    const mapId = Number(fixtureDb.prepare("INSERT INTO maps (name, is_active) VALUES ('Fixture map', 1)").run().lastInsertRowid);
+    fixtureDb.prepare("INSERT INTO map_tokens (map_id, entity_id, entity_name, is_hidden) VALUES (?, 'hidden-fixture', 'HIDDEN_MAP_SENTINEL', 1)").run(mapId);
+    const before = JSON.stringify(fixtureDb.prepare('SELECT * FROM map_tokens WHERE map_id = ?').all(mapId));
+    const dm = await connectSocket(baseUrl);
+    const player = await connectSocket(baseUrl, { auth: { accessFlow: 'companion', accessToken: ariaGrant.token } });
+    const cast = await connectSocket(baseUrl, { auth: { accessFlow: 'cast', accessToken: castGrant.token } });
+    const publicClient = await connectSocket(baseUrl);
+    clients.push(dm.socket, player.socket, cast.socket, publicClient.socket);
+    try {
+      const snapshot = onceWithTimeout(dm.socket, 'map_state');
+      dm.socket.emit('dm_join_room', { dmToken });
+      expect((await snapshot).tokens[0].entity_name).toBe('HIDDEN_MAP_SENTINEL');
+      expect(player.events.find(event => event.event === 'map_state').payload.tokens).toEqual([]);
+      expect(cast.events.some(event => event.event === 'map_state')).toBe(false);
+      expect(publicClient.events.some(event => event.event === 'map_state')).toBe(false);
+      const headers = { authorization: `Bearer ${dmToken}`, 'content-type': 'application/json' };
+      const created = await request(baseUrl, '/api/dm-notes', { method: 'POST', headers, body: JSON.stringify({ title: 'PRIVATE_PREP_SENTINEL', content: '@[Another](note:999)', linked_type: 'map_marker', linked_id: 11 }) });
+      expect(created.status).toBe(201);
+      const note = await created.json();
+      expect((await request(baseUrl, '/api/dm-notes?linked_type=map_marker&linked_id=11', { headers }).then(response => response.json())).some(item => item.id === note.id)).toBe(true);
+      expect(await request(baseUrl, '/api/dm-notes?linked_type=map_marker&linked_id=12', { headers }).then(response => response.json())).toEqual([]);
+      dm.socket.emit('relay_dm_note', { event: 'dm_note_created', data: note });
+      await delay();
+      for (const client of [player, cast, publicClient]) expect(JSON.stringify(client.events)).not.toContain('PRIVATE_PREP_SENTINEL');
+      const updated = await request(baseUrl, `/api/dm-notes/${note.id}`, { method: 'PATCH', headers, body: JSON.stringify({ title: 'Renamed fixture' }) }).then(response => response.json());
+      expect(updated.content).toBe('@[Another](note:999)');
+      expect((await request(baseUrl, `/api/dm-notes/${note.id}`, { method: 'DELETE', headers })).ok).toBe(true);
+      const reconnectSnapshot = onceWithTimeout(player.socket, 'map_state');
+      player.socket.disconnect(); player.socket.connect();
+      expect((await reconnectSnapshot).tokens).toEqual([]);
+      expect(JSON.stringify(fixtureDb.prepare('SELECT * FROM map_tokens WHERE map_id = ?').all(mapId))).toBe(before);
+    } finally {
+      for (const client of [dm, player, cast, publicClient]) client.socket.disconnect();
+      fixtureDb.prepare('DELETE FROM map_tokens WHERE map_id = ?').run(mapId);
+      fixtureDb.prepare('DELETE FROM maps WHERE id = ?').run(mapId);
+      fixtureDb.close();
+    }
+  });
+
   it('proves role isolation, revocation, reconnect, origin, message-rate, and size controls', async () => {
     const unauthenticated = await connectSocket(baseUrl);
     const cast = await connectSocket(baseUrl, {

@@ -1,3 +1,4 @@
+import { dmFetch } from '../lib/dmFetch';
 import { useState, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -170,7 +171,7 @@ export default function DmDashboard() {
       return;
     }
     try {
-      const response = await fetch('/api/access-grants/cast', {
+      const response = await dmFetch('/api/access-grants/cast', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -199,7 +200,7 @@ export default function DmDashboard() {
         onStartEncounter={handleStartEncounter}
       />
       <DmAutomationPanel open={showAutomation} onClose={() => setShowAutomation(false)} />
-      <CombatRecoveryModal open={showRecovery} onClose={() => setShowRecovery(false)} />
+      <CombatRecoveryModal open={showRecovery} onOpenChange={setShowRecovery} />
       <Compendium open={showCompendium} onClose={() => setShowCompendium(false)} />
       <EffectPresetLibrary open={showPresets} onClose={() => setShowPresets(false)} />
       <ImportDiffModal open={showImportDiff} onClose={() => setShowImportDiff(false)} />
@@ -243,12 +244,12 @@ export default function DmDashboard() {
       )}
 
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Eye className="h-7 w-7 text-primary" />
           <h1 className="text-3xl font-display tracking-wider">DM Command Center</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-secondary/30 border border-border rounded-lg px-3 py-1.5">
             <AnimatedToggle
               checked={state.isApprovalMode}
@@ -323,9 +324,9 @@ export default function DmDashboard() {
       {/* Top Row: God-Eye View + World Panel */}
       <div className="grid grid-cols-12 gap-4">
         {/* God-Eye View */}
-        <Card className="col-span-12 lg:col-span-9 border-primary/20 bg-secondary/5">
+        <Card className="min-w-0 col-span-12 xl:col-span-8 border-primary/20 bg-secondary/5">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="font-display flex items-center gap-2 text-primary">
                 <Eye className="h-5 w-5" /> God-Eye View
               </CardTitle>
@@ -389,7 +390,7 @@ export default function DmDashboard() {
                           style={{ width: `${hpPercent}%` }}
                         />
                       </div>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="text-xs font-bold font-mono">{char.hp.current}/{char.hp.max} HP</div>
                         <div className="flex gap-1">
                           <button onClick={() => handleQuickHp(char.id, -5)} className="w-7 h-6 flex items-center justify-center bg-destructive/10 text-destructive border border-destructive/20 rounded hover:bg-destructive/20 text-[10px] font-bold transition-colors">-5</button>
@@ -418,7 +419,7 @@ export default function DmDashboard() {
         </Card>
 
         {/* World Panel */}
-        <div className="col-span-12 lg:col-span-3">
+        <div className="min-w-0 col-span-12 xl:col-span-4">
           <WorldPanel isDm />
         </div>
       </div>
@@ -426,16 +427,16 @@ export default function DmDashboard() {
       {/* Middle Row: Quests + Initiative + Right Column */}
       <div className="grid grid-cols-12 gap-4">
         {/* Quest Tracker */}
-        <div className="col-span-12 lg:col-span-3 flex flex-col min-h-[400px]">
+        <div className="min-w-0 col-span-12 xl:col-span-4 flex flex-col min-h-[400px]">
           <QuestTracker isDm />
         </div>
 
         {/* Center: Initiative + Encounter Controls */}
-        <div className="col-span-12 lg:col-span-6 space-y-3">
+        <div className="min-w-0 col-span-12 xl:col-span-8 2xl:col-span-4 space-y-3">
           {/* Combat Controls */}
           <Card className="border-primary/20 bg-secondary/5">
             <CardContent className="p-3 flex items-center justify-between flex-wrap gap-2">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowEncounterLibrary(true)}>
                   <Swords className="h-3 w-3 mr-1" /> Encounters
                 </Button>
@@ -459,7 +460,7 @@ export default function DmDashboard() {
         </div>
 
         {/* Right Column: Dice + Soundboard + Chronicle */}
-        <div className="col-span-12 lg:col-span-3 space-y-3">
+        <div className="min-w-0 col-span-12 2xl:col-span-4 space-y-3">
           <Card className="border-primary/20 bg-secondary/5">
             <CardHeader className="pb-2">
               <CardTitle className="font-display text-sm">Dice Roller</CardTitle>
@@ -518,7 +519,7 @@ export default function DmDashboard() {
           </div>
 
           {/* Input */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Textarea
               value={loreInput}
               onChange={e => setLoreInput(e.target.value)}
@@ -540,7 +541,7 @@ export default function DmDashboard() {
                 <div key={idx} className="bg-secondary/20 border border-border/40 rounded-lg p-3 space-y-2">
                   <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider italic">{entry.prompt}</div>
                   <ActionableLoreMessage rawText={entry.response} />
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <span className="text-[9px] text-muted-foreground/50 font-mono">{entry.timestamp}</span>
                     <Button
                       size="sm"

@@ -131,7 +131,7 @@ export function EncounterBuilderModal({ open, onClose, onStartEncounter }: Encou
         return;
       }
 
-      setNewEncounter({ name: data.name, monsters: data.monsters });
+      setNewEncounter({ name: data.name, monsters: data.monsters, difficulty: data.difficulty || '', environment_json: data.environment_json || [] });
       setIsCreating(true);
       toast.success('Encounter pasted — review and save.');
     } catch {

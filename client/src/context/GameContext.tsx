@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { accessFlowForPath } from '../lib/accessCredential';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
+import { dmFetch, DM_ACCESS_LOST } from '../lib/dmFetch';
 import socket from '../socket';
 import { Character, Party, ActionLogEntry, SharedLootItem, SpellSlots, LootVoteState } from '../types/character';
 import { EffectEvent } from '../types/effects';
@@ -22,7 +24,13 @@ export interface ResourcePermissions {
   condition_self_apply: 'open' | 'dm_approval';
 }
 
+export interface Readiness { connected: boolean; party: boolean; initiative: boolean; combat: boolean; map: boolean; dmAuthenticated: boolean }
+const isAudienceView = () => accessFlowForPath(window.location.pathname) !== null;
+const emptyReadiness = (): Readiness => ({ connected: !!socket.connected, party: false, initiative: false, combat: false, map: false, dmAuthenticated: false });
 interface GameState {
+  readiness: Readiness;
+  mapState: unknown;
+
   characters: Character[];
   party: Party | null;
   initiativeState: any[];
@@ -83,6 +91,7 @@ function normaliseCharacter(raw: any): Character {
     proficiencyBonus: raw.proficiencyBonus ?? (Math.floor(((raw.level || 1) - 1) / 4) + 2),
     speed: raw.speed || 30,
     initiative: raw.initiativeBonus || 0,
+    activeFeatures: raw.activeFeatures || [],
     activeBuffs: raw.buffs || [],
     concentratingOn: raw.concentratingOn,
     attacks: raw.attacks || [],
@@ -100,6 +109,8 @@ const GameContext = createContext<{
   clearDmAuth: () => void;
 }>({
   state: {
+    readiness: emptyReadiness(),
+    mapState: null,
     characters: [],
     party: null,
     initiativeState: [],
@@ -120,6 +131,10 @@ const GameContext = createContext<{
 });
 
 export function GameProvider({ children }: { children: ReactNode }) {
+  const [readiness, setReadiness] = useState<Readiness>(emptyReadiness);
+  const [mapState, setMapState] = useState<unknown>(null);
+  const dmConfirmed = useRef(false);
+
   const [party, setParty] = useState<Character[]>([]);
   const [initiativeState, setInitiativeState] = useState<any[]>([]);
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([]);
@@ -131,14 +146,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [pendingImports, setPendingImports] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<ResourcePermissions>({ loot_claim: 'open', cross_player_effects: 'open', inventory_transfer: 'open', view_monster_hp: 'open', edit_party_notes: 'open', condition_self_apply: 'open' });
   const [isDm, setIsDm] = useState<boolean>(() => {
-    return !!localStorage.getItem('dm_token');
+    return !isAudienceView() && !!localStorage.getItem('dm_token');
   });
   const [dmToken, setDmTokenState] = useState<string | null>(() => {
-    return localStorage.getItem('dm_token');
+    return isAudienceView() ? null : localStorage.getItem('dm_token');
   });
 
   const setDmAuth = useCallback((token: string) => {
     localStorage.setItem('dm_token', token);
+    dmConfirmed.current = false;
+    setReadiness(emptyReadiness());
     setDmTokenState(token);
     setIsDm(true);
     socket.emit('dm_join_room', { dmToken: token });
@@ -147,16 +164,38 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const clearDmAuth = useCallback(() => {
     localStorage.removeItem('dm_token');
     setDmTokenState(null);
+    dmConfirmed.current = false;
+    setReadiness(emptyReadiness());
+    setMapState(null); setParty([]); setInitiativeState([]); setNotes([]); setActionLog([]);
+    if (socket.connected) { socket.disconnect(); socket.connect(); }
     setIsDm(false);
+    setEffectEvents([]);
+    setPendingImports([]);
+  }, []);
+
+  useEffect(() => {
+    const onAccessLost = () => clearDmAuth();
+    window.addEventListener(DM_ACCESS_LOST, onAccessLost);
+    return () => window.removeEventListener(DM_ACCESS_LOST, onAccessLost);
+  }, [clearDmAuth]);
+
+  useEffect(() => {
+    const reset = () => { dmConfirmed.current = false; setReadiness(emptyReadiness()); setMapState(null); };
+    const joined = () => { dmConfirmed.current = true; setReadiness({ ...emptyReadiness(), dmAuthenticated: true }); };
+    const map = (data: unknown) => { setMapState(data); setReadiness(previous => ({ ...previous, map: true })); };
+    socket.on('connect', reset); socket.on('disconnect', reset); socket.on('dm_room_joined', joined); socket.on('map_state', map);
+    return () => { socket.off('connect', reset); socket.off('disconnect', reset); socket.off('dm_room_joined', joined); socket.off('map_state', map); };
   }, []);
 
   useEffect(() => {
     socket.on('party_state', (data: any[]) => {
       setParty(data.map(normaliseCharacter));
+      setReadiness(previous => ({ ...previous, party: true, dmAuthenticated: dmConfirmed.current }));
     });
 
     socket.on('initiative_state', (data: any[]) => {
       setInitiativeState(data);
+      setReadiness(previous => ({ ...previous, initiative: true }));
     });
 
     socket.on('action_logged', (data: any[]) => {
@@ -193,6 +232,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
     socket.on('combat_state_sync', (data: { round: number; turnIndex: number }) => {
       setRoundNumber(data.round);
+      setReadiness(previous => ({ ...previous, combat: true }));
     });
 
     socket.on('pending_imports_sync', (data: any[]) => {
@@ -207,32 +247,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }
         return [...prev, data];
       });
-      const token = localStorage.getItem('dm_token');
+      const token = isAudienceView() ? null : localStorage.getItem('dm_token');
       if (token) {
         toast.info(`New character import pending: ${data.playerName}`);
       }
     });
 
     // Re-join DM room on reconnect
-    socket.on('connect', () => {
-      const token = localStorage.getItem('dm_token');
+    const reconnect = () => {
+      const token = isAudienceView() ? null : localStorage.getItem('dm_token');
       if (token) {
         socket.emit('dm_join_room', { dmToken: token });
       }
-      socket.emit('refresh_party');
-      socket.emit('refresh_party_loot');
-    });
+    };
+    socket.on('connect', reconnect);
 
-    socket.emit('refresh_party');
-    socket.emit('refresh_party_loot');
+
 
     // Join DM room if token exists
-    const storedToken = localStorage.getItem('dm_token');
+    const storedToken = isAudienceView() ? null : localStorage.getItem('dm_token');
     if (storedToken) {
-      fetch('/api/effect-timeline')
+      dmFetch('/api/effect-timeline')
         .then(async r => {
           if (!r.ok) {
-            if (r.status === 401 || r.status === 403) {
+            if ((r.status === 401 || r.status === 403) && localStorage.getItem('dm_token') === storedToken) {
               clearDmAuth();
             }
             return [];
@@ -241,7 +279,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           const data = await r.json();
           return Array.isArray(data) ? data : [];
         })
-        .then(setEffectEvents)
+        .then(events => { if (localStorage.getItem('dm_token') === storedToken) setEffectEvents(events); })
         .catch(() => {});
       socket.emit('dm_join_room', { dmToken: storedToken });
     } else {
@@ -249,6 +287,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
 
     return () => {
+      socket.off('connect', reconnect);
       socket.off('party_state');
       socket.off('initiative_state');
       socket.off('action_logged');
@@ -260,11 +299,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('combat_state_sync');
       socket.off('pending_imports_sync');
       socket.off('pending_import_created');
-      socket.off('connect');
+
     };
   }, [clearDmAuth]);
 
   const state: GameState = {
+    readiness, mapState,
     characters: party,
     party: {
       name: "The Party",

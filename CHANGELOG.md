@@ -4,7 +4,14 @@ All notable changes to the **Arcane Ally** project will be documented in this fi
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
-## [Unreleased]
+## September 17, 2026 product release
+
+- Linked private prep and marker-specific notes, mapless encounter/cast board, and first-session guidance.
+- Archive recovery, session-expiry clearing, responsive Party/DM/Guide layouts, and explicit build-time type checks.
+- Updated Arcane Codex, user/developer documentation, access notes, and deployment runbook. No schema or dependency changes.
+- Verification and remaining limits: [release record](docs/PRODUCT_PLAN_VERIFICATION_2026-09-17.md).
+
+## Earlier baseline changes (previously Unreleased)
 
 ### Added
 - **Multi-Phase Boss Tracker**: DMs can configure two or more phases on a monster, set phase-specific HP and AC, choose reset/retain/proportional HP transitions, and optionally clear conditions or buffs per phase.

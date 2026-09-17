@@ -298,6 +298,7 @@ export interface Character {
   hp: { current: number; max: number; temp: number };
   ac: number;
   acBreakdown?: any[];
+  abilityScores: AbilityScores;
   abilityScoresBreakdown?: Record<AbilityScore, StatSource[]>;
   abilityModifiers?: Record<AbilityScore, number>;
   formattedModifiers?: Record<AbilityScore, string>;
@@ -421,8 +422,11 @@ export function createDefaultCharacter(id: string): Character {
     proficiencyBonus: 2,
     speed: 30,
     initiative: 0,
+    activeFeatures: [],
     activeBuffs: [],
     skillProficiencies: {},
     saveProficiencies: {},
   };
 }
+
+export function getAbilityModifier(score: number): number { return Math.floor((score - 10) / 2); }

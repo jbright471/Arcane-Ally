@@ -384,6 +384,7 @@ export function parseDDBCharacter(json: unknown): Character {
     speed: 30, // Could be parsed from modifiers but varies by race
     initiative: dexMod,
     activeBuffs: [],
+    conditionDurations: {}, skillProficiencies: {}, saveProficiencies: {}, homebrewInventory: [], activeFeatures: [], hitDice: {}, hitDiceUsed: {},
   };
 }
 

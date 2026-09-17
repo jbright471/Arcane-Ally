@@ -4,6 +4,7 @@ import path from "path";
 import tailwindcss from '@tailwindcss/vite';
 
 // Set CAPACITOR=true when building for mobile to use relative asset paths
+const backendTarget = process.env.ARCANE_BACKEND_URL || 'http://dnd-party-sync-backend:3001';
 const isCapacitor = process.env.CAPACITOR === 'true';
 
 // https://vitejs.dev/config/
@@ -22,9 +23,9 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     proxy: {
-      '/api': 'http://dnd-party-sync-backend:3001',
+      '/api': backendTarget,
       '/socket.io': {
-        target: 'http://dnd-party-sync-backend:3001',
+        target: backendTarget,
         ws: true,
       },
     },

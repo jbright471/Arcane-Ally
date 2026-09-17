@@ -30,7 +30,7 @@ export function VoiceChat() {
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const speakingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
 
   const createPeerConnection = useCallback((remoteSocketId: string): RTCPeerConnection => {
@@ -243,7 +243,7 @@ export function VoiceChat() {
   const totalInVoice = peers.length + (inVoice ? 1 : 0);
 
   return (
-    <div className="fixed bottom-20 right-4 z-40 flex flex-col items-end gap-2">
+    <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 flex flex-col items-end gap-2">
       {/* ── Expanded panel ── */}
       {isOpen && (
         <div className="w-64 rounded-xl border border-primary/20 bg-background/95 backdrop-blur shadow-2xl overflow-hidden">

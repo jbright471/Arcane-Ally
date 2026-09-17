@@ -58,7 +58,7 @@ export function RulesAssistant() {
       <button
         onClick={() => setIsOpen(true)}
         title="Ask the Rules Sage"
-        className="fixed bottom-6 right-[72px] w-12 h-12 rounded-full bg-card border-2 border-primary/70 text-primary cursor-pointer shadow-lg shadow-black/50 flex items-center justify-center z-[100] transition-all duration-200 hover:scale-110 hover:border-primary hover:shadow-primary/20"
+        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[80px] w-12 h-12 rounded-full bg-card border-2 border-primary/70 text-primary cursor-pointer shadow-lg shadow-black/50 flex items-center justify-center z-40 transition-all duration-200 hover:scale-110 hover:border-primary hover:shadow-primary/20"
       >
         🧙
       </button>
@@ -66,7 +66,7 @@ export function RulesAssistant() {
   }
 
   return (
-    <div className="fixed bottom-20 right-4 w-[340px] h-[480px] bg-card border border-border rounded-xl shadow-2xl shadow-black/60 flex flex-col z-[100] overflow-hidden">
+    <div className="fixed bottom-20 right-4 w-[min(340px,calc(100vw-2rem))] h-[min(480px,calc(100dvh-7rem))] bg-card border border-border rounded-xl shadow-2xl shadow-black/60 flex flex-col z-40 overflow-hidden">
       {/* Header */}
       <div className="bg-secondary/30 border-b border-border px-4 py-2.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">

@@ -10,9 +10,9 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="h-dvh flex w-full overflow-hidden">
         <AppSidebar />
-        <div className="flex-1 flex flex-col min-h-screen min-w-0">
+        <div className="flex-1 flex flex-col min-h-0 min-w-0">
           <header className="h-14 shrink-0 flex items-center border-b border-border px-4 bg-card/60 backdrop-blur-sm sticky top-0 z-20 shadow-sm shadow-black/30">
             <SidebarTrigger className="mr-4" />
             <div className="flex items-center gap-2">
@@ -37,10 +37,10 @@ export function Layout({ children }: { children: ReactNode }) {
             {/* Decorative gold rule at the bottom of the header */}
             <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           </header>
-          <main className="flex-1 p-6 overflow-y-auto overflow-x-hidden">
+          <main className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto overflow-x-hidden pb-6">
             {children}
           </main>
-          <footer className="border-t border-border/10 py-4 px-6 text-center text-[10px] md:text-xs text-muted-foreground/40 bg-card/20 shrink-0">
+          <footer className="border-t border-border/10 pt-3 pb-[calc(5rem+env(safe-area-inset-bottom))] px-6 text-center text-[10px] md:text-xs text-muted-foreground/40 bg-card/20 shrink-0">
             <p className="max-w-3xl mx-auto leading-normal">
               If you have features, bugs or general inquiry please reach out to{' '}
               <a href="mailto:j.bright@gaming-dojo.net" className="text-muted-foreground/60 hover:text-primary transition-colors">

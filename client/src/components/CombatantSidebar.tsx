@@ -141,7 +141,7 @@ function StatBlock({ stats }: { stats: Record<string, any> }) {
           <div className="flex flex-wrap gap-1">
             {Object.entries(stats.saving_throws).map(([save, val]) => (
               <span key={save} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-950/40 border border-blue-700/30 text-blue-300">
-                {save.slice(0, 3).toUpperCase()} {String(val).startsWith('+') || String(val).startsWith('-') ? val : `+${val}`}
+                {save.slice(0, 3).toUpperCase()} {String(val).startsWith('+') || String(val).startsWith('-') ? String(val) : `+${val}`}
               </span>
             ))}
           </div>
