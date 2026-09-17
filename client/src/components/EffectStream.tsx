@@ -82,7 +82,7 @@ export function EffectStream({ currentCharacterId }: EffectStreamProps) {
       <button
         onClick={isOpen ? () => setIsOpen(false) : handleOpen}
         aria-label="Toggle Effect Stream"
-        className="fixed left-0 top-1/2 -translate-y-1/2 z-[90] flex flex-col items-center justify-center gap-1 bg-card border border-l-0 border-primary/30 rounded-r-lg px-1.5 py-3 shadow-lg shadow-black/40 hover:border-primary/60 hover:bg-secondary/30 transition-all duration-200 group"
+        className="fixed left-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] h-12 w-12 z-40 flex flex-col items-center justify-center gap-1 bg-card border  border-primary/30 rounded-full p-2 shadow-lg shadow-black/40 hover:border-primary/60 hover:bg-secondary/30 transition-all duration-200 group"
       >
         <Activity className="h-4 w-4 text-primary" />
         {unseenCount > 0 && (
@@ -95,6 +95,8 @@ export function EffectStream({ currentCharacterId }: EffectStreamProps) {
 
       {/* Drawer Panel */}
       <div
+        inert={!isOpen}
+        aria-hidden={!isOpen}
         className={`fixed left-0 top-0 h-full w-[300px] bg-card border-r border-border shadow-2xl shadow-black/60 z-[89] flex flex-col transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -184,7 +186,7 @@ export function EffectStream({ currentCharacterId }: EffectStreamProps) {
                             {getEventSummary(event)}
                           </span>
                           <div className="flex items-center gap-1 shrink-0">
-                            {isAuto && <Zap className="h-2.5 w-2.5 text-orange-400" title="Automation" />}
+                            {isAuto && <Zap className="h-2.5 w-2.5 text-orange-400" aria-label="Automation" />}
                             <span className="text-muted-foreground/30 font-mono text-[8px]">T{event.turn_index}</span>
                           </div>
                         </div>

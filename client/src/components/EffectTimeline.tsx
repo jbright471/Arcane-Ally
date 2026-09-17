@@ -171,10 +171,10 @@ function EventRow({ event, isDm, indented = false }: { event: EffectEvent; isDm:
       </span>
       <div className="flex items-center gap-1 shrink-0">
         {isReversed && (
-          <RotateCcw className="h-2.5 w-2.5 text-slate-500" title="Undone" />
+          <RotateCcw className="h-2.5 w-2.5 text-slate-500" aria-label="Undone" />
         )}
         {isAuto && !isReversed && (
-          <Zap className="h-2.5 w-2.5 text-orange-400" title="Automation" />
+          <Zap className="h-2.5 w-2.5 text-orange-400" aria-label="Automation" />
         )}
         <span className="text-muted-foreground/40 font-mono text-[8px]">
           T{event.turn_index}
@@ -449,7 +449,6 @@ export function EffectTimeline() {
               variant="ghost"
               className="h-7 px-2 text-[10px] text-muted-foreground hover:text-primary"
               onClick={handleExport}
-              title="Export as markdown"
               aria-label="Export timeline as Markdown"
             >
               <Download className="h-3 w-3" />
@@ -459,7 +458,6 @@ export function EffectTimeline() {
               variant="ghost"
               className="h-7 px-2 text-[10px] text-muted-foreground hover:text-destructive"
               onClick={handleClear}
-              title="Clear timeline"
               aria-label="Clear current timeline"
               disabled={selectedSessionId !== 'live'}
             >

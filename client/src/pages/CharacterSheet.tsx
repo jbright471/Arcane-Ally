@@ -472,7 +472,7 @@ export default function CharacterSheet() {
                     score={val}
                     modifier={character.abilityModifiers?.[key] ?? 0}
                     rollType="Ability Check"
-                    characterName={character.name}
+                    character={character}
                     variant="card"
                     breakdown={character.provenance?.abilityScores?.[key as AbilityScore]}
                   />

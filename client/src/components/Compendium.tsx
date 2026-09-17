@@ -114,7 +114,7 @@ export function Compendium({ open, onClose }: CompendiumProps) {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Debounced SRD search
-  const srdTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const srdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadEntities = useCallback(async () => {
     try {

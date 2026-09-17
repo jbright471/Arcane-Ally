@@ -1,3 +1,4 @@
+import { FirstSessionChecklist } from '../components/FirstSessionChecklist';
 import { useGame } from '../context/GameContext';
 import { CharacterCard } from '../components/CharacterCard';
 import { Button } from '../components/ui/button';
@@ -28,6 +29,7 @@ const Index = () => {
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
+      <FirstSessionChecklist />
       {/* Hero */}
       <div className="relative text-center space-y-4 py-10 px-6 rounded-xl overflow-hidden border border-primary/10 bg-gradient-to-b from-card/80 to-background/0 animate-fade-in">
         {/* Decorative background glow */}

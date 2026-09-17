@@ -163,6 +163,7 @@ export default function CompanionPage() {
       if (!raw) return;
       // Minimal normalisation (mirrors GameContext.normaliseCharacter key fields)
       setCharacter({
+        activeBuffs: [], activeFeatures: [], hitDice: {}, hitDiceUsed: {},
         id: String(raw.id),
         name: raw.name || 'Unknown',
         class: raw.class || 'Adventurer',

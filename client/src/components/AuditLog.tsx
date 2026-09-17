@@ -155,7 +155,7 @@ export function AuditLog({ isDm = false }: AuditLogProps) {
                             </span>
                             <div className="flex items-center gap-1 shrink-0">
                               {isAuto && (
-                                <Zap className="h-2.5 w-2.5 text-orange-400" title="Automation" />
+                                <Zap className="h-2.5 w-2.5 text-orange-400" aria-label="Automation" />
                               )}
                               {canReverse && (
                                 <Tooltip>

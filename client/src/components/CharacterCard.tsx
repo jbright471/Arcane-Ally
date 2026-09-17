@@ -51,7 +51,7 @@ export function CharacterCard({ character, onClick, selected, compact }: Charact
     else navigate(`/character/${character.id}`);
   };
 
-  const handleBreakConcentration = (e: React.MouseEvent) => {
+  const handleBreakConcentration = (e: React.MouseEvent | Event) => {
     e.stopPropagation();
     socket.emit('drop_concentration', { characterId: parseInt(character.id!), actor: 'DM' });
   };

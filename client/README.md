@@ -14,13 +14,15 @@ React/Vite frontend for Arcane Ally, the player and DM-facing tabletop companion
 ## Common Commands
 
 ```bash
-npm install
+npm ci
 npm run dev
+npm test
+npm run typecheck
 npm run lint
 npm run build
 ```
 
-The Vite dev server runs on `http://localhost:5173` by default. It expects the backend API and Socket.io gateway to be available on the server port, normally `3001`.
+The Vite dev server runs on `http://localhost:5173` by default. Its default proxy target is `http://backend:3001` for container development. For a host backend, set `ARCANE_BACKEND_URL=http://localhost:3001` (PowerShell: `$env:ARCANE_BACKEND_URL="http://localhost:3001"`) before `npm run dev`. Both REST and Socket.io use this target.
 
 ## App Entry Points
 
@@ -34,6 +36,16 @@ The Vite dev server runs on `http://localhost:5173` by default. It expects the b
 - `src/components/DMRollFeed.tsx` - DM roll stream with non-public visibility grouping
 - `src/components/DmAutomationPanel.tsx` - group effects, save requests, presets, auras, and campaign automation policies
 - `src/components/EffectTimeline.tsx` - active and archived encounter history, filtering, pagination, export, and reversal controls
+
+## September product surfaces
+
+- `ArchiveContent.tsx` validates responses and handles loading, empty, retry, expired access, cancellation, and private-state clearing for the page and modal.
+- `DmPrepPanel.tsx` and `PrepReferences.tsx` provide private note search, stable ID references, marker contexts, and in-panel drafts. They do not provide offline or collaborative editing.
+- `EncounterBoard.tsx` provides shared read-only presentation for mapless Battlemap and cast; server audience projection remains authoritative.
+- `FirstSessionChecklist.tsx` waits for confirmed DM and party readiness before automatic opening.
+- `GameContext.tsx` tracks connection/domain readiness and consumes read-only map bootstrap; cast/companion paths do not inherit stored DM bootstrap.
+- `dmFetch.ts` reuses the global credential boundary and handles current-session expiry. It does not introduce a new authentication scheme.
+- `AppGuidebook.tsx` owns Arcane Codex content; `/guide#dm-prep-tools`, `/guide#combat-management`, and `/guide#welcome` are direct section links.
 
 ## Roll Visibility
 
@@ -76,7 +88,11 @@ npm run cap:ios
 Before publishing frontend changes, run:
 
 ```bash
+npm test
+npm run typecheck
 npm run lint
 npm run build
 npm audit --audit-level=high
 ```
+
+`build` and `build:mobile` include explicit app and Node-config type checks. The existing lint configuration covers JS/JSX only; TS/TSX lint is not configured. See [release verification](../docs/PRODUCT_PLAN_VERIFICATION_2026-09-17.md) and [deployment operations](../docs/DEPLOYMENT.md).

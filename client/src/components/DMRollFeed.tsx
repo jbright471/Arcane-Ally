@@ -176,7 +176,7 @@ export function DMRollFeed({ maxHeight = 320 }: DMRollFeedProps) {
                       </div>
                       <span className="text-[10px] font-semibold text-foreground/80">{event.actor}</span>
                       {visibility !== 'public' && (
-                        <Lock className="h-2.5 w-2.5 text-fuchsia-400" title={`${visibility.replace('_', ' ')} roll`} />
+                        <Lock className="h-2.5 w-2.5 text-fuchsia-400" aria-label={`${visibility.replace('_', ' ')} roll`} />
                       )}
                       <span className="text-[8px] text-muted-foreground/30 ml-auto">
                         {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

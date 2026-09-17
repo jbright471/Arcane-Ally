@@ -11,6 +11,7 @@ import {
   Plus, ChevronUp, ChevronDown, Eye, EyeOff, Zap, Loader2, Settings2, History,
   Pin, Users, Radio, Save,
 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import socket from '../socket';
 import { CombatReportModal } from './CombatReportModal';
@@ -320,12 +321,12 @@ export function InitiativeTracker() {
       <>
       <Card className="border-primary/20 bg-secondary/5">
         <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Swords className="h-5 w-5 text-primary" />
               <span className="font-display text-lg">Combat Tracker</span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Button onClick={() => setShowMiniatures(true)} variant="outline" size="sm" className="h-8 text-xs font-display">
                 <Users className="h-3.5 w-3.5 mr-1" /> Miniatures
               </Button>
@@ -378,7 +379,7 @@ export function InitiativeTracker() {
     <Card className="border-primary/20 bg-secondary/5 overflow-hidden">
       {/* Header */}
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="font-display flex items-center gap-2 text-primary">
             <Swords className="h-5 w-5" />
             Initiative
@@ -407,7 +408,7 @@ export function InitiativeTracker() {
               </Popover>
             </div>
           </CardTitle>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button
               variant="ghost"
               size="sm"
@@ -561,7 +562,7 @@ export function InitiativeTracker() {
         {/* Aura Panel Collapsible Section */}
         {showAuraPanel && (
           <div className="p-3 bg-secondary/15 border border-border/30 rounded-lg space-y-3 mb-2 animate-fade-in">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-xs uppercase tracking-wider text-primary font-bold font-display flex items-center gap-1.5">
                 <Radio className="h-3.5 w-3.5 animate-pulse text-emerald-400" /> Aura-Sync Panel
               </h3>
@@ -662,7 +663,7 @@ export function InitiativeTracker() {
                   return (
                     <div key={aura.id} className={`flex items-center justify-between p-2 rounded bg-secondary/30 border border-border/30 transition-all ${isActive ? 'border-l-2 border-l-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.05)]' : 'opacity-55'}`}>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <span className={`text-xs font-bold font-display ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>{aura.name}</span>
                           <Badge variant="outline" className="text-[8px] h-3.5 px-1 font-mono">{aura.radius} ft</Badge>
                         </div>

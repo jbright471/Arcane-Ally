@@ -1,3 +1,5 @@
+import { useLocation } from 'react-router-dom';
+import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
@@ -184,9 +186,11 @@ function RouteLoading({ fullScreen = false }: { fullScreen?: boolean }) {
 }
 
 function MainAppShell() {
+  const location = useLocation();
   return (
     <>
       <Layout>
+        <RouteErrorBoundary key={location.pathname}>
         <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="/" element={<Index />} />
@@ -205,6 +209,7 @@ function MainAppShell() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+        </RouteErrorBoundary>
       </Layout>
       <Suspense fallback={null}>
         <RulesAssistant />

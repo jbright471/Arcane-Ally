@@ -1,3 +1,4 @@
+import { dmFetch } from '../lib/dmFetch';
 import { type FormEvent, type PropsWithChildren, useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { useGame } from '../context/GameContext';
@@ -24,7 +25,7 @@ export function DmAccessGate({ children }: PropsWithChildren) {
 
     const controller = new AbortController();
     setAccessState('checking');
-    fetch('/api/characters', { signal: controller.signal })
+    dmFetch('/api/characters', { signal: controller.signal })
       .then(response => {
         if (!response.ok) throw new Error('stored_session_rejected');
         setAccessState('authenticated');

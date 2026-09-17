@@ -24,26 +24,20 @@ function mergedHeaders(input: RequestInfo | URL, init?: RequestInit): Headers {
   return headers;
 }
 
+export function withApiCredential(input: RequestInfo | URL, init?: RequestInit): RequestInit | undefined {
+  const method = init?.method || (input instanceof Request ? input.method : 'GET');
+  if (!isProtectedSameOriginApiUrl(requestUrl(input), window.location.href, method)) return init;
+  const token = window.localStorage.getItem('dm_token');
+  if (!token) return init;
+  const headers = mergedHeaders(input, init);
+  if (!headers.has('authorization') && !headers.has('x-dm-token')) headers.set('authorization', `Bearer ${token}`);
+  return { ...init, headers };
+}
+
 export function installApiCredentialBoundary(): void {
   const originalFetch = window.fetch.bind(window);
   if ((window.fetch as typeof window.fetch & { apiCredentialBoundary?: boolean }).apiCredentialBoundary) return;
-
-  const authenticatedFetch: typeof window.fetch = (input, init) => {
-    const method = init?.method || (input instanceof Request ? input.method : 'GET');
-    if (!isProtectedSameOriginApiUrl(requestUrl(input), window.location.href, method)) {
-      return originalFetch(input, init);
-    }
-
-    const token = window.localStorage.getItem('dm_token');
-    if (!token) return originalFetch(input, init);
-
-    const headers = mergedHeaders(input, init);
-    if (!headers.has('authorization') && !headers.has('x-dm-token')) {
-      headers.set('authorization', `Bearer ${token}`);
-    }
-    return originalFetch(input, { ...init, headers });
-  };
-
+  const authenticatedFetch: typeof window.fetch = (input, init) => originalFetch(input, withApiCredential(input, init));
   (authenticatedFetch as typeof window.fetch & { apiCredentialBoundary?: boolean }).apiCredentialBoundary = true;
   window.fetch = authenticatedFetch;
 }

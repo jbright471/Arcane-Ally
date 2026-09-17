@@ -70,9 +70,8 @@ export function StatChecks({ character }: StatChecksProps) {
               sublabel={ability}
               modifier={getSaveModifier(ability)}
               rollType="Saving Throw"
-              characterName={name}
+              character={character}
               variant="row"
-              conditions={conditions}
               ability={ability}
               proficiencyLevel={saveProficiencies[ability] ? 'proficiency' : 'none'}
               breakdown={character.provenance?.saves?.[ability]}
@@ -97,9 +96,8 @@ export function StatChecks({ character }: StatChecksProps) {
               sublabel={ability}
               modifier={getSkillModifier(label)}
               rollType="Skill Check"
-              characterName={name}
+              character={character}
               variant="row"
-              conditions={conditions}
               ability={ability}
               proficiencyLevel={skillProficiencies[label] ?? 'none'}
               breakdown={character.provenance?.skills?.[label]}

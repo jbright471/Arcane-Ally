@@ -830,6 +830,7 @@ function emitRoleState(socket) {
     emitProjectedTimeline(socket);
     egress.send(socket, 'permissions_state', getPermissions(db));
     egress.send(socket, 'combat_state_sync', { round: currentCombatRound, turnIndex: currentTurnIndex });
+    egress.send(socket, 'map_state', getCurrentMapState());
     egress.send(socket, 'party_loot_state', getPartyLootState());
     egress.send(socket, 'approval_mode', isApprovalMode);
 }
@@ -925,16 +926,17 @@ function broadcastWorldMapState() {
     } catch (e) { console.error('[WorldMap] Broadcast error:', e); }
 }
 
-function broadcastMapState() {
+// Read-only snapshot; opening a screen must not synchronize or create tokens.
+function getCurrentMapState() {
     const map = db.prepare('SELECT * FROM maps WHERE is_active = 1').get();
-    if (map) {
-        const tokens = db.prepare('SELECT * FROM map_tokens WHERE map_id = ?').all(map.id);
-        const markers = db.prepare('SELECT * FROM map_markers WHERE parent_map_id = ?').all(map.id);
-        const image_data = map.image_path ? `/api/maps/file/${path.basename(map.image_path)}` : null;
-        egress.broadcast('map_state', { ...map, image_data, tokens, markers });
-    } else {
-        egress.broadcast('map_state', null);
-    }
+    if (!map) return null;
+    const tokens = db.prepare('SELECT * FROM map_tokens WHERE map_id = ?').all(map.id);
+    const markers = db.prepare('SELECT * FROM map_markers WHERE parent_map_id = ?').all(map.id);
+    const image_data = map.image_path ? `/api/maps/file/${path.basename(map.image_path)}` : null;
+    return { ...map, image_data, tokens, markers };
+}
+function broadcastMapState() {
+    egress.broadcast('map_state', getCurrentMapState());
 }
 
 function logAction(actor, description, status = 'applied', effectsJson = null) {

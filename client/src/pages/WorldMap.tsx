@@ -1,3 +1,6 @@
+import { useGame } from '../context/GameContext';
+import { DmPrepPanel } from '../components/DmPrepPanel';
+import { dmFetch } from '../lib/dmFetch';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Map, MapPin, Swords, ScrollText, Eye, EyeOff,
@@ -53,7 +56,9 @@ type EditingMarker = Partial<WorldMarker> & { isNew?: boolean; pendingX?: number
 export default function WorldMapPage() {
   const [worldMap, setWorldMap] = useState<WorldMapData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDm, setIsDm] = useState(false);
+  const { state } = useGame();
+  const isDm = state.isDm;
+  const [prepMarker, setPrepMarker] = useState<WorldMarker | null>(null);
   const [allMaps, setAllMaps] = useState<{ id: number; name: string }[]>([]);
   const mapImageUrl = useAuthenticatedResourceUrl(worldMap?.map_url);
 
@@ -69,22 +74,22 @@ export default function WorldMapPage() {
 
   const fetchWorldMap = useCallback(async () => {
     try {
-      const res = await fetch('/api/maps/overworld');
+      const res = await dmFetch('/api/maps/overworld');
       setWorldMap(res.ok ? await res.json() : null);
     } catch {
       setWorldMap(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [state.dmToken]);
 
   useEffect(() => {
     fetchWorldMap();
-    fetch('/api/maps').then(r => r.json()).then(setAllMaps).catch(() => {});
+    if (state.dmToken) dmFetch('/api/maps').then(r => r.ok ? r.json() : []).then(data => setAllMaps(Array.isArray(data) ? data : [])).catch(() => {});
 
     socket.on('world_map_state', (data: WorldMapData | null) => setWorldMap(data));
     return () => { socket.off('world_map_state'); };
-  }, [fetchWorldMap]);
+  }, [fetchWorldMap, state.dmToken]);
 
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDm || !worldMap) return;
@@ -109,7 +114,7 @@ export default function WorldMapPage() {
     if (!worldMap || !editing.name?.trim()) return;
 
     if (editing.isNew) {
-      await fetch(`/api/maps/${worldMap.id}/markers`, {
+      await dmFetch(`/api/maps/${worldMap.id}/markers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -123,7 +128,7 @@ export default function WorldMapPage() {
       });
       toast.success('Marker placed on the map.');
     } else {
-      await fetch(`/api/maps/markers/${editing.id}`, {
+      await dmFetch(`/api/maps/markers/${editing.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -144,7 +149,7 @@ export default function WorldMapPage() {
   };
 
   const handleDelete = async (markerId: number) => {
-    await fetch(`/api/maps/markers/${markerId}`, { method: 'DELETE' });
+    await dmFetch(`/api/maps/markers/${markerId}`, { method: 'DELETE' });
     setShowDialog(false);
     setSelectedMarker(null);
     socket.emit('refresh_world_map');
@@ -154,7 +159,7 @@ export default function WorldMapPage() {
 
   const handleToggleDiscovered = async (marker: WorldMarker, e: React.MouseEvent) => {
     e.stopPropagation();
-    await fetch(`/api/maps/markers/${marker.id}`, {
+    await dmFetch(`/api/maps/markers/${marker.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_discovered: marker.is_discovered ? 0 : 1 }),
@@ -176,13 +181,13 @@ export default function WorldMapPage() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const res = await fetch('/api/maps', {
+        const res = await dmFetch('/api/maps', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: uploadName, image_data: e.target?.result, grid_size: 50 }),
         });
         const created = await res.json();
-        await fetch(`/api/maps/${created.id}/set-overworld`, { method: 'POST' });
+        await dmFetch(`/api/maps/${created.id}/set-overworld`, { method: 'POST' });
         socket.emit('refresh_world_map');
         await fetchWorldMap();
         toast.success('The world map has been charted!');
@@ -215,8 +220,8 @@ export default function WorldMapPage() {
         <h1 className="text-3xl font-display tracking-wider">The Known World</h1>
         <p className="text-muted-foreground text-sm ml-2">Global overworld & fast-travel</p>
         <div className="ml-auto flex items-center gap-2">
-          <Switch id="dm-mode-wm" checked={isDm} onCheckedChange={setIsDm} />
-          <Label htmlFor="dm-mode-wm" className="text-sm text-muted-foreground cursor-pointer">DM Mode</Label>
+          <Badge variant="outline">{isDm ? "DM view" : "Player view"}</Badge>
+
         </div>
       </div>
 
@@ -416,6 +421,7 @@ export default function WorldMapPage() {
         </div>
       )}
 
+      <DmPrepPanel isOpen={!!prepMarker && isDm} onClose={() => setPrepMarker(null)} contextFilter={prepMarker ? { type: 'map_marker', id: prepMarker.id, label: worldMap?.markers.some(marker => marker.id === prepMarker.id) ? prepMarker.name : 'Removed marker — retained prep' } : undefined} />
       {/* ── Marker Dialog ── */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-sm bg-background border-primary/20">
@@ -446,6 +452,7 @@ export default function WorldMapPage() {
             </div>
           )}
 
+          {isDm && selectedMarker && <Button variant="outline" onClick={() => { setShowDialog(false); setPrepMarker(selectedMarker); }}>Open private prep</Button>}
           {/* DM edit form */}
           {isDm && (
             <div className="space-y-3">

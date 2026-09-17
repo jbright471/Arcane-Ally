@@ -6,6 +6,12 @@
 
 A high-performance, self-hosted companion application for D&D 5e. Real-time party management, AI-powered content generation, and a full DM command center — all running on your local hardware.
 
+## September product improvements
+
+Private prep notes support `@` links and scene-marker entry points. Without an active map, Battlemap shows a read-only encounter board; use a cast link for a shared audience. New-session guidance appears after confirmed DM bootstrap, and Archive explains access/loading failures without losing navigation.
+
+See [implementation verification](docs/PRODUCT_PLAN_VERIFICATION_2026-09-17.md) for scope, checks, and release status. Run `npm run typecheck` in `client` for the explicit application checks. For an isolated host development backend, set `ARCANE_BACKEND_URL` before starting Vite; the default remains the container backend.
+
 ## Quick Start
 
 ```bash
@@ -19,16 +25,18 @@ cp server/.env.example server/.env
 # Terminal 1: backend
 ```bash
 cd server
-npm install
+npm ci
 npm start
 ```
 
 # Terminal 2: frontend
 ```bash
 cd client
-npm install
-npm run dev
+npm ci
+ARCANE_BACKEND_URL=http://localhost:3001 npm run dev
 ```
+
+For PowerShell, set `$env:ARCANE_BACKEND_URL="http://localhost:3001"` before `npm run dev`. Container development keeps the default `http://backend:3001` target.
 
 - Frontend dev server: `http://localhost:5173`
 - Backend API and Socket.io gateway: `http://localhost:3001`
@@ -112,7 +120,11 @@ Buttons disable after use to prevent duplicate spawns.
 
 **Encounter Builder & Prep Packs** — pre-plan encounters with named monster groups. DMs can now import complete "Prep Packs" (JSON bundles containing monsters, maps, notes, and sandboxed automation triggers) by pasting them directly into the Encounter Library.
 
-**DM Prep Panel** — per-character and per-encounter sticky notes accessible from the God-Eye View.
+**DM Prep Panel** — searchable private notes with stable `@` references, in-panel draft retention, and scene-marker attachments. Character and encounter toolbar entry points filter by note type; only map-marker prep in this release has a specific scene attachment. Save before reloading; drafts are not offline storage.
+
+**First-session guide** — appears automatically for a connected, authenticated DM after an empty party snapshot; you can also reopen it from the Dashboard.
+
+**Mapless encounters** — Battlemap shows a read-only encounter board when no map is active. It waits for fresh state after reconnecting and respects the existing audience permissions.
 
 - **Effect Preset Library** — Reusable, DM-created templates for spells, conditions, monster auras, and environmental modifiers. Allows searching, editing, and quick-applying modifiers concurrently to target PCs and monsters from a dedicated side-panel drawer.
 - **Import Guardrails & Safety Diffs** — Real-time validation layer analyzing incoming character stats (Level, HP, AC, ability scores) from D&D Beyond or PDFs. Flags rule anomalies (Danger/Warning/Info) and holds player-initiated updates in a staged DM approval queue (`pending_imports`) with side-by-side comparative views.
@@ -303,3 +315,7 @@ Keep private deployment files, local databases, character PDFs, and real environ
 ## License
 
 See [LICENSE](./LICENSE).
+
+## Release operations
+
+Use the [deployment runbook](docs/DEPLOYMENT.md) for Bastet release and rollback. The [verification record](docs/PRODUCT_PLAN_VERIFICATION_2026-09-17.md) lists scope and limitations. Arcane Codex under **Guide** contains the player/DM workflows.

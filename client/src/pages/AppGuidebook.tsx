@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom';
 /**
  * AppGuidebook — the master documentation hub for Arcane Ally.
  * Split-pane layout: sidebar navigation on the left, content on the right.
@@ -5,7 +6,7 @@
  * DMs, core mechanics, AI/homebrew, host setup, and troubleshooting.
  */
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -52,6 +53,10 @@ Unlike static character sheets, Arcane Ally is **event-driven**. When the DM dea
 - **The Compendium** is your homebrew library plus a searchable gateway to the entire 5e SRD — monsters, spells, and items at your fingertips
 - **Actionable AI** — the AI Lore Console generates items, monsters, and NPCs with interactive buttons to inject them directly into the live game state
 - **Voice Chat** — built-in WebRTC voice communication, no external apps needed
+
+## First-Session Guidance
+
+On the Dashboard, **First-session guide** offers setup links. It opens automatically after a signed-in DM connects and the party has loaded empty. You can dismiss or reopen it. Opening a page does not mark a step complete. Players should ask their DM for a private character link.
 
 ## Quick Start
 
@@ -726,11 +731,20 @@ The **Player Miniature Sidebar** (toggled via the **Miniatures** button in the h
 - **Interactive Spell Slots**: Display slot pips. Clicking pips allows DMs and players to quickly use (fill) or restore (clear) spell slots, emitting a WebSocket event to keep all views synchronized.
 - **Quick Adjustments**: Hit points can be modified instantly with \`-5\` and \`+5\` quick update buttons.
 
+## Play Without a Map
+
+> **Where to go:** Battlemap
+
+When no map is active, Battlemap shows the current round, initiative order, active turn, and party in a read-only encounter board. Sign in as DM for your permitted private details. Opening the page does not create or synchronize map tokens. Activate a map to return to the map view.
+
+During a disconnect, wait for the connection and fresh state to return. The board avoids presenting stale combat state as current.
+
 ## Encounter Cast View
 
 For an immersive in-person table experience, use **Cast Link** in the DM Command Center and open the generated link on a secondary monitor or TV. The credential is stored for that tab only, and the view is read-only and updates live.
 
-- Party members show exact HP.
+- Party members show exact HP when shared; withheld values appear as **Health not shared**.
+- A revoked or expired cast link requires a new link from the DM. A cast tab stays read-only even in a browser where the DM is signed in.
 - Revealed monsters show a broad health label instead of exact HP, maximum HP, or AC.
 - Monsters hidden with the **eye** control do not appear at all.
 - Private sheets, future boss phases, effect details, notes, and DM tools are never sent to the cast view.
@@ -1087,6 +1101,10 @@ Navigate to **World Map** from the sidebar to see the shared overworld. The DM c
 - **Discovery mode** — markers can be hidden until the DM reveals them
 - **Token sync** — the DM can sync map tokens to track party position
 
+### Private Scene Notes
+
+DMs can open a marker and choose **Open private prep** to keep scene-specific plans. Notes remain private even when their marker is visible. Map editing requires your actual DM session.
+
 ## The World Panel
 
 The **World Panel** appears in the DM Dashboard and shows:
@@ -1113,19 +1131,22 @@ The **Quest Tracker** is visible to all players and managed by the DM:
 
 ## DM Prep Panel
 
-Click **Prep Notes** in the DM Dashboard header to open the Prep Panel. This is your private notepad for session planning:
+Click **Prep Notes** in the DM Dashboard header. Sign in as DM to read or edit these private notes.
 
-- **Per-character notes** — click the sticky note icon on any character card in the God-Eye View to open notes specific to that character
-- **Per-encounter notes** — click the sticky note icon next to the Encounters button for encounter-specific prep
-- **General notes** — the default view for miscellaneous session prep
-- **Context filtering** — notes are tagged by type and filtered automatically based on where you opened them
+- **Find a note** — search its title or content, or select a tag filter. The entry point determines the context filter.
+- **Link a note** — type **@** and part of its title. Choose with the arrow keys and Enter, or click a suggestion. Save, then follow the link from the preview. Renaming a target keeps the link working; deleted targets show **note unavailable**.
+- **Keep your draft** — switching notes or following a reference retains unsaved edits while the panel stays open. Click **Save** to persist them. Closing with unsaved edits asks whether to discard them; drafts do not survive a page reload.
+- **Scene prep** — open a World Map marker, then choose **Open private prep**. New notes belong to that marker; other markers keep their own lists. References can still lead to notes outside the current scene.
+- **Other entry points** — the character sticky-note buttons open general prep, and the Encounters sticky-note button opens encounter-type prep. These entry points are type filters, not unique character or encounter attachments.
+
+Private prep is separate from shared Party Notes. It is not sent to player or cast audiences. A lost or expired DM session clears private content; sign in again to continue.
 
 ## Party Notes
 
 Navigate to **Party Notes** from the sidebar. These are shared with the entire party:
 - **Categories** — lore, npc, quest, general
 - **AI integration** — "Send to Notes" from the AI Lore Console pushes lore text directly here
-- **Collaborative** — players and the DM can all contribute
+- **Access** — the current Party Notes page uses DM-authorized REST reads and writes; this release does not add collaborative player editing
 
 ## DM-Only Notes
 
@@ -1156,7 +1177,7 @@ Click **End Session** in the DM Dashboard header. This:
 
 ### Session Archive
 
-Navigate to **Session Archive** from the sidebar to browse past session recaps. Each entry includes the AI-generated narrative summary and a timestamp.
+Navigate to **Session Archive** from the sidebar and sign in as DM to browse recaps. Each entry includes the AI-generated narrative summary and a timestamp. An empty archive means no recaps were returned. Loading failures offer **Retry**; expired access requires signing in again. Navigation remains available if the archive fails. The archive modal uses the same recovery behavior.
 
 ## Soundboard
 
@@ -1431,6 +1452,18 @@ To resolve pending imports:
     content: `# Common Problems & Fixes
 
 Use this section when something does not behave the way you expected.
+
+## Archive or Prep Asks for DM Access
+
+Sign in with your DM PIN. If the session expired, sign in again; private content is cleared while access is missing. Use **Retry** for a loading failure after access is restored.
+
+## Battlemap Shows an Encounter Board
+
+No map is active. The read-only board is the supported mapless view. If it shows a connection message, wait for fresh state after reconnecting.
+
+## A Prep Reference Is Unavailable
+
+The target note may have been deleted. Check the note list and choose a replacement with **@**. Save drafts before reloading the page.
 
 ## D&D Beyond Import Fails
 
@@ -1743,7 +1776,10 @@ function renderInline(text: string): React.ReactNode {
 // ── Main Component ───────────────────────────────────────────────────────
 
 export default function AppGuidebook() {
-  const [activeId, setActiveId] = useState(GUIDE_SECTIONS[0].id);
+  const location = useLocation();
+  const initialSection = () => { const requested = location.hash.slice(1); return GUIDE_SECTIONS.some(section => section.id === requested) ? requested : GUIDE_SECTIONS[0].id; };
+  const [activeId, setActiveId] = useState(initialSection);
+  useEffect(() => { if (location.hash) { setActiveId(initialSection()); setSearch(''); } }, [location.hash]);
   const [search, setSearch] = useState('');
 
   const filteredSections = useMemo(() => {
@@ -1757,9 +1793,9 @@ export default function AppGuidebook() {
   const activeSection = GUIDE_SECTIONS.find(s => s.id === activeId) ?? GUIDE_SECTIONS[0];
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] -m-6 overflow-hidden">
+    <div className="flex flex-col lg:flex-row min-h-0 h-full overflow-hidden">
       {/* ── Guide Sidebar (Arcane Codex) ─────────────────────── */}
-      <aside className="w-72 shrink-0 border-r border-border/40 bg-card z-10 flex flex-col">
+      <aside className="w-full lg:w-64 max-h-56 lg:max-h-none shrink-0 border-r border-border/40 bg-card z-10 flex flex-col">
         {/* Back to App */}
         <Link
           to="/"
@@ -1843,8 +1879,8 @@ export default function AppGuidebook() {
       </aside>
 
       {/* ── Content Area ─────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-8 py-8">
+      <main className="min-w-0 flex-1 overflow-y-auto break-words">
+        <div className="max-w-3xl mx-auto px-4 py-4 md:px-8 md:py-8">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 mb-6 text-[10px] text-muted-foreground/40 font-display tracking-wider uppercase">
             <Link to="/" className="hover:text-primary transition-colors">Arcane Ally</Link>
