@@ -78,3 +78,5 @@ Codex browser recheck: all five updated section deep links loaded without page e
 ## Production build compatibility correction
 
 The first deployment candidate stopped during image build, before preflight or any live service change: `npm install --legacy-peer-deps` omitted the transitive testing-library DOM peer, causing explicit TypeScript checks to fail. The Dockerfile client stage now uses `npm ci`, matching local/GitHub installation. Package manifests and lockfiles are unchanged by this correction. Live status after the failed build remained the healthy `c167974` baseline. Container verification and deployment outcome are recorded in the release receipt.
+
+The corrected full multi-stage image also built successfully on Bastet (Node 20 Alpine, native backend compilation included), tagged `arcane-ally-build-check:20260917`. This build test did not start or replace live services.
