@@ -1,6 +1,6 @@
 # September product plan — local implementation verification
 
-Status: implementation locally verified; documentation and release preparation authorized. Deployment receipts are tracked in [deployment operations](DEPLOYMENT.md).
+Status: implemented, published, and deployed. See the [deployment receipt](DEPLOYMENT_RECEIPT_2026-09-17.md) for the exact live revision and post-deployment evidence.
 
 ## Delivered
 

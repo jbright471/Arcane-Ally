@@ -1,5 +1,7 @@
 # Deployment operations
 
+Current verified live release: `1a47b16297f6cae512dd61f59ee65686dc9d7270`, deployed September 17 Eastern time. See the [deployment receipt](DEPLOYMENT_RECEIPT_2026-09-17.md) for health, backup, and rollback evidence.
+
 ## Ownership and source
 
 Bastet's existing controller owns release operations for the two Arcane Ally services inside the shared `projects-stack`. Do not launch a competing project-local Compose stack.
@@ -47,7 +49,7 @@ The user authorized documentation, GitHub publication, and deployment. Live stat
 
 The user explicitly approved extending the controller's client-only pilot allowlist on September 17. The product change additionally needs `client/package.json`, `client/vite.config.ts`, `server/server.js`, and `server/test/productionServerSecurity.test.js`; `client/README.md` is documentation. The tracked controller copy in `docs/deployment/arcane-ally-deploy.sh` adds only those named paths and preserves all existing revision, staging, backup, and rollback gates. Installation retains the original controller as a dated backup. This preparation record does not claim deployment success.
 
-See [implementation verification](PRODUCT_PLAN_VERIFICATION_2026-09-17.md) for feature scope and evidence. A dated deployment receipt will record the published release and actual live result. Controller validation: `bash -n` and `python3 docs/deployment/test_release_policy.py` passed (16 path-policy cases, including the approved Dockerfile change).
+See [implementation verification](PRODUCT_PLAN_VERIFICATION_2026-09-17.md) for feature scope and evidence. The [dated deployment receipt](DEPLOYMENT_RECEIPT_2026-09-17.md) records the published release and verified live result. Controller validation: `bash -n` and `python3 docs/deployment/test_release_policy.py` passed (16 path-policy cases, including the approved Dockerfile change).
 
 ### Build compatibility
 

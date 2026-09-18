@@ -319,3 +319,5 @@ See [LICENSE](./LICENSE).
 ## Release operations
 
 Use the [deployment runbook](docs/DEPLOYMENT.md) for Bastet release and rollback. The [verification record](docs/PRODUCT_PLAN_VERIFICATION_2026-09-17.md) lists scope and limitations. Arcane Codex under **Guide** contains the player/DM workflows.
+
+September product release: [verified deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-09-17.md).
