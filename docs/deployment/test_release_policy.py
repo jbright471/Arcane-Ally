@@ -21,7 +21,8 @@ cases = {
     "server/package.json": "0 1",
     "server/package-lock.json": "0 1",
     "client/package-lock.json": "0 1",
-    "Dockerfile": "0 1",
+    "Dockerfile": "1 0",
+    "docker-compose.yml": "0 1",
     "server/.env": "0 1",
     "data/dnd.db": "0 1",
 }
