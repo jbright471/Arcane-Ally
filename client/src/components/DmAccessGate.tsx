@@ -75,7 +75,7 @@ export function DmAccessGate({ children }: PropsWithChildren) {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <Label htmlFor="dm-username" className="sr-only">Account</Label>
-            <Input
+            <input
               id="dm-username"
               name="username"
               type="text"
