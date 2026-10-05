@@ -69,6 +69,25 @@ describe('client state projections', () => {
     expect(open[1].current_hp).toBe(90);
   });
 
+  it('keeps defense chips inside the established role projection', () => {
+    const source = [{
+      ...tracker[1],
+      conditions: ['Poisoned'],
+      notes: 'PRIVATE_DEFENSE_SENTINEL',
+    }];
+    const dm = projectInitiativeState(source, { role: 'dm' });
+    const playerRedacted = projectInitiativeState(source, { role: 'player', permissions: { view_monster_hp: 'dm_only' } });
+    const playerOpen = projectInitiativeState(source, { role: 'player', permissions: { view_monster_hp: 'open' } });
+    const cast = projectInitiativeState(source, { role: 'cast' });
+
+    expect(dm[0]).toMatchObject({ ac: 18, conditions: ['Poisoned'], notes: 'PRIVATE_DEFENSE_SENTINEL' });
+    expect(playerRedacted[0]).toMatchObject({ ac: null, conditions: ['Poisoned'] });
+    expect(playerOpen[0]).toMatchObject({ ac: 18, conditions: ['Poisoned'] });
+    expect(cast[0]).toMatchObject({ ac: null });
+    expect(cast[0]).not.toHaveProperty('conditions');
+    expect(JSON.stringify([playerRedacted, playerOpen, cast])).not.toContain('PRIVATE_DEFENSE_SENTINEL');
+  });
+
   it('uses an allowlist for player initiative summaries and omits DM internals', () => {
     const result = projectInitiativeState([{
       ...tracker[1],

@@ -4,9 +4,20 @@ const db = require('../db');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const multer = require('multer');
+const {
+    MAX_UVTT_FILE_BYTES,
+    UvttPreviewError,
+    parseUvttPreview,
+} = require('../lib/uvttPreview');
 
 const MAPS_DIR = path.join(__dirname, '../../data/maps');
 if (!fs.existsSync(MAPS_DIR)) fs.mkdirSync(MAPS_DIR, { recursive: true });
+
+const uvttPreviewUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { files: 1, fileSize: MAX_UVTT_FILE_BYTES },
+});
 
 // GET /api/maps — List all maps
 router.get('/', (req, res) => {
@@ -21,6 +32,43 @@ router.get('/', (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+// POST /api/maps/uvtt/preview — Parse a UVTT file and return a zero-write receipt.
+router.post('/uvtt/preview', (req, res) => {
+    uvttPreviewUpload.single('file')(req, res, uploadError => {
+        if (uploadError) {
+            const tooLarge = uploadError instanceof multer.MulterError && uploadError.code === 'LIMIT_FILE_SIZE';
+            return res.status(tooLarge ? 413 : 400).json({
+                code: tooLarge ? 'UVTT_FILE_TOO_LARGE' : 'INVALID_UVTT_UPLOAD',
+                error: tooLarge ? `UVTT file exceeds ${MAX_UVTT_FILE_BYTES / 1024 / 1024} MB` : 'UVTT upload could not be read',
+            });
+        }
+        if (!req.file?.buffer) {
+            return res.status(400).json({ code: 'UVTT_FILE_REQUIRED', error: 'Choose a UVTT or DD2VTT file to preview' });
+        }
+
+        try {
+            const receipt = parseUvttPreview(req.file.buffer);
+            const originalName = String(req.file.originalname || 'map.dd2vtt');
+            const safeName = (originalName.split(/[\\/]/).pop() || 'map.dd2vtt')
+                .replace(/[\u0000-\u001f\u007f]/g, '')
+                .slice(0, 120);
+            return res.json({
+                file: {
+                    name: safeName,
+                    bytes: req.file.size,
+                },
+                receipt,
+            });
+        } catch (error) {
+            const expected = error instanceof UvttPreviewError;
+            return res.status(expected && error.code.includes('TOO_LARGE') ? 413 : 400).json({
+                code: expected ? error.code : 'INVALID_UVTT',
+                error: expected ? error.message : 'UVTT preview failed',
+            });
+        }
+    });
 });
 
 // GET /api/maps/active

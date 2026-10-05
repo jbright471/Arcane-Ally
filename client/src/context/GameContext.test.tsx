@@ -51,7 +51,13 @@ describe('GameProvider DM session recovery', () => {
 afterEach(() => window.history.replaceState({}, '', '/'));
 function ReadinessProbe() {
   const { state } = useGame();
-  return <pre data-testid="readiness">{JSON.stringify({ ...state.readiness, isDm: state.isDm, characters: state.characters.length })}</pre>;
+  return <pre data-testid="readiness">{JSON.stringify({
+    ...state.readiness,
+    isDm: state.isDm,
+    characters: state.characters.length,
+    mapState: state.mapState,
+    mapError: state.mapStateError,
+  })}</pre>;
 }
 it('requires a DM acknowledgement and fresh snapshots after reconnect', () => {
   localStorage.clear(); socket.on.mockReset();
@@ -75,4 +81,25 @@ it('never inherits a stored DM session in a cast audience view', () => {
   expect(JSON.parse(screen.getByTestId('readiness').textContent!).isDm).toBe(false);
   expect(request).not.toHaveBeenCalled();
   expect(socket.emit).not.toHaveBeenCalledWith('dm_join_room', expect.anything());
+});
+
+it('rejects a malformed map snapshot before it reaches battlemap rendering', () => {
+  localStorage.clear(); socket.on.mockReset();
+  render(<GameProvider><ReadinessProbe /></GameProvider>);
+  const emit = (event: string, payload?: unknown) => act(() => {
+    socket.on.mock.calls.filter(call => call[0] === event).forEach(call => call[1](payload));
+  });
+
+  emit('map_state', {
+    id: 7,
+    name: 'Malformed fixture',
+    image_data: null,
+    tokens: [{ id: 1, map_id: 7, entity_id: 'pc-1', entity_name: 'Fixture', entity_type: 'pc', x: Infinity, y: 20 }],
+  });
+
+  expect(JSON.parse(screen.getByTestId('readiness').textContent!)).toMatchObject({
+    map: true,
+    mapState: null,
+    mapError: { code: 'INVALID_MAP_STATE', issues: ['token_0_x_invalid'] },
+  });
 });

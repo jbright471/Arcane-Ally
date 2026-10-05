@@ -316,6 +316,55 @@ describe('actual production server security integration', () => {
     expect(replacementAccess.status).toBe(200);
   });
 
+  it('returns a DM-only UVTT preview receipt without changing map or file state', async () => {
+    const mapsDirectory = path.join(SERVER_ROOT, '..', 'data', 'maps');
+    const filesBefore = fs.existsSync(mapsDirectory) ? fs.readdirSync(mapsDirectory).sort() : [];
+    const database = new Database(databasePath, { readonly: true });
+    const mapsBefore = database.prepare('SELECT COUNT(*) AS count FROM maps').get().count;
+    const tokensBefore = database.prepare('SELECT COUNT(*) AS count FROM map_tokens').get().count;
+    database.close();
+
+    const source = JSON.stringify({
+      format: 0.3,
+      resolution: { map_origin: { x: 0, y: 0 }, map_size: { x: 12, y: 8 }, pixels_per_grid: 100 },
+      line_of_sight: [[{ x: 0, y: 0 }, { x: 12, y: 8 }]],
+      portals: [{ bounds: [{ x: 2, y: 2 }, { x: 3, y: 2 }] }],
+      lights: [],
+      image: 'iVBORw0KGgo=',
+    });
+    const form = () => {
+      const body = new FormData();
+      body.append('file', new Blob([source], { type: 'application/json' }), 'synthetic.dd2vtt');
+      return body;
+    };
+
+    const denied = await request(baseUrl, '/api/maps/uvtt/preview', { method: 'POST', body: form() });
+    expect(denied.status).toBe(401);
+
+    const response = await request(baseUrl, '/api/maps/uvtt/preview', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${dmToken}` },
+      body: form(),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      file: { name: 'synthetic.dd2vtt' },
+      receipt: {
+        kind: 'uvtt-preview',
+        mapSize: { widthCells: 12, heightCells: 8, pixelWidth: 1200, pixelHeight: 800 },
+        counts: { wallPaths: 1, wallPoints: 2, portals: 1, lights: 0 },
+        persistence: 'none',
+      },
+    });
+
+    const verification = new Database(databasePath, { readonly: true });
+    expect(verification.prepare('SELECT COUNT(*) AS count FROM maps').get().count).toBe(mapsBefore);
+    expect(verification.prepare('SELECT COUNT(*) AS count FROM map_tokens').get().count).toBe(tokensBefore);
+    verification.close();
+    const filesAfter = fs.existsSync(mapsDirectory) ? fs.readdirSync(mapsDirectory).sort() : [];
+    expect(filesAfter).toEqual(filesBefore);
+  });
+
   it('enforces HTTP origin, body-size, DM-auth rate, and redacted audit controls', async () => {
     const deniedOrigin = await fetch(`${baseUrl}/api/health`, {
       headers: { Origin: 'https://evil.example.test' },

@@ -10,7 +10,7 @@ R1-E is deny-by-default. The central middleware in `server/lib/restAuthorization
 | `/api/characters` | `characters` | DM session | Character reads/writes, HP, tokens, weapons, inspector/log data |
 | `/api/encounters` | `encounters` | DM session | Encounter CRUD, duplicate, authenticated export |
 | `/api/initiative` | `initiative` | DM session | Initiative/tracker state |
-| `/api/maps` | `maps` | DM session | Map metadata, files, uploads, activation, tokens, markers |
+| `/api/maps` | `maps` | DM session | Map metadata, files, uploads, zero-write UVTT preview, activation, tokens, markers |
 | `/api/npcs` | `npcs` | DM session | NPC reads and writes |
 | `/api/loot` | `loot` | DM session | AI generation, archive, direct assignment |
 | `/api/quests` | `quests` | DM session | Public and hidden quest state; query flags grant no authority |
@@ -54,3 +54,7 @@ The route policy is unchanged. Archive still requires DM access; loading/error s
 The client already installs a global same-origin credential wrapper. `dmFetch` reuses it and clears only the matching expired session. Cast/companion entry paths do not request DM history or join the DM room using a stored browser token.
 
 The server adds a read-only `map_state` bootstrap snapshot through the existing egress projection. DM/player projection remains unchanged; public/cast clients do not receive map payloads. Opening Battlemap no longer emits token synchronization. The actual-server integration tests verify audience filtering, reconnect without token writes, and private prep isolation.
+
+## October battlemap behavior
+
+`POST /api/maps/uvtt/preview` remains inside the existing DM-only `/api/maps` route class. It parses one bounded in-memory upload and returns dimensions, geometry counts, warnings, and `persistence: none`. It does not write a map row, token row, image file, campaign state, or schema. The battlemap snapshot parser and defense-chip UI consume only the existing audience projection; they do not add a new credential, role, or hidden-data fallback.

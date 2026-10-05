@@ -4,6 +4,15 @@ All notable changes to the **Arcane Ally** project will be documented in this fi
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## October 5, 2026 local release candidate
+
+- Added a fail-closed battlemap snapshot parser with a read-only recovery path for malformed realtime state.
+- Grouped Effects, Rules, and Voice into one responsive table-tools dock with reserved page space.
+- Added explicit DM, player-companion, and read-only-cast handoff guidance plus corrected DM PIN form semantics.
+- Added role-safe AC and condition chips that render only server-projected fields.
+- Added a DM-authenticated, zero-write UVTT/DD2VTT preview receipt for map dimensions and scene geometry.
+- No schema, dependency, authentication-policy, or deployment change. This candidate is locally verified but not deployed; see [verification](docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md).
+
 ## September 17, 2026 product release
 
 - Linked private prep and marker-specific notes, mapless encounter/cast board, and first-session guidance.

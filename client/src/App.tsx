@@ -9,6 +9,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { DmAccessGate } from "./components/DmAccessGate";
 import { GameProvider, useGame } from "./context/GameContext";
 import { Layout } from "./components/Layout";
+import { TableControlsDock } from "./components/TableControlsDock";
 import { toast } from "sonner";
 import socket from "./socket";
 
@@ -212,9 +213,11 @@ function MainAppShell() {
         </RouteErrorBoundary>
       </Layout>
       <Suspense fallback={null}>
-        <RulesAssistant />
-        <VoiceChat />
-        <EffectStream />
+        <TableControlsDock>
+          <EffectStream />
+          <RulesAssistant />
+          <VoiceChat />
+        </TableControlsDock>
       </Suspense>
     </>
   );

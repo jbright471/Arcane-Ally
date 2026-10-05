@@ -35,7 +35,7 @@ describe('DmAccessGate', () => {
   });
 
   it('exchanges a valid PIN for a session before mounting protected content', async () => {
-    vi.spyOn(window, 'fetch').mockResolvedValue({
+    const fetchSpy = vi.spyOn(window, 'fetch').mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ token: 'fresh-session-token' }),
@@ -46,7 +46,18 @@ describe('DmAccessGate', () => {
     fireEvent.submit(screen.getByRole('button', { name: 'Unlock DM Tools' }).closest('form')!);
 
     await waitFor(() => expect(game.setDmAuth).toHaveBeenCalledWith('fresh-session-token'));
+    expect(fetchSpy).toHaveBeenCalledWith('/api/auth/dm', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ pin: 'correct-pin-value' }),
+    }));
     expect(screen.getByText('Protected command center')).toBeInTheDocument();
+  });
+
+  it('provides password-manager username semantics without adding it to the login payload', () => {
+    render(<DmAccessGate><div>Protected command center</div></DmAccessGate>);
+
+    expect(document.querySelector('input[autocomplete="username"]')).toHaveValue('arcane-ally-dm');
+    expect(screen.getByLabelText('DM PIN')).toHaveAttribute('autocomplete', 'current-password');
   });
 
   it('clears a rejected stored session without mounting protected content', async () => {

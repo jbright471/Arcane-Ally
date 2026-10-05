@@ -737,6 +737,12 @@ The **Player Miniature Sidebar** (toggled via the **Miniatures** button in the h
 
 When no map is active, Battlemap shows the current round, initiative order, active turn, and party in a read-only encounter board. Sign in as DM for your permitted private details. Opening the page does not create or synchronize map tokens. Activate a map to return to the map view.
 
+The public Battlemap page explains the three access modes: DM control, a character-specific player companion link, and a read-only cast link for shared displays. Links keep their credentials private instead of printing them on the handoff page.
+
+When a map is active, defense chips show Armor Class and conditions only when the server included those fields for the current audience. If a realtime map snapshot is malformed or incompatible, Battlemap rejects it and offers a read-only fresh-snapshot request instead of rendering partial token state.
+
+DMs can expand **Preview a UVTT file** to inspect a UVTT/DD2VTT file's grid size and geometry counts. Preview returns a receipt only: it does not save, activate, or import the map.
+
 During a disconnect, wait for the connection and fresh state to return. The board avoids presenting stale combat state as current.
 
 ## Encounter Cast View

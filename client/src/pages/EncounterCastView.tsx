@@ -2,6 +2,7 @@ import { EncounterBoard, type BoardPartyMember } from '../components/EncounterBo
 import { useState, useEffect } from 'react';
 import { Shield } from 'lucide-react';
 import socket, { accessCredential } from '../socket';
+import { BattlemapAccessHandoff } from '../components/BattlemapAccessHandoff';
 
 
 interface Combatant {
@@ -106,5 +107,5 @@ export default function EncounterCastView() {
     );
   }
 
-  return <main className="min-h-dvh bg-background p-4 md:p-8"><div className="mx-auto max-w-6xl space-y-4"><h1 className="font-display text-2xl">Encounter cast</h1><EncounterBoard party={party} initiative={initiative} round={combatState.round} connected={isConnected} ready={ready.party && ready.initiative && ready.combat} /></div></main>;
+  return <main className="min-h-dvh bg-background p-4 md:p-8"><div className="mx-auto max-w-6xl space-y-4"><h1 className="font-display text-2xl">Encounter cast</h1><BattlemapAccessHandoff mode="cast" compact /><EncounterBoard party={party} initiative={initiative} round={combatState.round} connected={isConnected} ready={ready.party && ready.initiative && ready.combat} /></div></main>;
 }

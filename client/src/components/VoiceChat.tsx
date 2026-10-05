@@ -243,10 +243,10 @@ export function VoiceChat() {
   const totalInVoice = peers.length + (inVoice ? 1 : 0);
 
   return (
-    <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 flex flex-col items-end gap-2">
+    <div className="flex flex-col items-end gap-2">
       {/* ── Expanded panel ── */}
       {isOpen && (
-        <div className="w-64 rounded-xl border border-primary/20 bg-background/95 backdrop-blur shadow-2xl overflow-hidden">
+        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-50 w-64 rounded-xl border border-primary/20 bg-background/95 backdrop-blur shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40 bg-secondary/10">
             <div className={`h-2 w-2 rounded-full ${inVoice ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`} />
@@ -352,6 +352,7 @@ export function VoiceChat() {
       {/* ── FAB ── */}
       <button
         onClick={() => setIsOpen(o => !o)}
+        aria-label="Toggle Voice Chat"
         className={`
           h-12 w-12 rounded-full shadow-lg border-2 flex items-center justify-center
           transition-all duration-200 hover:scale-110 relative

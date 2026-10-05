@@ -6,6 +6,12 @@
 
 A high-performance, self-hosted companion application for D&D 5e. Real-time party management, AI-powered content generation, and a full DM command center — all running on your local hardware.
 
+## October battlemap candidate
+
+The current local candidate rejects malformed realtime map snapshots before rendering, groups the three persistent table tools into one responsive dock, labels DM/player/cast access modes, and shows only role-projected AC and condition chips. Authenticated DMs can inspect UVTT/DD2VTT dimensions and geometry through a zero-write receipt before deciding whether to import anything.
+
+See [local implementation verification](docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md). This candidate has not been deployed.
+
 ## September product improvements
 
 Private prep notes support `@` links and scene-marker entry points. Without an active map, Battlemap shows a read-only encounter board; use a cast link for a shared audience. New-session guidance appears after confirmed DM bootstrap, and Archive explains access/loading failures without losing navigation.
@@ -147,6 +153,10 @@ Buttons disable after use to prevent duplicate spawns.
 ### Battlemap
 - **Token Drag** — tokens represent PCs, monsters, and NPCs as percentage-positioned circles on the map; drag-and-drop with pointer capture API; positions sync to all clients via `move_token` socket
 - **HP Overlays** — each token shows a live HP bar correlated from initiative state (green/amber/red)
+- **Role-safe defense chips** — AC and conditions appear only when those fields are present in the server-projected audience state
+- **State guard and recovery** — malformed or version-skewed snapshots fail closed and can request a fresh read-only snapshot without synchronizing or moving tokens
+- **Access handoff** — the public route explains the separate DM-control, player-companion, and read-only-cast paths without displaying credentials
+- **UVTT preview receipt** — authenticated DMs can inspect supported map dimensions and geometry without saving or activating a map
 - **DM Tools** — show/hide hidden tokens; "Sync from Initiative" spawns tokens for all active combatants
 
 ### World & Discovery
