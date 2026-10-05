@@ -5,7 +5,8 @@ set -Eeuo pipefail
 # It intentionally accepts only the exact head of the reviewed live-baseline
 # branch. The September product release adds explicitly reviewed paths
 # to the original client/UI scope; schemas, lockfiles, auth modules, and
-# other infrastructure remain outside the allowlist.
+# other infrastructure remain outside the allowlist. The October battlemap
+# release adds only the named zero-write preview helper/route and its tests.
 
 umask 077
 
@@ -212,10 +213,10 @@ RUNTIME_CHANGE=0
 BLOCKED_FILES=()
 for changed_file in "${CHANGED_FILES[@]}"; do
   case "$changed_file" in
-    client/src/*|client/public/*|client/index.html|client/package.json|client/vite.config.ts|server/server.js|Dockerfile)
+    client/src/*|client/public/*|client/index.html|client/package.json|client/vite.config.ts|server/server.js|server/routes/maps.js|server/lib/uvttPreview.js|Dockerfile)
       RUNTIME_CHANGE=1
       ;;
-    docs/*|.github/*|README.md|CHANGELOG.md|LICENSE|client/README.md|server/test/productionServerSecurity.test.js)
+    docs/*|.github/*|README.md|CHANGELOG.md|LICENSE|client/README.md|server/test/productionServerSecurity.test.js|server/test/uvttPreview.test.js|server/test/clientStateProjection.test.js)
       ;;
     *)
       BLOCKED_FILES+=("$changed_file")

@@ -82,7 +82,7 @@ export function EffectStream({ currentCharacterId }: EffectStreamProps) {
       <button
         onClick={isOpen ? () => setIsOpen(false) : handleOpen}
         aria-label="Toggle Effect Stream"
-        className="fixed left-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] h-12 w-12 z-40 flex flex-col items-center justify-center gap-1 bg-card border  border-primary/30 rounded-full p-2 shadow-lg shadow-black/40 hover:border-primary/60 hover:bg-secondary/30 transition-all duration-200 group"
+        className="relative h-12 w-12 flex flex-col items-center justify-center gap-1 bg-card border border-primary/30 rounded-full p-2 shadow-lg shadow-black/40 hover:border-primary/60 hover:bg-secondary/30 transition-all duration-200 group"
       >
         <Activity className="h-4 w-4 text-primary" />
         {unseenCount > 0 && (

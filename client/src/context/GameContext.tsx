@@ -5,6 +5,11 @@ import socket from '../socket';
 import { Character, Party, ActionLogEntry, SharedLootItem, SpellSlots, LootVoteState } from '../types/character';
 import { EffectEvent } from '../types/effects';
 import { toast } from 'sonner';
+import {
+  parseBattleMapState,
+  type BattleMapState,
+  type BattleMapStateError,
+} from '../lib/battleMapState';
 
 interface Note {
   id: number;
@@ -29,7 +34,8 @@ const isAudienceView = () => accessFlowForPath(window.location.pathname) !== nul
 const emptyReadiness = (): Readiness => ({ connected: !!socket.connected, party: false, initiative: false, combat: false, map: false, dmAuthenticated: false });
 interface GameState {
   readiness: Readiness;
-  mapState: unknown;
+  mapState: BattleMapState | null;
+  mapStateError: BattleMapStateError | null;
 
   characters: Character[];
   party: Party | null;
@@ -111,6 +117,7 @@ const GameContext = createContext<{
   state: {
     readiness: emptyReadiness(),
     mapState: null,
+    mapStateError: null,
     characters: [],
     party: null,
     initiativeState: [],
@@ -132,7 +139,8 @@ const GameContext = createContext<{
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const [readiness, setReadiness] = useState<Readiness>(emptyReadiness);
-  const [mapState, setMapState] = useState<unknown>(null);
+  const [mapState, setMapState] = useState<BattleMapState | null>(null);
+  const [mapStateError, setMapStateError] = useState<BattleMapStateError | null>(null);
   const dmConfirmed = useRef(false);
 
   const [party, setParty] = useState<Character[]>([]);
@@ -166,7 +174,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setDmTokenState(null);
     dmConfirmed.current = false;
     setReadiness(emptyReadiness());
-    setMapState(null); setParty([]); setInitiativeState([]); setNotes([]); setActionLog([]);
+    setMapState(null); setMapStateError(null); setParty([]); setInitiativeState([]); setNotes([]); setActionLog([]);
     if (socket.connected) { socket.disconnect(); socket.connect(); }
     setIsDm(false);
     setEffectEvents([]);
@@ -180,9 +188,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [clearDmAuth]);
 
   useEffect(() => {
-    const reset = () => { dmConfirmed.current = false; setReadiness(emptyReadiness()); setMapState(null); };
+    const reset = () => { dmConfirmed.current = false; setReadiness(emptyReadiness()); setMapState(null); setMapStateError(null); };
     const joined = () => { dmConfirmed.current = true; setReadiness({ ...emptyReadiness(), dmAuthenticated: true }); };
-    const map = (data: unknown) => { setMapState(data); setReadiness(previous => ({ ...previous, map: true })); };
+    const map = (data: unknown) => {
+      const parsed = parseBattleMapState(data);
+      setMapState(parsed.value);
+      setMapStateError(parsed.error);
+      setReadiness(previous => ({ ...previous, map: true }));
+    };
     socket.on('connect', reset); socket.on('disconnect', reset); socket.on('dm_room_joined', joined); socket.on('map_state', map);
     return () => { socket.off('connect', reset); socket.off('disconnect', reset); socket.off('dm_room_joined', joined); socket.off('map_state', map); };
   }, []);
@@ -304,7 +317,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [clearDmAuth]);
 
   const state: GameState = {
-    readiness, mapState,
+    readiness, mapState, mapStateError,
     characters: party,
     party: {
       name: "The Party",

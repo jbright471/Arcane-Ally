@@ -74,10 +74,22 @@ export function DmAccessGate({ children }: PropsWithChildren) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <Label htmlFor="dm-username" className="sr-only">Account</Label>
+            <Input
+              id="dm-username"
+              name="username"
+              type="text"
+              autoComplete="username"
+              value="arcane-ally-dm"
+              readOnly
+              tabIndex={-1}
+              className="sr-only"
+            />
             <div className="space-y-2">
               <Label htmlFor="dm-pin">DM PIN</Label>
               <Input
                 id="dm-pin"
+                name="pin"
                 type="password"
                 autoComplete="current-password"
                 value={pin}

@@ -12,6 +12,7 @@ import { DiceRoller } from '../components/DiceRoller';
 import { toast } from 'sonner';
 import socket, { accessCredential } from '../socket';
 import { type Character, rollDice } from '../types/character';
+import { BattlemapAccessHandoff } from '../components/BattlemapAccessHandoff';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -305,6 +306,8 @@ export default function CompanionPage() {
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+
+        <BattlemapAccessHandoff mode="companion" compact />
 
         {/* Character identity */}
         <div className="flex items-start justify-between">

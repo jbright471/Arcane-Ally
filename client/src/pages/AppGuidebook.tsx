@@ -200,7 +200,8 @@ Your character sheet is divided into panels:
 
 - **HP Bar** flashes red on damage, green on healing
 - **Condition Badges** appear/disappear in real-time when the DM applies or removes them
-- **The Effect Stream** (bottom-right) shows a live feed of all game events across the party
+- **Table tools** sit together at the bottom of the main app: Effects, Rules Sage, and Voice. Open a tool to see its panel; close the panel to return to the compact controls.
+- **The Effect Stream** shows the events available to your current view
 - **Voice indicators** show who is currently speaking in voice chat
 
 ## Contextual Help
@@ -737,6 +738,20 @@ The **Player Miniature Sidebar** (toggled via the **Miniatures** button in the h
 
 When no map is active, Battlemap shows the current round, initiative order, active turn, and party in a read-only encounter board. Sign in as DM for your permitted private details. Opening the page does not create or synchronize map tokens. Activate a map to return to the map view.
 
+The public Battlemap page explains the three access modes: DM control, a character-specific player companion link, and a read-only cast link for shared displays. Links keep their credentials private instead of printing them on the handoff page.
+
+When a map is active, defense chips show Armor Class and conditions only when the server included those fields for the current audience. If a realtime map snapshot is malformed or incompatible, Battlemap rejects it and offers a read-only fresh-snapshot request instead of rendering partial token state.
+
+### Preview a DungeonDraft / UVTT File
+
+> **Where to go:** \`Battlemap -> Preview a UVTT file\` after signing in as DM
+
+1. Expand **Preview a UVTT file** and choose a \`.uvtt\` or \`.dd2vtt\` file.
+2. Review the receipt's grid dimensions, pixel dimensions, wall paths and points, portals, and lights.
+3. Read the review notes for unsupported fields or scene elements that are only counted.
+
+Preview accepts a file up to 16 MB with an embedded PNG up to 10 MB. It checks the file and returns a receipt; it does not show a rendered map, import walls or lighting, save a map, activate it, or move tokens. Portals and lights are counted for review only. A rejected file leaves your campaign unchanged; fix the reported input problem and choose it again.
+
 During a disconnect, wait for the connection and fresh state to return. The board avoids presenting stale combat state as current.
 
 ## Encounter Cast View
@@ -993,10 +1008,10 @@ Arcane Ally includes **built-in WebRTC voice communication**—no Discord, TeamS
 
 ## Joining Voice
 
-The Voice Chat widget is accessible on every page from the bottom toolbar or sidebar.
-1. Click the **microphone icon** to join the active voice room.
-2. A voice drawer will expand, showing all connected players, speaking states, and mute controls.
-3. Choose your audio input source and toggle between **Push-to-Talk** (bind a key) or **Open Mic** modes.
+The main app groups Voice with Effects and Rules Sage in the bottom table-tools dock.
+1. Open **Voice Chat** to expand the voice panel.
+2. Click **Join Voice** and allow microphone access when the browser asks.
+3. Use **Mute**, **Deafen**, and the per-participant volume controls while connected; use **Leave** to exit the room.
 
 ## Browser Microphone Permissions
 
@@ -1460,6 +1475,18 @@ Sign in with your DM PIN. If the session expired, sign in again; private content
 ## Battlemap Shows an Encounter Board
 
 No map is active. The read-only board is the supported mapless view. If it shows a connection message, wait for fresh state after reconnecting.
+
+## Battlemap Says Its State Could Not Be Displayed Safely
+
+The received map snapshot was incomplete or incompatible. Select **Request a fresh snapshot** after the connection settles. This requests current state without synchronizing or moving tokens. If the alert remains, ask the host to check the map data and application revision; do not use **Sync from Initiative** as a repair for an invalid snapshot.
+
+## Battlemap Does Not Show an AC or Condition
+
+Battlemap uses only what the server shares with your current access mode. A missing field is withheld or unavailable; the page does not reconstruct it from a private character sheet. Ask the DM for the appropriate companion or cast link instead of sharing the DM PIN.
+
+## UVTT Preview Rejects a File
+
+Use a UVTT/DD2VTT JSON export with an embedded PNG. Keep the upload under 16 MB and the embedded PNG under 10 MB. The error describes the rejected part; choosing another file retries the preview. The receipt reports dimensions and scene counts, not a rendered or imported map.
 
 ## A Prep Reference Is Unavailable
 
