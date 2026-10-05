@@ -11,7 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Added explicit DM, player-companion, and read-only-cast handoff guidance plus corrected DM PIN form semantics.
 - Added role-safe AC and condition chips that render only server-projected fields.
 - Added a DM-authenticated, zero-write UVTT/DD2VTT preview receipt for map dimensions and scene geometry.
-- No schema, dependency, authentication-policy, or deployment change. This candidate is locally verified but not deployed; see [verification](docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md).
+- Updated Arcane Codex with table-tools guidance, UVTT preview steps and limits, role visibility, and invalid-snapshot recovery.
+- No schema, dependency, or authentication-policy change. Production release preparation retains the existing deployment gates and adds only four exact reviewed server paths; see [verification](docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md).
 
 ## September 17, 2026 product release
 

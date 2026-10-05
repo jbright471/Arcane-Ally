@@ -54,3 +54,9 @@ See [implementation verification](PRODUCT_PLAN_VERIFICATION_2026-09-17.md) for f
 ### Build compatibility
 
 The explicit client type check requires testing-library peer types. The Dockerfile client stage uses `npm ci`, matching GitHub; `--legacy-peer-deps` omits those peer packages and failed the first candidate image build before services changed. This is an install-command correction, not a dependency or lockfile upgrade. The user explicitly approved the additional Dockerfile controller scope. The original controller and the intermediate product-scope controller are retained as dated backups.
+
+## October 5 release preparation
+
+The user authorized documentation, Arcane Codex, GitHub publication, and production deployment on October 5. The implementation is recorded in [verification](PRODUCT_PLAN_VERIFICATION_2026-10-05.md). The controller candidate adds only `server/routes/maps.js`, `server/lib/uvttPreview.js`, `server/test/uvttPreview.test.js`, and `server/test/clientStateProjection.test.js` to its existing release scope. The first two are runtime changes; the other two are test-only. All revision, staging, backup, health, and rollback gates are retained.
+
+The policy suite now includes 23 cases, including negative checks for adjacent unreviewed server routes/helpers, the projection implementation, authorization, schema, dependencies, environment, and database paths. Preserve the installed controller as `arcane-ally-deploy.sh.pre-battlemap-20261005` before installing the verified candidate. Deployment outcome and rollback evidence belong in the dated October receipt after live verification.

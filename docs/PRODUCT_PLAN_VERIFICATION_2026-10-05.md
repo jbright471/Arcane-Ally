@@ -1,13 +1,13 @@
 # October battlemap plan — local implementation verification
 
-Status: implemented and verified in an isolated local application. This branch has not been pushed, merged, or deployed, and the live Bastet application was not changed.
+Status: implemented and verified in an isolated local application. Publication and production deployment were authorized on October 5; their outcome will be recorded in the dated deployment receipt after verification.
 
 ## Baseline and scope
 
 - Implementation branch: `implementation/product-briefs-20261004` in `arcane-ally-product-20260917`.
 - Starting revision: `03e07bfe1a61e5b531bc0a6498464501a204e78b`; its application code matches the deployed `1a47b16297f6cae512dd61f59ee65686dc9d7270` revision.
 - The dirty `arcane-ally-hardening` checkout was used only for the approved plan and remained outside the implementation source.
-- No package manifest, lockfile, schema, authentication/authorization policy, deployment controller, service, or network setting changed.
+- The implementation changed no package manifest, lockfile, schema, authentication/authorization policy, service, or network setting. Release preparation separately adds four exact server paths to the deployment controller's allowlist; its existing gates remain in place.
 - The session-only reveal overlay remains deferred because it adds a new authorized realtime mutation and needs its own review.
 
 ## Delivered
@@ -26,7 +26,7 @@ Status: implemented and verified in an isolated local application. This branch h
 | Server `npm test` | Passed: 163 tests in 27 files |
 | Client `npm run typecheck` | Passed |
 | Client `npm run build` | Passed: explicit type checks and production Vite build |
-| Client `npm run lint` | Passed |
+| Client `npm run lint` | Passed; existing configuration covers JS/JSX, not TS/TSX |
 | Server `npm run lint` | Passed |
 | Focused production security integration | Passed: unauthenticated preview denied; authenticated preview wrote no map row, token row, or file |
 | `git diff --check` | Passed; line-ending notices only |
@@ -45,8 +45,8 @@ The real client and server were started against a synthetic temporary SQLite dat
 - At 390, 768, and 1280 pixels, the three 48-pixel dock controls had no pairwise overlap, stayed inside the viewport, and cleared the final page content. The expanded Voice panel remained inside the mobile viewport above the dock.
 - Final browser console result: zero warnings and zero errors. The preview request returned HTTP 200.
 
-## Remaining gate
+## Release gate
 
 - This evidence establishes a local release candidate, not a live deployment.
-- Before deployment, publish and review the candidate commit, run the deployment controller in plan mode, confirm the allowed file scope, and obtain explicit approval for the live change.
+- The user explicitly authorized publication and live deployment on October 5. Publish the reviewed candidate, require GitHub checks to pass, run controller plan mode, and retain staging/backup/rollback evidence before verifying the running release.
 - The reveal overlay remains a separate follow-on; it is not part of this candidate.
