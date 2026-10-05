@@ -47,13 +47,15 @@ The Vite dev server runs on `http://localhost:5173` by default. Its default prox
 - `dmFetch.ts` reuses the global credential boundary and handles current-session expiry. It does not introduce a new authentication scheme.
 - `AppGuidebook.tsx` owns Arcane Codex content; `/guide#dm-prep-tools`, `/guide#combat-management`, and `/guide#welcome` are direct section links.
 
-## October battlemap candidate
+## October battlemap improvements
 
 - `battleMapState.ts` normalizes the untrusted realtime map snapshot and fails closed on malformed identifiers, collections, types, or coordinates.
 - `BattlemapAccessHandoff.tsx` labels DM control, character-scoped companion, and read-only cast entry paths without exposing credentials.
 - `TableControlsDock.tsx` owns the fixed Effects, Rules, and Voice trigger layout so those controls do not compete for mobile offsets.
 - `UvttPreviewPanel.tsx` requests a DM-authenticated, zero-write UVTT/DD2VTT receipt. It does not save or activate maps.
 - `BattleMap.tsx` renders AC and conditions only when the role-projected initiative payload contains those fields.
+
+These improvements and the corresponding Arcane Codex instructions are deployed. See the [October verification](../docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md) and [production receipt](../docs/DEPLOYMENT_RECEIPT_2026-10-05.md) for test boundaries and live revision.
 
 ## Roll Visibility
 

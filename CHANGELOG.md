@@ -4,7 +4,7 @@ All notable changes to the **Arcane Ally** project will be documented in this fi
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
-## October 5, 2026 local release candidate
+## October 5, 2026 product release
 
 - Added a fail-closed battlemap snapshot parser with a read-only recovery path for malformed realtime state.
 - Grouped Effects, Rules, and Voice into one responsive table-tools dock with reserved page space.
@@ -13,7 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Added a DM-authenticated, zero-write UVTT/DD2VTT preview receipt for map dimensions and scene geometry.
 - Updated Arcane Codex with table-tools guidance, UVTT preview steps and limits, role visibility, and invalid-snapshot recovery.
 - Corrected the visually hidden username field after production mobile checks exposed inherited full-width input styling on the DM and Archive sign-in gates.
-- No schema, dependency, or authentication-policy change. Production release preparation retains the existing deployment gates and adds only four exact reviewed server paths; see [verification](docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md).
+- No schema, dependency, or authentication-policy change. Production release retains the existing deployment gates and adds only four exact reviewed server paths; see [verification](docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md).
+- Published through PRs #4 and #5 and deployed on Bastet as `7f1e525c565e587ff6d1a76fbb4f19bba04af41c`; see the [verified deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-10-05.md).
 
 ## September 17, 2026 product release
 

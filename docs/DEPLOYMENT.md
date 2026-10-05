@@ -1,6 +1,6 @@
 # Deployment operations
 
-Current verified live release: `1a47b16297f6cae512dd61f59ee65686dc9d7270`, deployed September 17 Eastern time. See the [deployment receipt](DEPLOYMENT_RECEIPT_2026-09-17.md) for health, backup, and rollback evidence.
+Current verified live application release: `7f1e525c565e587ff6d1a76fbb4f19bba04af41c`, deployed October 5 Eastern time. See the [October deployment receipt](DEPLOYMENT_RECEIPT_2026-10-05.md) for GitHub checks, production browser tests, health, backup, and rollback evidence. Later documentation-only commits do not change the running application revision.
 
 ## Ownership and source
 
@@ -59,4 +59,4 @@ The explicit client type check requires testing-library peer types. The Dockerfi
 
 The user authorized documentation, Arcane Codex, GitHub publication, and production deployment on October 5. The implementation is recorded in [verification](PRODUCT_PLAN_VERIFICATION_2026-10-05.md). The controller candidate adds only `server/routes/maps.js`, `server/lib/uvttPreview.js`, `server/test/uvttPreview.test.js`, and `server/test/clientStateProjection.test.js` to its existing release scope. The first two are runtime changes; the other two are test-only. All revision, staging, backup, health, and rollback gates are retained.
 
-The policy suite now includes 23 cases, including negative checks for adjacent unreviewed server routes/helpers, the projection implementation, authorization, schema, dependencies, environment, and database paths. Preserve the installed controller as `arcane-ally-deploy.sh.pre-battlemap-20261005` before installing the verified candidate. Deployment outcome and rollback evidence belong in the dated October receipt after live verification.
+The policy suite includes 23 cases, including negative checks for adjacent unreviewed server routes/helpers, the projection implementation, authorization, schema, dependencies, environment, and database paths. The installed controller passed syntax and all 23 cases; the prior controller is retained as `arcane-ally-deploy.sh.pre-battlemap-20261005`. PR #4 deployed the product/Codex release; production mobile testing found a hidden-field layout issue, corrected and deployed through PR #5. Both passed CI, staging, backup, and health gates. See the [October receipt](DEPLOYMENT_RECEIPT_2026-10-05.md) for final revision and rollback evidence.

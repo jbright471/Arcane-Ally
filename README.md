@@ -6,11 +6,11 @@
 
 A high-performance, self-hosted companion application for D&D 5e. Real-time party management, AI-powered content generation, and a full DM command center — all running on your local hardware.
 
-## October battlemap candidate
+## October battlemap improvements
 
-The current local candidate rejects malformed realtime map snapshots before rendering, groups the three persistent table tools into one responsive dock, labels DM/player/cast access modes, and shows only role-projected AC and condition chips. Authenticated DMs can inspect UVTT/DD2VTT dimensions and geometry through a zero-write receipt before deciding whether to import anything.
+The October release rejects malformed realtime map snapshots before rendering, groups the three persistent table tools into one responsive dock, labels DM/player/cast access modes, and shows only role-projected AC and condition chips. Authenticated DMs can inspect UVTT/DD2VTT dimensions and geometry through a zero-write receipt before deciding whether to import anything.
 
-See [local implementation verification](docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md). This candidate has not been deployed.
+See [implementation verification](docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md) and the [verified October deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-10-05.md). Arcane Codex includes preview limits, role visibility, table-tools guidance, and snapshot recovery.
 
 ## September product improvements
 
@@ -330,4 +330,4 @@ See [LICENSE](./LICENSE).
 
 Use the [deployment runbook](docs/DEPLOYMENT.md) for Bastet release and rollback. The [verification record](docs/PRODUCT_PLAN_VERIFICATION_2026-09-17.md) lists scope and limitations. Arcane Codex under **Guide** contains the player/DM workflows.
 
-September product release: [verified deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-09-17.md).
+Current product release: [October deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-10-05.md). Historical release: [September deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-09-17.md).
