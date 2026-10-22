@@ -1,6 +1,6 @@
 # Deployment operations
 
-Current verified live application release: `7f1e525c565e587ff6d1a76fbb4f19bba04af41c`, deployed October 5 Eastern time. See the [October deployment receipt](DEPLOYMENT_RECEIPT_2026-10-05.md) for GitHub checks, production browser tests, health, backup, and rollback evidence. Later documentation-only commits do not change the running application revision.
+Current verified live application release: `417ae5e4ef2ebe42ed5ddc827e7405b9bf3532e7`, deployed October 22 Eastern time. See the [October 22 deployment receipt](DEPLOYMENT_RECEIPT_2026-10-22.md) for GitHub checks, production browser tests, health, backup, rollback, and outstanding dependency advisories. Later documentation-only commits do not change the running application revision. The [October 5 receipt](DEPLOYMENT_RECEIPT_2026-10-05.md) remains historical.
 
 ## Ownership and source
 
@@ -60,3 +60,10 @@ The explicit client type check requires testing-library peer types. The Dockerfi
 The user authorized documentation, Arcane Codex, GitHub publication, and production deployment on October 5. The implementation is recorded in [verification](PRODUCT_PLAN_VERIFICATION_2026-10-05.md). The controller candidate adds only `server/routes/maps.js`, `server/lib/uvttPreview.js`, `server/test/uvttPreview.test.js`, and `server/test/clientStateProjection.test.js` to its existing release scope. The first two are runtime changes; the other two are test-only. All revision, staging, backup, health, and rollback gates are retained.
 
 The policy suite includes 23 cases, including negative checks for adjacent unreviewed server routes/helpers, the projection implementation, authorization, schema, dependencies, environment, and database paths. The installed controller passed syntax and all 23 cases; the prior controller is retained as `arcane-ally-deploy.sh.pre-battlemap-20261005`. PR #4 deployed the product/Codex release; production mobile testing found a hidden-field layout issue, corrected and deployed through PR #5. Both passed CI, staging, backup, and health gates. See the [October receipt](DEPLOYMENT_RECEIPT_2026-10-05.md) for final revision and rollback evidence.
+
+## October 22 release
+
+- You authorized commit, push, and deployment after the product-polish implementation and synthetic app tests. [PR #6](https://github.com/jbright471/Arcane-Ally/pull/6) merged after client/build and server checks passed.
+- The unchanged controller accepted and deployed `417ae5e4ef2ebe42ed5ddc827e7405b9bf3532e7`; syntax, 23 path-policy cases, copied-database staging, backup, and live health checks passed. No allowlist expansion was needed.
+- Read-only live routes, Rules Sage dismissal/focus/drafts, and Codex filtering passed. Authenticated health/legend acceptance remains the synthetic-data walkthrough, not a production campaign mutation.
+- The release receipt records the new backup manifest, exact previous/target images, independent backup verification, and rollback command. Runtime dependency advisories remain a separate security-maintenance task; this release does not establish security readiness.
