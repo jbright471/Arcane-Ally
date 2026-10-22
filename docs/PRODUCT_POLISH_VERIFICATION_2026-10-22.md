@@ -1,14 +1,14 @@
 # October 22 product polish — implementation verification
 
-Status: implemented and locally verified; you authorized commit, push, and deployment on October 22. Publication and deployment are pending at this release checkpoint. Your existing Bastet application remains on `7f1e525c565e587ff6d1a76fbb4f19bba04af41c`.
+Status: implemented, published through [PR #6](https://github.com/jbright471/Arcane-Ally/pull/6), and deployed on October 22 under your explicit commit/push/deploy authorization. Your verified live application revision is `417ae5e4ef2ebe42ed5ddc827e7405b9bf3532e7`. See the [deployment receipt](DEPLOYMENT_RECEIPT_2026-10-22.md) for production, backup, rollback, and dependency-advisory evidence.
 
 ## Scope and baseline
 
 - You approved implementation after reviewing the October 6–22 brief window. The available briefs are October 7, 9, 11, 14, 16, 18, and 21; there are no October 6 or October 22 brief files.
-- Source checkout: `arcane-ally-product-20260917`, branch `implementation/product-polish-20261022`, starting HEAD `00d878dc7ec096ae6594d1a50371067d33c208ac`. Its starting application code matches live; only documentation/release images differ from the live revision.
+- Source checkout: `arcane-ally-product-20260917`, implementation branch `implementation/product-polish-20261022`, starting HEAD `00d878dc7ec096ae6594d1a50371067d33c208ac`. Its starting application code matched the previous live revision; only documentation/release images differed at that checkpoint.
 - The dirty `arcane-ally-hardening` checkout is not implementation source. Final validation matched its branch/HEAD/status and all 32 pre-existing changed/untracked file hashes to preflight, plus all three source database/sidecar hashes.
-- This update changes client components, tests, Codex content, and documentation only. It introduces no server code, schema, dependency, permission, access-grant policy, or deployment change. Reveal overlay remains deferred.
-- Scheduled briefs must distinguish this authorized uncommitted local implementation from the unchanged deployed revision; local source is intentionally no longer clean or application-equivalent after this work.
+- This update changes client components, tests, Codex content, and documentation only. It introduces no server code, schema, dependency, permission, access-grant policy, or deployment-policy change. Reveal overlay remains deferred.
+- Scheduled briefs must distinguish the deployed application SHA from any later documentation-only checkout HEAD. Compare the complete diff before accepting application equivalence; never reset a checkout to hide drift.
 
 ## Delivered
 
@@ -66,7 +66,7 @@ All six images contain only synthetic campaign data or static UI. Contact text i
 
 ## Limits and release status
 
-- The implementation walkthrough performed no production authentication, campaign mutation, question submission, import/upload, voice participation, deployment, commit, or push. Full server tests subsequently passed during release preparation against a separate temporary database. Dependency audits were not rerun; backend code is unchanged. Screen-reader user testing remains separate from DOM/browser semantics checks.
-- README, changelog, Arcane Codex, this verification record, and JoJo's project status note describe the local update without claiming deployment. Historical backup/deployment receipts were preserved. Derived Graphify views were not refreshed; the linked source record is authoritative for local release status.
+- The implementation walkthrough performed no production authentication, campaign mutation, question submission, import/upload, voice participation, deployment, commit, or push. Publication and deployment subsequently completed under your separate authorization. Full server tests passed during release preparation against a temporary database. A release-time server production dependency audit reported one critical, two high, and one moderate package advisory; see the receipt. Backend code and dependency definitions/lockfiles are unchanged. Screen-reader user testing remains separate from DOM/browser semantics checks.
+- README, changelog, Arcane Codex, this verification record, the deployment receipt/runbook, and JoJo's project status note now distinguish local synthetic acceptance from verified deployment. Historical receipts were preserved. Derived Graphify views were not refreshed; use the linked source records for current release status.
 - Browser/helper processes are closed after testing. Diagnostic scratch and synthetic fixtures remain at `C:\Users\brigh\AppData\Local\Temp\arcane-polish-20261022`, outside application source; they are not production data.
-- Next release gate: publish the reviewed diff, pass GitHub checks, and use the existing Bastet release procedure under your October 22 authorization. No deployment controller, network, service, scheduler, or automation configuration was changed during implementation or preparation.
+- Release gates completed: local/GitHub checks, controller eligibility, image build, copied-database preflight, verified backup, live health/labels, and read-only production browser checks. Only the two app services were recreated through the existing controller; controller policy, network, scheduler, automation, schema, and authorization policy remain unchanged. The dirty hardening checkout and source database/sidecar hashes still match release preflight.
