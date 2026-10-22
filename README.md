@@ -6,6 +6,12 @@
 
 A high-performance, self-hosted companion application for D&D 5e. Real-time party management, AI-powered content generation, and a full DM command center — all running on your local hardware.
 
+## October 22 product polish — local implementation
+
+Rules Sage now has named controls, keyboard dismissal, and focus restoration without losing messages or drafts. Codex search has an explicit accessible name and search semantics. Battlemap can display server-supplied broad health labels when exact HP is absent, with accessible token descriptions and contextual legend help.
+
+These changes are local and not deployed. They change no server code, schema, dependency, or permission policy. See [implementation verification](docs/PRODUCT_POLISH_VERIFICATION_2026-10-22.md) for checks, browser evidence, and remaining release gates.
+
 ## October battlemap improvements
 
 The October release rejects malformed realtime map snapshots before rendering, groups the three persistent table tools into one responsive dock, labels DM/player/cast access modes, and shows only role-projected AC and condition chips. Authenticated DMs can inspect UVTT/DD2VTT dimensions and geometry through a zero-write receipt before deciding whether to import anything.

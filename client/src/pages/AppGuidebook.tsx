@@ -201,6 +201,7 @@ Your character sheet is divided into panels:
 - **HP Bar** flashes red on damage, green on healing
 - **Condition Badges** appear/disappear in real-time when the DM applies or removes them
 - **Table tools** sit together at the bottom of the main app: Effects, Rules Sage, and Voice. Open a tool to see its panel; close the panel to return to the compact controls.
+- **Rules Sage keyboard access** — opening the non-modal panel focuses **Close Rules Sage**. Use that button or press **Escape** inside the panel to close it and return focus to its launcher. Your messages and unsent draft stay available when you reopen it; you can still move focus to the rest of the table.
 - **The Effect Stream** shows the events available to your current view
 - **Voice indicators** show who is currently speaking in voice chat
 
@@ -741,6 +742,13 @@ When no map is active, Battlemap shows the current round, initiative order, acti
 The public Battlemap page explains the three access modes: DM control, a character-specific player companion link, and a read-only cast link for shared displays. Links keep their credentials private instead of printing them on the handoff page.
 
 When a map is active, defense chips show Armor Class and conditions only when the server included those fields for the current audience. If a realtime map snapshot is malformed or incompatible, Battlemap rejects it and offers a read-only fresh-snapshot request instead of rendering partial token state.
+
+### Read the Token Legend
+
+- Exact HP stays visible when your view is allowed to receive it. Otherwise, a supplied **Healthy**, **Bloodied**, **Critical**, or **Dead** label can appear in the legend and the token's accessible description.
+- A label does not reveal an HP total or percentage. Missing or unrecognized health information is not treated as Healthy.
+- Choose **About this legend** beside **Token legend** for an explanation of the values supplied to your view. A missing AC, condition, or health badge does not establish that the value is empty or hidden.
+- Close the help with **Close legend help**, **Escape**, or a click outside it. This help does not change tokens, campaign settings, or access permissions.
 
 ### Preview a DungeonDraft / UVTT File
 
@@ -1323,6 +1331,8 @@ When the DM ends a session, the AI generates a narrative summary of key events f
 ### Rules Assistant
 The floating "Rules Sage" chat widget answers D&D 5e rules questions using AI.
 
+Open it from the bottom table-tools dock. **Close Rules Sage** and **Escape** inside the panel restore focus to its launcher without sending a question. Your existing messages and draft remain when you reopen it. The panel is non-modal, so the rest of your table remains available.
+
 ## Configuration
 
 AI features require a running Ollama instance. Set the URL in your environment:
@@ -1841,6 +1851,8 @@ export default function AppGuidebook() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
             <Input
+              type="search"
+              aria-label="Search Arcane Codex"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search guides..."

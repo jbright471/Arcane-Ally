@@ -4,6 +4,15 @@ All notable changes to the **Arcane Ally** project will be documented in this fi
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## Unreleased — October 22, 2026 product polish
+
+- Added named non-modal Rules Sage controls, scoped Escape dismissal, and launcher focus restoration while preserving messages and drafts.
+- Added an explicit accessible name and search type to the existing local Arcane Codex filter.
+- Added recognized server-projected health labels to Battlemap token descriptions and its legend when exact HP is absent; no hidden values or percentages are inferred.
+- Added keyboard/touch-accessible token legend help with neutral missing-data wording and no map writes.
+- Updated Arcane Codex and added focused regression coverage. No server, schema, dependency, permission, or production deployment change.
+- Local verification and release status: [October 22 implementation record](docs/PRODUCT_POLISH_VERIFICATION_2026-10-22.md).
+
 ## October 5, 2026 product release
 
 - Added a fail-closed battlemap snapshot parser with a read-only recovery path for malformed realtime state.

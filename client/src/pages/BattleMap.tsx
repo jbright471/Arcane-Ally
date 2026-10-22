@@ -4,6 +4,7 @@ import { useGame } from '../context/GameContext';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { AlertTriangle, RefreshCw, Map, Users, Eye, EyeOff, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import socket, { accessCredential } from '../socket';
@@ -20,6 +21,7 @@ interface InitiativeEntry {
   max_hp: number | null;
   ac?: number | null;
   conditions?: unknown;
+  hp_status?: unknown;
   character_id: number | null;
   instance_id: string | null;
   is_hidden: number;
@@ -34,6 +36,8 @@ const TOKEN_COLORS: Record<string, string> = {
 const HP_COLOR = (pct: number) =>
   pct > 0.5 ? '#22c55e' : pct > 0.25 ? '#f59e0b' : '#ef4444';
 
+const SHARED_HEALTH_LABELS = new Set(['Healthy', 'Bloodied', 'Critical', 'Dead']);
+
 function getInitials(name: string): string {
   return name.split(/\s+/).map(w => w[0]?.toUpperCase() ?? '').join('').slice(0, 2) || '?';
 }
@@ -45,6 +49,7 @@ export default function BattleMap() {
 
   const mapState = state.mapState;
   const [showHidden, setShowHidden] = useState(false);
+  const [showLegendHelp, setShowLegendHelp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Dragging state
@@ -71,7 +76,11 @@ export default function BattleMap() {
         .map(condition => condition.trim())
         .filter(condition => condition.length > 0 && condition.length <= 40))].slice(0, 6)
       : [];
-    return { hp: current !== null && max !== null ? { current, max } : null, ac, conditions };
+    const hp = current !== null && max !== null ? { current, max } : null;
+    // Consume the projected label only; never infer withheld HP from a label.
+    const healthStatus = !hp && typeof entry?.hp_status === 'string' && SHARED_HEALTH_LABELS.has(entry.hp_status)
+      ? entry.hp_status : null;
+    return { hp, healthStatus, ac, conditions };
   };
 
   const handlePointerDown = useCallback((e: React.PointerEvent, token: BattleMapToken) => {
@@ -208,6 +217,7 @@ export default function BattleMap() {
           const color  = TOKEN_COLORS[token.entity_type] ?? TOKEN_COLORS.monster;
           const hidden = !!token.is_hidden;
           const accessibleStatus = [
+            combat.healthStatus ? `health ${combat.healthStatus}` : null,
             combat.ac ? `armor class ${combat.ac}` : null,
             combat.conditions.length > 0 ? `conditions ${combat.conditions.join(', ')}` : null,
           ].filter(Boolean).join(', ');
@@ -238,7 +248,7 @@ export default function BattleMap() {
                   borderColor: hidden ? '#888' : 'white',
                   boxShadow: `0 0 6px ${color}80`,
                 }}
-                title={`${token.entity_name}${combat.hp ? ` — HP: ${combat.hp.current}/${combat.hp.max}` : ''}`}
+                title={`${token.entity_name}${combat.hp ? ` — HP: ${combat.hp.current}/${combat.hp.max}` : combat.healthStatus ? ` — Health: ${combat.healthStatus}` : ''}`}
               >
                 {getInitials(token.entity_name)}
                 {hidden && (
@@ -274,42 +284,64 @@ export default function BattleMap() {
 
       {/* Token legend */}
       {visibleTokens.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {visibleTokens.map(token => {
-            const combat = getCombatData(token);
-            const hpPct  = combat.hp ? Math.max(0, Math.min(1, combat.hp.current / combat.hp.max)) : null;
-            const color  = TOKEN_COLORS[token.entity_type] ?? TOKEN_COLORS.monster;
-            return (
-              <div
-                key={token.id}
-                className="flex items-center gap-1.5 text-xs bg-secondary/30 border border-border/20 rounded px-2 py-1"
-              >
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                <span className="font-display">{token.entity_name}</span>
-                {combat.hp && (
-                  <span className="text-[10px] text-muted-foreground tabular-nums">
-                    {combat.hp.current}/{combat.hp.max}
-                  </span>
-                )}
-                {combat.ac !== null && (
-                  <span className="inline-flex items-center gap-0.5 rounded border border-sky-400/30 bg-sky-400/10 px-1 text-[10px] text-sky-200" aria-label={`Armor class ${combat.ac}`}>
-                    <Shield className="h-2.5 w-2.5" /> AC {combat.ac}
-                  </span>
-                )}
-                {combat.conditions.map(condition => (
-                  <span key={condition} className="rounded border border-amber-400/30 bg-amber-400/10 px-1 text-[10px] text-amber-200" aria-label={`Condition: ${condition}`}>
-                    {condition}
-                  </span>
-                ))}
-                {token.entity_type !== 'pc' && hpPct !== null && (
-                  <span className="text-[10px]" style={{ color: HP_COLOR(hpPct) }}>
-                    {Math.round(hpPct * 100)}%
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <section aria-label="Token legend" className="space-y-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-display">Token legend</h2>
+            <Popover open={showLegendHelp} onOpenChange={setShowLegendHelp}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="ghost" size="sm" aria-label="About the token legend" className="h-8 text-xs">
+                  About this legend
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent aria-label="Token legend help" align="start" collisionPadding={16} className="max-w-[calc(100vw-2rem)] space-y-3 text-sm">
+                <p>Only values supplied for your view are shown. A missing AC, condition, or health badge is not a known value and does not tell you whether information is unavailable or empty.</p>
+                <p>Broad health labels may appear instead of exact HP. No HP total or percentage is calculated from a label.</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowLegendHelp(false)}>Close legend help</Button>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {visibleTokens.map(token => {
+              const combat = getCombatData(token);
+              const hpPct  = combat.hp ? Math.max(0, Math.min(1, combat.hp.current / combat.hp.max)) : null;
+              const color  = TOKEN_COLORS[token.entity_type] ?? TOKEN_COLORS.monster;
+              return (
+                <div
+                  key={token.id}
+                  className="flex items-center gap-1.5 text-xs bg-secondary/30 border border-border/20 rounded px-2 py-1"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                  <span className="font-display">{token.entity_name}</span>
+                  {combat.hp && (
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      {combat.hp.current}/{combat.hp.max}
+                    </span>
+                  )}
+                  {combat.healthStatus && (
+                    <span className="rounded border border-border/50 px-1 text-[10px] text-muted-foreground" aria-label={`Health: ${combat.healthStatus}`}>
+                      {combat.healthStatus}
+                    </span>
+                  )}
+                  {combat.ac !== null && (
+                    <span className="inline-flex items-center gap-0.5 rounded border border-sky-400/30 bg-sky-400/10 px-1 text-[10px] text-sky-200" aria-label={`Armor class ${combat.ac}`}>
+                      <Shield className="h-2.5 w-2.5" /> AC {combat.ac}
+                    </span>
+                  )}
+                  {combat.conditions.map(condition => (
+                    <span key={condition} className="rounded border border-amber-400/30 bg-amber-400/10 px-1 text-[10px] text-amber-200" aria-label={`Condition: ${condition}`}>
+                      {condition}
+                    </span>
+                  ))}
+                  {token.entity_type !== 'pc' && hpPct !== null && (
+                    <span className="text-[10px]" style={{ color: HP_COLOR(hpPct) }}>
+                      {Math.round(hpPct * 100)}%
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
     </div>
   );

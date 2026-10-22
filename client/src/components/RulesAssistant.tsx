@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Send, X, BookOpen } from 'lucide-react';
@@ -16,6 +16,23 @@ export function RulesAssistant() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const launcherRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
+  const titleId = useId();
+
+  const dismiss = () => {
+    restoreFocus.current = true;
+    setIsOpen(false);
+  };
+
+  useEffect(() => {
+    if (isOpen) closeRef.current?.focus();
+    else if (restoreFocus.current) {
+      launcherRef.current?.focus();
+      restoreFocus.current = false;
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -56,9 +73,12 @@ export function RulesAssistant() {
   if (!isOpen) {
     return (
       <button
+        ref={launcherRef}
+        type="button"
         onClick={() => setIsOpen(true)}
         title="Ask the Rules Sage"
         aria-label="Open Rules Sage"
+        aria-haspopup="dialog"
         className="w-12 h-12 rounded-full bg-card border-2 border-primary/70 text-primary cursor-pointer shadow-lg shadow-black/50 flex items-center justify-center transition-all duration-200 hover:scale-110 hover:border-primary hover:shadow-primary/20"
       >
         🧙
@@ -67,14 +87,25 @@ export function RulesAssistant() {
   }
 
   return (
-    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 w-[min(340px,calc(100vw-2rem))] h-[min(480px,calc(100dvh-7rem))] bg-card border border-border rounded-xl shadow-2xl shadow-black/60 flex flex-col z-50 overflow-hidden">
+    <div
+      role="dialog"
+      aria-modal={false}
+      aria-labelledby={titleId}
+      onKeyDown={event => {
+        if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
+        event.preventDefault();
+        event.stopPropagation();
+        dismiss();
+      }}
+      className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 w-[min(340px,calc(100vw-2rem))] h-[min(480px,calc(100dvh-7rem))] bg-card border border-border rounded-xl shadow-2xl shadow-black/60 flex flex-col z-50 overflow-hidden"
+    >
       {/* Header */}
       <div className="bg-secondary/30 border-b border-border px-4 py-2.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-primary" />
-          <h3 className="font-display text-sm font-bold">Rules Sage</h3>
+          <h3 id={titleId} className="font-display text-sm font-bold">Rules Sage</h3>
         </div>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsOpen(false)}>
+        <Button ref={closeRef} type="button" aria-label="Close Rules Sage" variant="ghost" size="icon" className="h-6 w-6" onClick={dismiss}>
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -104,13 +135,14 @@ export function RulesAssistant() {
       {/* Input Area */}
       <form onSubmit={handleSend} className="border-t border-border p-2.5 flex gap-2 bg-secondary/20 shrink-0">
         <Input
+          aria-label="Rules question"
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder="Ask about a spell or rule..."
           disabled={isLoading}
           className="flex-1 h-8 text-xs bg-background/50"
         />
-        <Button type="submit" size="icon" className="h-8 w-8" disabled={!input.trim() || isLoading}>
+        <Button type="submit" aria-label="Ask Rules Sage" size="icon" className="h-8 w-8" disabled={!input.trim() || isLoading}>
           <Send className="h-3.5 w-3.5" />
         </Button>
       </form>
