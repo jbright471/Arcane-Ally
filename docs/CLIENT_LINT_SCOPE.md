@@ -23,6 +23,6 @@ npm run build
 
 Your pull-request workflow executes the lint check before client tests/build. Both client and server jobs also run read-only dependency audits after installation: production dependencies must have no moderate-or-higher findings, and the full dependency graph must have no high-or-higher findings. These checks report vulnerabilities; they do not automatically change dependencies.
 
-Its server job sets a per-run database path under the runner's temporary directory and disables scheduled jobs before test imports, so the default source database is not opened by integration-test imports. Local server checks must likewise set a unique temporary `DB_PATH` and `DISABLE_SCHEDULED_JOBS=true` before launching the test process.
+Its server job disables scheduled jobs, and its test step sets a per-run database path under the runner's temporary directory before imports. `runner.temp` belongs in step-level environment configuration. Local server checks must likewise set a unique temporary `DB_PATH` and `DISABLE_SCHEDULED_JOBS=true` before launching the test process; use the [development commands](DEVELOPMENT.md#server-checks).
 
 For lint-coverage verification, `npx --no-install eslint --print-config src/components/CharacterCard.tsx` must resolve the TypeScript parser and recommended rules. A temporary stdin TSX snippet containing a debugger statement must fail under that filename; `src/lib/battleMapState.ts` must also resolve the TypeScript configuration. Do not retain a deliberately invalid probe in source.

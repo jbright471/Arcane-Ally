@@ -8,6 +8,7 @@ R1-E is deny-by-default. The central middleware in `server/lib/restAuthorization
 | `GET /api/health` | `health` | Public | Process health and memory telemetry |
 | `/api/characters/import` | `character_imports` | DM session | Import, PDF upload, sync, pending approval writes |
 | `/api/characters` | `characters` | DM session | Character reads/writes, HP, tokens, weapons, inspector/log data |
+| `GET /api/characters/:id/combat-inspector` | `characters` | DM session | Read-only resolved AC/ability finals and source rows, conditions, combined buffs |
 | `/api/encounters` | `encounters` | DM session | Encounter CRUD, duplicate, authenticated export |
 | `/api/initiative` | `initiative` | DM session | Initiative/tracker state |
 | `/api/maps` | `maps` | DM session | Map metadata, files, uploads, zero-write UVTT preview, activation, tokens, markers |
@@ -58,3 +59,11 @@ The server adds a read-only `map_state` bootstrap snapshot through the existing 
 ## October battlemap behavior
 
 `POST /api/maps/uvtt/preview` remains inside the existing DM-only `/api/maps` route class. It parses one bounded in-memory upload and returns dimensions, geometry counts, warnings, and `persistence: none`. It does not write a map row, token row, image file, campaign state, or schema. The battlemap snapshot parser and defense-chip UI consume only the existing audience projection; they do not add a new credential, role, or hidden-data fallback.
+
+## Character Inspector
+
+- `GET /api/characters/:id/combat-inspector` uses the existing `characters` DM-only route class. The existing same-origin credential wrapper supplies the DM session; player/cast grants gain no REST access.
+- A successful response contains only `characterId`, `name`, `ac` (`finalAC`, `breakdown`), `abilityScores` (each stat's `final`, `modifier`, `breakdown`), `activeConditions`, and `activeBuffs`. Source rows come from the shared combat resolver and identify their source/value and optional type, including overrides. Gear, buffs, auras, and active features use that resolver's current behavior; the UI adds no separate armor or equipment formulas.
+- A strict positive safe-integer character ID and existing character/session rows are required. Invalid or unknown IDs return `404`; a missing session returns `409`; unusable state returns a controlled `500`. Authentication denial retains the status/code contract above.
+- Character/session checks and resolution run in one read transaction, so opening the Inspector does not create a missing session or alter campaign state. The response omits raw import data and backstory. It reads a snapshot when opened; it does not establish a new realtime subscription.
+- Regression coverage lives in `server/test/characterInspector.test.js` and `client/src/components/CombatStateInspectorModal.test.tsx`. November also adds local legend spotlight selection; that client selection sends no new map request or mutation and changes no role projection or DM movement permission.

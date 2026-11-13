@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## November 13, 2026 product update
 
+- Expanded Arcane Codex with character-card keyboard, DM Inspector, History and menu guidance; aligned hosting/privacy/proxy/healthcheck instructions with the current configuration. Updated the documentation index, API contract and safe development checks.
 - Fixed character-card keyboard event ownership so nested Inspector, History and options actions do not trigger surrounding navigation or selection.
 - Restored the missing read-only DM Inspector endpoint using resolved stat values and source breakdowns, with no session creation during reads.
 - Added keyboard/touch legend spotlight for already-visible tokens, with temporary stacking, clear/Escape behavior and invalidated-selection cleanup. Spotlight sends no map mutation and changes no access rules.

@@ -18,11 +18,11 @@ npm ci
 npm run dev
 npm test
 npm run typecheck
-npm run lint
+npm run lint -- --max-warnings=0
 npm run build
 ```
 
-The Vite dev server runs on `http://localhost:5173` by default. Its default proxy target is `http://backend:3001` for container development. For a host backend, set `ARCANE_BACKEND_URL=http://localhost:3001` (PowerShell: `$env:ARCANE_BACKEND_URL="http://localhost:3001"`) before `npm run dev`. Both REST and Socket.io use this target.
+The Vite dev server runs on `http://localhost:5173` by default. Its default proxy target is `http://dnd-party-sync-backend:3001` for container development. For a host backend, set `ARCANE_BACKEND_URL=http://localhost:3001` (PowerShell: `$env:ARCANE_BACKEND_URL="http://localhost:3001"`) before `npm run dev`. Both REST and Socket.io use this target.
 
 ## App Entry Points
 
@@ -36,6 +36,18 @@ The Vite dev server runs on `http://localhost:5173` by default. Its default prox
 - `src/components/DMRollFeed.tsx` - DM roll stream with non-public visibility grouping
 - `src/components/DmAutomationPanel.tsx` - group effects, save requests, presets, auras, and campaign automation policies
 - `src/components/EffectTimeline.tsx` - active and archived encounter history, filtering, pagination, export, and reversal controls
+- `src/components/CharacterCard.tsx` - card navigation/selection and independent nested keyboard actions
+- `src/components/CombatStateInspectorModal.tsx` - DM read-only resolved combat stats and source rows
+- `src/pages/BattleMap.tsx` - role-projected token presentation, DM movement, and local legend spotlight
+
+## November table controls
+
+- Character-card root Enter/Space activation stays separate from nested Inspector, History, and options actions.
+- The DM Inspector reads `GET /api/characters/:id/combat-inspector` when opened. It displays the server resolver's AC, ability finals/modifiers, source rows, and conditions. Its [response and unavailable-state contract](../docs/REST_ACCESS_MATRIX.md#character-inspector) requires an existing character/session and makes no campaign changes.
+- Battlemap legend names support pointer/touch and Enter/Space selection to spotlight an already-visible token. Select the name again, use **Clear spotlight**, or press Escape within Battlemap to clear. Selection is local, preserves movement permissions and saved positions, and clears when the token/map becomes unavailable.
+- Condition removal and same-PC positive/zero/recovered health have lifecycle regression coverage. Existing audience projection and health rendering remain authoritative.
+
+See the [November verification](../docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md), [production receipt](../docs/DEPLOYMENT_RECEIPT_2026-11-13.md), and [current deployment runbook](../docs/DEPLOYMENT.md). The [documentation index](../docs/README.md) separates current references from dated release evidence.
 
 ## September product surfaces
 
@@ -55,7 +67,7 @@ The Vite dev server runs on `http://localhost:5173` by default. Its default prox
 - `UvttPreviewPanel.tsx` requests a DM-authenticated, zero-write UVTT/DD2VTT receipt. It does not save or activate maps.
 - `BattleMap.tsx` renders AC and conditions only when the role-projected initiative payload contains those fields.
 
-These improvements and the corresponding Arcane Codex instructions are deployed. See the [October verification](../docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md) and [production receipt](../docs/DEPLOYMENT_RECEIPT_2026-10-05.md) for test boundaries and live revision.
+These improvements remain in the current release. Their [October verification](../docs/PRODUCT_PLAN_VERIFICATION_2026-10-05.md) and [production receipt](../docs/DEPLOYMENT_RECEIPT_2026-10-05.md) record the original acceptance; the current live revision belongs in the [deployment runbook](../docs/DEPLOYMENT.md).
 
 ## Roll Visibility
 
@@ -98,11 +110,12 @@ npm run cap:ios
 Before publishing frontend changes, run:
 
 ```bash
-npm test
+npm test -- --maxWorkers=1
 npm run typecheck
-npm run lint
+npm run lint -- --max-warnings=0
 npm run build
+npm audit --omit=dev --audit-level=moderate
 npm audit --audit-level=high
 ```
 
-`build` and `build:mobile` include explicit app and Node-config type checks. The existing lint configuration covers JS/JSX only; TS/TSX lint is not configured. See [release verification](../docs/PRODUCT_PLAN_VERIFICATION_2026-09-17.md) and [deployment operations](../docs/DEPLOYMENT.md).
+`build` and `build:mobile` include explicit app and Node-config type checks. Lint covers existing JS/JSX plus the ten TS/TSX files listed in [Client lint coverage](../docs/CLIENT_LINT_SCOPE.md); it is incremental, without type-aware rules. CI runs lint, audits, tests, and the production build. See [safe server validation](../docs/DEVELOPMENT.md#server-checks) before running backend tests and the [deployment runbook](../docs/DEPLOYMENT.md) before a release.
