@@ -10,7 +10,7 @@ A self-hosted companion application for D&D 5e, with real-time party management,
 
 The update fixes nested character-card keyboard actions, restores the missing read-only DM Inspector, adds a local token spotlight for overlapping tokens, and protects condition removal and zero-HP recovery with regression tests. Dependency maintenance resolves the current client/server audit findings; scoped TypeScript lint and dependency checks run in CI.
 
-Published through PR #8 and deployed on Bastet as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`. See the [deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13.md), [verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md), [dependency maintenance](docs/DEPENDENCY_MAINTENANCE_2026-11-13.md), and [TypeScript lint scope](docs/CLIENT_LINT_SCOPE.md).
+The product changes first shipped through PR #8 as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`. The Codex/documentation follow-up in PR #10 is now live on Bastet as `e7dfb5282130d55fe1633248633c52051ceda3ef`. See the [current deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13_CODEX.md), [original product receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13.md), [verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md), [dependency maintenance](docs/DEPENDENCY_MAINTENANCE_2026-11-13.md), and [TypeScript lint scope](docs/CLIENT_LINT_SCOPE.md).
 
 ## October 22 product polish
 
@@ -342,4 +342,4 @@ See [LICENSE](./LICENSE).
 
 Use the [deployment runbook](docs/DEPLOYMENT.md) for the current Bastet revision, release ownership, and rollback. The [November verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md) records implementation checks and their limits. Arcane Codex under **Guide** contains the player/DM workflows.
 
-Current product release: [November 13 deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13.md). Earlier receipts remain linked in the [documentation index](docs/README.md#release-history). Documentation-only follow-ups do not change the running application revision.
+Current deployment: [November 13 Codex follow-up receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13_CODEX.md). Earlier receipts remain linked in the [documentation index](docs/README.md#release-history). Markdown-only follow-ups do not change the running application revision; bundled Codex changes require a client build and deployment.

@@ -12,13 +12,14 @@
 - [Autonomous change pilot scope](AUTONOMOUS_CHANGE_WORKFLOW.md) — one bounded tested PR per run; its worker cannot merge, deploy, add dependencies, migrate data, or change authorization. The original Agentic OS reviewer hook is historical and optional.
 - [Deployment ownership, current runtime revision, and rollback](DEPLOYMENT.md).
 
-Arcane Codex at `/guide` in the app contains your player and DM workflows. Use the deployment runbook for the current running revision; a documentation-only GitHub follow-up does not change that revision.
+Arcane Codex at `/guide` in the app contains your player and DM workflows. Use the deployment runbook for the current running revision. Markdown-only GitHub follow-ups do not change that revision; bundled Codex article changes require a client build and deployment.
 
 ## November 13 release evidence
 
 - [Product implementation and acceptance](PRODUCT_UPDATE_VERIFICATION_2026-11-13.md).
 - [Dependency maintenance and audit limits](DEPENDENCY_MAINTENANCE_2026-11-13.md).
-- [Verified Bastet deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13.md).
+- [Current Codex/documentation deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13_CODEX.md).
+- [Initial product deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13.md).
 
 ## Release history
 

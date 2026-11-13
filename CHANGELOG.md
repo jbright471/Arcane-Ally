@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Added condition-removal and same-PC zero-HP/recovery snapshot coverage; existing health/condition runtime logic needed no repair.
 - Updated vulnerable dependency resolutions, removed unused client resolver/validation dependencies, and added bounded dependency regression tests. Backend image installation now uses the committed lockfile through `npm ci`.
 - Added scoped TypeScript/TSX lint, CI audit gates, isolated server-test database settings, and exact reviewed deployment-policy additions.
-- Published through PR #8 and deployed as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`; see the [deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13.md), [verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md) and [dependency evidence](docs/DEPENDENCY_MAINTENANCE_2026-11-13.md). No schema, authentication or permission-policy change.
+- Product implementation first shipped through PR #8 as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`. The Codex/documentation completion in PR #10 is deployed as `e7dfb5282130d55fe1633248633c52051ceda3ef`; see the [current receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13_CODEX.md), [original receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13.md), [verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md) and [dependency evidence](docs/DEPENDENCY_MAINTENANCE_2026-11-13.md). No schema, authentication or permission-policy change.
 
 ## October 22, 2026 product polish
 

@@ -1,6 +1,6 @@
 # November 13 product update — implementation verification
 
-- **Status:** Implemented, published through PR #8 and deployed on Bastet as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`. The [deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13.md) records GitHub checks, controller, production, backup and rollback evidence. This document retains the local/synthetic acceptance details.
+- **Status:** Implemented and first deployed through PR #8 as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`; its [receipt](DEPLOYMENT_RECEIPT_2026-11-13.md) records the product rollout. The [Codex/documentation follow-up](DEPLOYMENT_RECEIPT_2026-11-13_CODEX.md) is now live as `e7dfb5282130d55fe1633248633c52051ceda3ef`, with application logic and dependencies unchanged. This document retains the original local/synthetic feature acceptance details.
 - **Scope:** The worthwhile unfinished recommendations from the ten October 23–November 13 product briefs, plus the missing Inspector endpoint reproduced during the actual app walkthrough.
 - **Source:** `arcane-ally-update-20261113`, branch `implementation/product-briefs-20261113`, based on published baseline `1e87eb4513d06bd6742617dc13373c1a06970b06`.
 - **Production preflight read-back:** Existing Bastet controller returned `417ae5e4ef2ebe42ed5ddc827e7405b9bf3532e7`, frontend/backend running, backend healthy. Installed controller SHA-256 was `83e226d1bb5fa1c75df4b7d5b05897f2130c4ade647085f5a805c0110ab92d01` before any release change.
