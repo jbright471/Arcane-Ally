@@ -196,6 +196,16 @@ Your character sheet is divided into panels:
 - **Inventory** — Equipment and items, with the ability to parse item descriptions via AI
 - **Conditions** — Active conditions displayed as removable badges
 
+## Character Cards and DM Inspection
+
+> **Where to go:** \`Dashboard or Party Lobby -> character card\`
+
+- **Open your sheet** — click the card, or focus the card itself and press **Enter** or **Space**.
+- **Use a card action** — when signed in as DM, use **Tab** to focus **Combat State Inspector**, **Effect History**, or **Character options**. **Enter** or **Space** activates that control without opening the surrounding character sheet.
+- **Combat State Inspector** — choose the eye button to read final AC, ability-score totals and modifiers, their source rows, and active conditions. Source rows can include overrides, so they are not all bonuses to add together. Inspection does not change character state. Close and reopen it for fresh values or to retry a failed load.
+- **Effect History** — choose the clock button to read up to five recent effects for that character.
+- **Character options** — the three-dot menu offers **Break Concentration** when the character is concentrating; otherwise it shows **Not concentrating**. **Escape** closes the menu and returns focus to its button.
+
 ## Real-Time Indicators
 
 - **HP Bar** flashes red on damage, green on healing
@@ -220,7 +230,7 @@ For deeper help, open **Guide** from the sidebar and search for the task you are
 
 This section is for the person hosting Arcane Ally. Players can skip it and use the app URL their DM provides.
 
-Arcane Ally is designed to run entirely on your local hardware or a home server. All features, databases, and AI processes run locally, ensuring that your campaigns are self-contained and private.
+You host the app and campaign database on your own hardware. AI requests go to your configured Ollama endpoint; keep that endpoint on hardware you control for local processing. D&D Beyond imports and Open5e compendium searches require internet access when you use them.
 
 ## Architecture Pipeline
 
@@ -228,43 +238,60 @@ The application uses a lightweight **Client-Server-WebSocket** architectural pip
 - **Frontend Client**: A responsive single-page React app that communicates with the server via REST APIs and WebSockets.
 - **Backend API Server**: A Node.js Express server that manages SQLite storage, processes rules, and acts as the WebSocket coordinator.
 - **WebSocket Gateway**: Powered by Socket.io, providing instantaneous bidirectional state sync between players and DMs.
-- **Local AI Layer**: Integrates with a local running instance of **Ollama** for PDF character parsing and homebrew generation.
+- **AI Layer**: Connects to the **Ollama** endpoint you configure for PDF character parsing and homebrew generation.
 
 ## Local Quick Start
 
 Arcane Ally can run as a local development pair or behind your own Portainer/Compose/reverse-proxy stack. The checked-in repository currently includes a production \`Dockerfile\`, but no \`docker-compose.yml\`.
 
 1. **Clone the Repository**: Ensure you have downloaded the project files.
-2. **Configure Environment Variables**: Create a \`.env\` file for the backend:
+2. **Configure Environment Variables**: Copy \`server/.env.example\` to \`server/.env\` and set your own values. Replace the PIN placeholder before starting:
    \`\`\`env
    PORT=3001
-   DM_PIN=1234
+    NODE_ENV=development
+    DM_PIN=replace-with-your-own-unique-long-pin
+    ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3001
    OLLAMA_URL=http://localhost:11434
    # Optional: DB_PATH=/absolute/path/to/dnd.db
    \`\`\`
 3. **Start the Backend**:
    \`\`\`bash
-   cd server && npm install && npm start
+    cd server
+    npm ci
+    npm start
    \`\`\`
 4. **Start the Frontend**:
    \`\`\`bash
-   cd client && npm install && npm run dev
+    cd client
+    npm ci
+    ARCANE_BACKEND_URL=http://localhost:3001 npm run dev
    \`\`\`
+    In PowerShell, use this in the frontend terminal instead:
+    \`\`\`powershell
+    cd client
+    npm ci
+    $env:ARCANE_BACKEND_URL = 'http://localhost:3001'
+    npm run dev
+    \`\`\`
 5. **Access the Interface**:
    - **Frontend App**: Open your browser to \`http://localhost:5173\`.
    - **Backend API / Socket.io Gateway**: Running at \`http://localhost:3001\`.
 
-For Portainer or Compose deployments, map frontend traffic to the Vite/static frontend service and route \`/api\` plus \`/socket.io\` traffic to the backend service on port \`3001\`.
+The local frontend command forwards both \`/api\` and \`/socket.io\` to your backend. Without \`ARCANE_BACKEND_URL\`, Vite targets the container address \`http://dnd-party-sync-backend:3001\`.
+
+For production, set \`NODE_ENV=production\`, use a unique, varied **DM_PIN** of at least 12 characters, and set **ALLOWED_ORIGINS** to the exact comma-separated browser origins serving your app, including scheme and port where needed. Wildcards and URLs with paths are rejected; missing or invalid production settings prevent startup.
+
+For Portainer or Compose deployments, map frontend traffic to the Vite/static frontend service and route \`/api\` plus \`/socket.io\` traffic to the backend service on its configured port (default \`3001\`).
 
 ## Host Checklist
 
-- Change the sample **DM_PIN** before inviting players.
+- Replace the **DM_PIN** placeholder with your own unique value before starting or inviting players.
 - Keep real \`.env\` files private.
 - Keep SQLite database files out of Git.
 - Back up the database before major updates.
-- Confirm the backend starts on port **3001**.
+- Confirm the backend starts on your configured **PORT** (default **3001**).
 - Confirm the frontend loads on port **5173** or your production domain.
-- Confirm Ollama is reachable if you want AI features.
+- Confirm the backend can reach your configured **OLLAMA_URL** if you want AI features.
 - Use HTTPS if players need browser microphone access for voice chat.
 
 ## WebRTC Voice Chat Security
@@ -272,22 +299,24 @@ For Portainer or Compose deployments, map frontend traffic to the Vite/static fr
 > [!WARNING]
 > WebRTC voice chat utilizes browser-level microphone access. For security, modern browsers **restrict microphone access to secure contexts (HTTPS or localhost)**. 
 
-If you are hosting Arcane Ally on a home server (e.g. \`http://192.168.1.50:5173\`) for remote or local players, you must secure the connection with an HTTPS certificate (such as a reverse proxy with Let's Encrypt or self-signed certs) for WebRTC voice communication to function.
-- **Localhost Rule**: Voice chat will work fine on \`http://localhost\` without any additional configuration.
-- **Remote Host Rule**: Remote connections *must* go through \`https://\` to allow microphone prompts.
+For LAN or remote access, serve the app over HTTPS with a certificate your browser trusts. Opening a plain HTTP LAN address does not normally permit microphone access.
+- **Localhost**: Browsers allow microphone requests on \`http://localhost\` without HTTPS.
+- **Permission and connectivity**: You still need to allow microphone access, and peers need a working network connection. A secure context alone does not guarantee a voice connection.
 
-## Required Port Configurations
+## Service Ports and Proxy Routing
 
-Ensure the following ports are open on your host firewall or proxy:
+These are the default service ports; your container or reverse-proxy mappings may differ. Your frontend proxy needs access to the backend, and the backend needs access to your configured Ollama endpoint:
 - **5173**: Default React frontend client port.
 - **3001**: Backend HTTP/Express API and Socket.io gateway port.
 - **11434**: Default Ollama API port (if running Ollama on the same server).
 
+Keep backend and Ollama endpoints private. Serve browser traffic through your selected frontend/reverse-proxy address, routing \`/api\` and \`/socket.io\` to the backend. These service ports are not a checklist of ports to expose to the internet.
+
 ## Production Container Telemetry & Health Checks
 
-For robust deployment monitoring, Arcane Ally comes configured with container health monitoring and telemetry:
+The production image includes a healthcheck and a telemetry endpoint:
 - **Telemetry Endpoint**: The \`/api/health\` endpoint serves server uptime and raw V8 engine memory usage figures (\`rss\`, \`heapTotal\`, \`heapUsed\`).
-- **Memory Loop Guard**: An automated Node-based healthcheck script (\`healthcheck.js\`) queries the telemetry endpoint and exits with code 1 if heap memory consumption exceeds a threshold of 500MB (preventing infinite loop memory exhaustion).
+- **Healthcheck result**: The Node healthcheck script exits with code 1 for a failed response or connection, invalid JSON, or \`heapUsed\` above 500 MiB. Docker marks the container unhealthy after its configured failed checks. This does not stop the main server or prevent a memory leak; restart and recovery behavior depends on your host's configuration.
 - **Lightweight 3-Stage Container**: The production \`Dockerfile\` is optimized into three build stages, completely discarding heavy build dependencies like \`g++\`, \`make\`, and \`python3\` from the final stage runner, dropping the final image footprint.`,
   },
 
@@ -1291,7 +1320,7 @@ The **Audit Log** (in the DM Dashboard) provides human-readable descriptions of 
     icon: Sparkles,
     content: `# AI Features Overview
 
-Arcane Ally integrates with your local **Ollama** instance to provide AI-powered features throughout the app. All AI processing happens on your hardware — no cloud APIs, no data leaves your network.
+Arcane Ally sends AI requests to the **Ollama** endpoint configured by your host. Keep that endpoint on hardware you control for local processing. D&D Beyond imports and Open5e compendium searches use internet services when selected.
 
 ## Where AI Is Used
 

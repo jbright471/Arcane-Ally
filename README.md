@@ -4,7 +4,7 @@
   <img src="client/public/arcane-ally-logo.png" alt="Arcane Ally logo" width="280" />
 </p>
 
-A high-performance, self-hosted companion application for D&D 5e. Real-time party management, AI-powered content generation, and a full DM command center — all running on your local hardware.
+A self-hosted companion application for D&D 5e, with real-time party management, configured AI tools, and a DM command center.
 
 ## November 13 update
 
@@ -33,7 +33,7 @@ See [implementation verification](docs/PRODUCT_PLAN_VERIFICATION_2026-09-17.md) 
 ## Quick Start
 
 ```bash
-git clone https://github.com/jbright471/Arcane-Ally.git
+git clone --branch automation/arcane-ally-live-baseline https://github.com/jbright471/Arcane-Ally.git
 cd Arcane-Ally
 
 cp .env.example .env
@@ -54,7 +54,7 @@ npm ci
 ARCANE_BACKEND_URL=http://localhost:3001 npm run dev
 ```
 
-For PowerShell, set `$env:ARCANE_BACKEND_URL="http://localhost:3001"` before `npm run dev`. Container development keeps the default `http://backend:3001` target.
+For PowerShell, set `$env:ARCANE_BACKEND_URL="http://localhost:3001"` before `npm run dev`. Container development keeps the default `http://dnd-party-sync-backend:3001` target.
 
 - Frontend dev server: `http://localhost:5173`
 - Backend API and Socket.io gateway: `http://localhost:3001`
@@ -64,19 +64,17 @@ For PowerShell, set `$env:ARCANE_BACKEND_URL="http://localhost:3001"` before `np
 
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, Radix UI
 - **Backend:** Node.js (Express), Socket.io (real-time sync), Better-SQLite3
-- **AI Layer:** Local Ollama integration for PDF parsing, item stat extraction, homebrew generation, lore generation, and actionable entity creation
+- **AI Layer:** Configured Ollama integration for PDF parsing, item stat extraction, homebrew generation, lore generation, and actionable entity creation
 - **Deployment:** Multi-stage Dockerfile, with local dev via Vite + Express and optional external Portainer/Compose stack configuration
 
 ## Core Features
 
 ### Real-Time Synchronization
-Every HP change, condition, spell slot, buff, and dice roll broadcasts instantly to all connected clients. The one-way state pipeline ensures consistency:
+HP, condition, spell-slot, buff, and dice-roll updates reach authorized clients through the server's role-specific projections. The one-way state pipeline is:
 
 ```
-Client emit → Server handler → DB mutation → broadcastPartyState() → All screens update
+Client action → Authorized server handler → DB mutation → Role-projected updates
 ```
-
-HP changes flash red (damage) or green (healing) on character cards. Latency is typically 50-100ms on local networks. Decoupled rendering ensures that ongoing local UI animations (like drag-and-drop dice rolling) are never interrupted by incoming external state mutations.
 
 Dice rolls can be public, private, secret, or super-secret. Secret modes are generated server-side and routed only to the DM, with optional masked acknowledgement for the rolling player.
 
@@ -85,6 +83,7 @@ Dice rolls can be public, private, secret, or super-secret. Secret modes are gen
 - **PDF Import** — upload a character sheet PDF; the AI parser extracts stats, classes, abilities, and spells
 - **Re-Sync** — pull latest changes from D&D Beyond without creating duplicates
 - **Manual Creation** — build a character from scratch with full stat entry
+- **Keyboard card actions** — Enter or Space on a focused card opens its sheet or selects it. Nested Inspector, History, and options controls keep their own keyboard actions.
 
 ### Interactive Character Sheets
 - **Clickable Ability Scores** — click any stat to roll d20 + modifier, broadcast to the DM's Roll Feed
@@ -111,7 +110,7 @@ Dice rolls can be public, private, secret, or super-secret. Secret modes are gen
 ### DM Command Center
 
 **God-Eye View** — compact cards for every party member showing HP bars, AC, conditions, and quick +/-5 HP buttons.
-- **Combat State Inspector** — real-time, transparent breakdown of a character's state. DM-only glassmorphism modal revealing exact mathematical breakdown of Armor Class, Ability Scores, and Active Conditions.
+- **Combat State Inspector** — open a DM character card's Inspector to read current resolved AC, ability scores/modifiers, source rows, and active conditions. It uses the same combat calculations as the party state, including applicable gear, buffs, auras, and active features. Opening it reads a snapshot without changing campaign state.
 
 **Initiative Tracker** — automatic initiative rolling (auto-roll d20 + DEX mod for all combatants), turn advancement, visibility toggles, HP tracking, and manual reordering. Three spawn methods: Quick Spawn, Compendium, and AI Lore Console.
 - **Smart Encounter Recovery** — total persistence for encounter flow. The active combat round and turn index are continuously synced to the SQLite database. Initiative automatically resumes on server restart or client reconnect.
@@ -163,8 +162,9 @@ Buttons disable after use to prevent duplicate spawns.
 - **Permission System** — configurable rules for loot claiming, cross-player effects, and inventory transfers
 
 ### Battlemap
-- **Token Drag** — tokens represent PCs, monsters, and NPCs as percentage-positioned circles on the map; drag-and-drop with pointer capture API; positions sync to all clients via `move_token` socket
-- **HP Overlays** — each token shows a live HP bar correlated from initiative state (green/amber/red)
+- **DM Token Drag** — tokens represent PCs, monsters, and NPCs as percentage-positioned circles on the map; DM drag-and-drop positions sync through the existing movement permission boundary
+- **HP Overlays** — tokens show supplied exact HP or a recognized server-projected broad health label; withheld values remain absent
+- **Local token spotlight** — select a visible legend name by pointer, touch, Enter, or Space to highlight and bring its token forward. Select it again, use **Clear spotlight**, or press Escape within Battlemap to clear. Selection stays local and leaves saved positions unchanged; unavailable tokens clear from selection.
 - **Role-safe defense chips** — AC and conditions appear only when those fields are present in the server-projected audience state
 - **State guard and recovery** — malformed or version-skewed snapshots fail closed and can request a fresh read-only snapshot without synchronizing or moving tokens
 - **Access handoff** — the public route explains the separate DM-control, player-companion, and read-only-cast paths without displaying credentials
@@ -208,6 +208,10 @@ An in-app, task-first documentation hub at `/guide` with searchable player, DM, 
 
 ## Documentation
 
+- [Documentation index and current release evidence](./docs/README.md)
+- [Development checks and isolated server test databases](./docs/DEVELOPMENT.md)
+- [REST access matrix and Inspector response contract](./docs/REST_ACCESS_MATRIX.md)
+- [Client lint coverage](./docs/CLIENT_LINT_SCOPE.md)
 - [Interactive Rolls & Roll Visibility](./docs/PHASE_7.1_INTERACTIVE_ROLLS.md)
 - [Automation Policies & Combat History](./docs/AUTOMATION_AND_COMBAT_HISTORY.md)
 - [Client README](./client/README.md)
@@ -216,7 +220,7 @@ An in-app, task-first documentation hub at `/guide` with searchable player, DM, 
 
 ## Self-Hosting
 
-Core campaign state, the database, and configured AI processing run on your hardware. D&D Beyond import and Open5e compendium searches require internet access when used. The checked-in repo ships a production `Dockerfile`, but no `docker-compose.yml`; keep private Portainer or Compose configuration alongside your deployment rather than committing host-specific paths and addresses.
+Campaign state and the database live on the server you host. AI requests go to the configured Ollama endpoint; D&D Beyond import and Open5e compendium searches use the internet when invoked. The checked-in repo ships a production `Dockerfile`, but no `docker-compose.yml`; keep private Portainer or Compose configuration alongside your deployment rather than committing host-specific paths and addresses.
 
 1. **Environment Config**
    ```env
@@ -234,12 +238,12 @@ Core campaign state, the database, and configured AI processing run on your hard
 
    Backend terminal:
    ```bash
-   cd server && npm install && npm start
+   cd server && npm ci && npm start
    ```
 
    Frontend terminal, from the repository root:
    ```bash
-   cd client && npm install && npm run dev
+   cd client && npm ci && ARCANE_BACKEND_URL=http://localhost:3001 npm run dev
    ```
 
 3. **Access**
@@ -253,11 +257,11 @@ Core campaign state, the database, and configured AI processing run on your hard
    - Terminate HTTPS at a trusted reverse proxy, or keep all access on a private encrypted overlay such as Tailscale. The backend does not provision certificates.
    - Preserve the client source address at the reverse-proxy rate-limit layer. Arcane Ally deliberately ignores caller-supplied forwarding headers; without a trusted proxy-side limiter, backend connection limits see the proxy as one source.
    - If the entire `server/` directory is bind-mounted into an Alpine-based container, mount `/app/server/node_modules` as a separate container volume. Native `better-sqlite3` binaries cannot be shared safely between host Linux and Alpine runtimes.
-   - Avoid running `npm install` on every container start. Build dependencies into the image and use `npm start` in the runtime container.
+   - Build dependencies into the image. The supplied runtime image starts `node server.js` directly and omits npm; its build stages install from lockfiles with `npm ci`.
 
 5. **Container Health & Telemetry**
    - **Telemetry API** — `/api/health` exposes V8 process uptime and memory usage metrics.
-   - **Memory Exhaustion Loop Guard** — An automated script (`healthcheck.js`) monitors memory and triggers container exits (exit code 1) if V8 heap utilization exceeds 500MB, preventing memory leak loops.
+   - **Health probe** — `server/scripts/healthcheck.js` exits nonzero when the API fails or reported V8 heap use exceeds 500 MiB. Docker records that probe as unhealthy; the probe does not terminate or restart the backend.
    - **Lightweight 3-Stage Docker Build** — The container is optimized to strip compiler libraries (`python3`, `make`, `g++`) from the final run image, keeping container size at a bare minimum.
 
 ## Security & Privacy Notes
@@ -295,6 +299,7 @@ Arcane Ally is intended for self-hosted, local-first play. Before publishing or 
 |---|---|---|
 | `POST /api/auth/dm` | DM PIN login and session token creation | Public |
 | `/api/characters` | Character CRUD, HP patches, token images, weapon attacks, action log | DM session |
+| `GET /api/characters/:id/combat-inspector` | Read-only resolved AC/ability finals and source rows, conditions, and combined buffs; existing character/session required | DM session |
 | `/api/characters/import` | D&D Beyond import, PDF import, and character re-sync | DM session |
 | `/api/encounters` / `/api/initiative` | Encounter library, tracker state, initiative export/duplicate helpers | DM session |
 | `/api/homebrew` | Compendium CRUD, AI generation, item parsing, item assignment | DM session |
@@ -325,12 +330,7 @@ See [docs/REST_ACCESS_MATRIX.md](docs/REST_ACCESS_MATRIX.md) for the complete in
 
 ## Contributing
 
-Arcane Ally is maintained as an open-source self-hosted app. Before opening a pull request, run the relevant validation commands:
-
-```bash
-cd server && npm test && npm run lint && npm audit --audit-level=high
-cd client && npm run lint && npm run build && npm audit --audit-level=high
-```
+Before opening a pull request, follow the [development validation commands](docs/DEVELOPMENT.md#validation). Set a unique temporary server database and disable scheduled jobs before launching server tests. Run the client suite, documented lint scope, explicit type checks/build, and both production/full dependency audits.
 
 Keep private deployment files, local databases, character PDFs, and real environment values out of commits.
 
@@ -340,6 +340,6 @@ See [LICENSE](./LICENSE).
 
 ## Release operations
 
-Use the [deployment runbook](docs/DEPLOYMENT.md) for Bastet release and rollback. The [verification record](docs/PRODUCT_PLAN_VERIFICATION_2026-09-17.md) lists scope and limitations. Arcane Codex under **Guide** contains the player/DM workflows.
+Use the [deployment runbook](docs/DEPLOYMENT.md) for the current Bastet revision, release ownership, and rollback. The [November verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md) records implementation checks and their limits. Arcane Codex under **Guide** contains the player/DM workflows.
 
-Current product release: [October deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-10-05.md). Historical release: [September deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-09-17.md).
+Current product release: [November 13 deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13.md). Earlier receipts remain linked in the [documentation index](docs/README.md#release-history). Documentation-only follow-ups do not change the running application revision.

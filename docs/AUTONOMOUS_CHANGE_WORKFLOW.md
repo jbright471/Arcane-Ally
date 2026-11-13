@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This branch is the review base for a scheduled Arcane Ally implementation pilot. It begins from the exact application revision deployed on Bastet on 2026-08-29. It is deliberately separate from GitHub `main` because the deployed release and current `main` have unrelated Git histories that require a human-led reconciliation.
+Use `origin/automation/arcane-ally-live-baseline` as the review base for the scheduled Arcane Ally implementation pilot. The pilot began from the application deployed on Bastet on 2026-08-29; later reviewed releases advance that branch. Resolve its current exact SHA and compare the running application through the [deployment runbook](DEPLOYMENT.md). GitHub `main` has a separate history; reconciling it is outside this pilot.
 
 The pilot may turn one evidence-backed product-brief item into a tested GitHub pull request. It may not merge, deploy, modify live campaign data, or change the baseline branch directly.
 
@@ -40,13 +40,15 @@ Fixing a defect necessarily produces a failing test before it produces a passing
 3. **Green.** Implement the narrowest fix that satisfies the brief item. Re-run the full suite.
 4. **Gate.** Commit, push, and open the pull request only once the full suite passes, including the new test.
 
+For server preflight and regression checks, set a unique temporary `DB_PATH` and `DISABLE_SCHEDULED_JOBS=true` before any test imports the database. Use the [safe development commands](DEVELOPMENT.md#server-checks); an in-memory helper alone does not prevent opening the default database during module import.
+
 If the fix cannot be made to pass within the declared scope, discard the branch and report the reproduction test and the blocking reason as the run's output, so the next run starts from evidence rather than repeating the analysis.
 
 Stopping at step 2 is not a safe failure. It leaves the defect proven and unfixed, with no pull request, no committed test, and no record of the attempt. Step 4 is the only point at which a failing test ends the run.
 
 ## Review and evidence
 
-Before editing, the worker creates a bounded R1 task description and requests the Agentic OS Gemini reviewer when it is available. Gemini advice cannot approve or execute work. Codex remains responsible for repository inspection, implementation, diff review, tests, and the final stop/proceed decision.
+Before editing, the worker creates a bounded R1 task description. The original pilot's Agentic OS Gemini reviewer hook is historical and optional; it does not require restoring that stack or imply that a reviewer is currently available. Reviewer advice cannot approve or execute work. Codex remains responsible for repository inspection, implementation, diff review, tests, and the final stop/proceed decision.
 
 Every pull request must include:
 
@@ -60,7 +62,7 @@ Every pull request must include:
 
 A run that stops before opening a pull request must still write a dated run record naming the selected item, the step it stopped at, and the blocking reason.
 
-GitHub Actions independently repeats client tests/build and server tests. During the pilot, a human reviews and merges the pull request and deployment remains a separate manual operation.
+GitHub Actions repeats client lint/tests/build, server tests, and production/full dependency audit gates. Server tests use an isolated temporary database with scheduled jobs disabled. Client TypeScript lint has the [documented incremental scope](CLIENT_LINT_SCOPE.md). During the pilot, a human reviews and merges the pull request and deployment remains a separate manual operation. The separately authorized November maintenance release does not broaden the pilot's dependency, authorization, or deployment permissions.
 
 ## Promotion criteria
 
