@@ -1,6 +1,6 @@
 # Dependency maintenance — November 13, 2026
 
-- **Status:** Published through PR #8, deployed on Bastet as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`, and verified. See the [deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13.md) for target-host gates, installed packages, live checks, backup and rollback evidence.
+- **Status:** Dependency maintenance first shipped through PR #8 as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`; its [receipt](DEPLOYMENT_RECEIPT_2026-11-13.md) records the package verification. Current live revision `e7dfb5282130d55fe1633248633c52051ceda3ef` adds only [Codex/documentation updates](DEPLOYMENT_RECEIPT_2026-11-13_CODEX.md), with the same dependency manifests and lockfiles. The dated audit results below retain their original scope.
 - **Source:** `arcane-ally-update-20261113`, based on release-baseline commit `1e87eb4513d06bd6742617dc13373c1a06970b06`. The local verification below preceded the authorized rollout.
 - **Related evidence:** [Product update verification](PRODUCT_UPDATE_VERIFICATION_2026-11-13.md), [client lint scope](CLIENT_LINT_SCOPE.md), and [deployment procedure](DEPLOYMENT.md).
 

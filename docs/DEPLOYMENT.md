@@ -1,6 +1,6 @@
 # Deployment operations
 
-Current verified live application release: `aaeb9848e72f3f23266531bd1884d7c7362f5ace`, deployed November 13 Eastern time. See the [November 13 receipt](DEPLOYMENT_RECEIPT_2026-11-13.md) for GitHub checks, installed dependency versions, production browser tests, health, backup and rollback. Later documentation-only commits do not change the running application revision. October receipts remain historical.
+Current verified live application release: `e7dfb5282130d55fe1633248633c52051ceda3ef`, deployed November 13 Eastern time. See the [Codex follow-up receipt](DEPLOYMENT_RECEIPT_2026-11-13_CODEX.md) for publication, live Guide checks, health, backup and rollback. The [initial November product receipt](DEPLOYMENT_RECEIPT_2026-11-13.md) retains feature/dependency evidence. Later Markdown-only commits do not change the running application revision.
 
 ## Ownership and source
 
@@ -73,4 +73,10 @@ The policy suite includes 23 cases, including negative checks for adjacent unrev
 - Local candidate: `C:/Users/brigh/Documents/Arcana Ally/arcane-ally-update-20261113`, branch `implementation/product-briefs-20261113`, based on published documentation HEAD `1e87eb4513d06bd6742617dc13373c1a06970b06`. It is not the deployed application.
 - The controller candidate adds exact runtime paths `server/package.json`, `server/package-lock.json`, `client/package-lock.json`, and `server/routes/characters.js`; each must trigger an image rebuild. It also adds the test-only dependency/Inspector regression files and `client/eslint.config.js` as non-runtime tooling. Adjacent unreviewed paths remain rejected.
 - Retain the installed controller as a dated backup before any authorized installation. Validate candidate syntax/path policy, compare the exact controller diff, and preserve all existing revision, staging, backup, health and rollback gates. The installed controller is unchanged by this local work.
-- The preceding bullets record preparation before rollout. You then authorized Bastet deployment. PR #8 passed both jobs, the reviewed controller was backed up/installed and passed syntax/31 policy cases, and exact-revision plan/build/staging/backup/health gates succeeded. Live revision is `aaeb9848e72f3f23266531bd1884d7c7362f5ace`; installed controller hash is `bb121decabec5185ffd603ba29fd95c553ee8a9d62d900742cbb2f763f4c77cf`. See the [deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13.md).
+- The preceding bullets record preparation before rollout. You then authorized Bastet deployment. PR #8 passed both jobs, the reviewed controller was backed up/installed and passed syntax/31 policy cases, and exact-revision plan/build/staging/backup/health gates succeeded. That product release deployed `aaeb9848e72f3f23266531bd1884d7c7362f5ace`; installed controller hash is `bb121decabec5185ffd603ba29fd95c553ee8a9d62d900742cbb2f763f4c77cf`. See its [deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13.md).
+
+## November 13 Codex documentation follow-up
+
+- PR #10 completed the in-app guidance and current repository references. Both GitHub jobs passed before merge; only Codex article strings and Markdown changed.
+- Bundled Codex content requires an app rebuild/deployment. The unchanged controller accepted and deployed exact revision `e7dfb5282130d55fe1633248633c52051ceda3ef` through its existing build, staging, backup and health gates.
+- The latest backup/rollback and live read-only Guide evidence are in the [Codex receipt](DEPLOYMENT_RECEIPT_2026-11-13_CODEX.md). Publishing that receipt as Markdown/images requires no second app deployment.
