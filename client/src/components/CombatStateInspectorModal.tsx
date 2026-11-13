@@ -4,19 +4,34 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Shield, Activity, User, Eye } from 'lucide-react';
 
+interface StatSource {
+  source: string;
+  value: number;
+  type?: string;
+}
+
 interface InspectorData {
   characterId: string;
   name: string;
-  acDetails: {
-    base: number;
-    dexBonus: number;
-    armor: any;
-    shield: any;
+  ac: {
     finalAC: number;
+    breakdown: StatSource[];
   };
-  abilityScores: Record<string, { base: number; equipmentBonus: number; final: number; modifier: number }>;
+  abilityScores: Record<string, { final: number; modifier: number; breakdown: StatSource[] }>;
   activeConditions: string[];
-  activeBuffs: any[];
+  activeBuffs: unknown[];
+}
+
+function StatSources({ sources }: { sources: StatSource[] }) {
+  return sources.map((entry, index) => (
+    <div key={`${entry.source}-${index}`} className="flex justify-between gap-3">
+      <span className="text-muted-foreground">
+        {entry.source}
+        {(entry.type?.includes('override') || entry.type === 'setAC') && <span> (override)</span>}
+      </span>
+      <span>{entry.value}</span>
+    </div>
+  ));
 }
 
 interface CombatStateInspectorModalProps {
@@ -79,33 +94,10 @@ export function CombatStateInspectorModal({ characterId, characterName, open, on
                   <Shield className="h-4 w-4 text-mana" /> Armor Class Resolution
                 </h3>
                 <div className="bg-secondary/30 rounded-lg p-3 space-y-1 text-sm font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Base AC:</span>
-                    <span>{data.acDetails.base}</span>
-                  </div>
-                  {data.acDetails.dexBonus !== 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">DEX Modifier{data.acDetails.armor?.dexCap !== null && data.acDetails.armor?.dexCap !== undefined ? ` (Cap: ${data.acDetails.armor?.dexCap})` : ''}:</span>
-                      <span className={data.acDetails.dexBonus > 0 ? "text-mana" : "text-destructive"}>
-                        {data.acDetails.dexBonus > 0 ? '+' : ''}{data.acDetails.dexBonus}
-                      </span>
-                    </div>
-                  )}
-                  {data.acDetails.armor && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Armor ({data.acDetails.armor.name}):</span>
-                      <span>{data.acDetails.armor.ac}</span>
-                    </div>
-                  )}
-                  {data.acDetails.shield && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Shield ({data.acDetails.shield.name}):</span>
-                      <span className="text-mana">+{data.acDetails.shield.ac}</span>
-                    </div>
-                  )}
+                  <StatSources sources={data.ac.breakdown} />
                   <div className="pt-2 mt-2 border-t border-border flex justify-between font-bold text-base">
                     <span>Final AC:</span>
-                    <span className="text-mana">{data.acDetails.finalAC}</span>
+                    <span className="text-mana">{data.ac.finalAC}</span>
                   </div>
                 </div>
               </div>
@@ -119,16 +111,7 @@ export function CombatStateInspectorModal({ characterId, characterName, open, on
                   {Object.entries(data.abilityScores).map(([stat, details]) => (
                     <div key={stat} className="bg-secondary/30 rounded-lg p-2 text-xs font-mono">
                       <div className="font-bold text-center mb-1 text-foreground">{stat.toUpperCase()}</div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Base:</span>
-                        <span>{details.base}</span>
-                      </div>
-                      {details.equipmentBonus !== 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Equip:</span>
-                          <span className="text-mana">+{details.equipmentBonus}</span>
-                        </div>
-                      )}
+                      <StatSources sources={details.breakdown} />
                       <div className="border-t border-border mt-1 pt-1 flex justify-between font-bold">
                         <span>Total:</span>
                         <span>{details.final} <span className="text-primary text-[10px]">({details.modifier > 0 ? '+' : ''}{details.modifier})</span></span>

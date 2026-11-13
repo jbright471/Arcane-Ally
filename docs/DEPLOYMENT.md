@@ -20,7 +20,7 @@ Bastet's existing controller owns release operations for the two Arcane Ally ser
 
 ## Release sequence
 
-1. Review source/docs and run client tests, explicit type checks/build, configured lint, and server tests with an isolated database. Verify affected browser flows. Client lint currently excludes TS/TSX.
+1. Review source/docs and run client tests, explicit type checks/build, configured lint, fresh dependency audits, and server tests with an isolated database and scheduled jobs disabled. Verify affected browser flows. Client lint includes the [documented incremental TS/TSX scope](CLIENT_LINT_SCOPE.md).
 2. Commit and push the reviewed release; keep the local tree clean. Confirm GitHub and controller target the same full SHA.
 3. Run `status`, then `plan <full-sha>` through the controller. The controller requires the exact deployment-ref head and a fast-forward descendant of the live revision.
 4. Run `deploy <full-sha>`. It builds the production image, checks a staging copy of the campaign database, runs the existing REST/access preflight, and verifies a SQLite backup before changing the two service references.
@@ -67,3 +67,10 @@ The policy suite includes 23 cases, including negative checks for adjacent unrev
 - The unchanged controller accepted and deployed `417ae5e4ef2ebe42ed5ddc827e7405b9bf3532e7`; syntax, 23 path-policy cases, copied-database staging, backup, and live health checks passed. No allowlist expansion was needed.
 - Read-only live routes, Rules Sage dismissal/focus/drafts, and Codex filtering passed. Authenticated health/legend acceptance remains the synthetic-data walkthrough, not a production campaign mutation.
 - The release receipt records the new backup manifest, exact previous/target images, independent backup verification, and rollback command. Runtime dependency advisories remain a separate security-maintenance task; this release does not establish security readiness.
+
+## November 13 candidate preparation
+
+- Local candidate: `C:/Users/brigh/Documents/Arcana Ally/arcane-ally-update-20261113`, branch `implementation/product-briefs-20261113`, based on published documentation HEAD `1e87eb4513d06bd6742617dc13373c1a06970b06`. It is not the deployed application.
+- The controller candidate adds exact runtime paths `server/package.json`, `server/package-lock.json`, `client/package-lock.json`, and `server/routes/characters.js`; each must trigger an image rebuild. It also adds the test-only dependency/Inspector regression files and `client/eslint.config.js` as non-runtime tooling. Adjacent unreviewed paths remain rejected.
+- Retain the installed controller as a dated backup before any authorized installation. Validate candidate syntax/path policy, compare the exact controller diff, and preserve all existing revision, staging, backup, health and rollback gates. The installed controller is unchanged by this local work.
+- Publication, GitHub execution, installed-controller checks and any eventual controller plan/deployment remain separate release steps. See [local verification](PRODUCT_UPDATE_VERIFICATION_2026-11-13.md) and [dependency maintenance](DEPENDENCY_MAINTENANCE_2026-11-13.md).

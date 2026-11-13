@@ -50,6 +50,8 @@ export default function BattleMap() {
   const mapState = state.mapState;
   const [showHidden, setShowHidden] = useState(false);
   const [showLegendHelp, setShowLegendHelp] = useState(false);
+  const [spotlight, setSpotlight] = useState<{ mapId: number; tokenId: number } | null>(null);
+  const spotlightTriggerRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Dragging state
@@ -126,6 +128,15 @@ export default function BattleMap() {
 
   const tokens = mapState?.tokens ?? [];
   const visibleTokens = isDm && showHidden ? tokens : tokens.filter(t => !t.is_hidden);
+  const spotlightToken = !state.mapStateError && spotlight?.mapId === mapState?.id
+    ? visibleTokens.find(token => token.id === spotlight?.tokenId) : undefined;
+  // Forget unavailable selections so a later snapshot cannot revive an old spotlight.
+  if (spotlight && !spotlightToken) setSpotlight(null);
+
+  const clearSpotlight = () => {
+    spotlightTriggerRef.current?.focus();
+    setSpotlight(null);
+  };
 
   if (state.mapStateError) {
     return (
@@ -163,7 +174,12 @@ export default function BattleMap() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-3 pb-6">
+    <div className="max-w-7xl mx-auto p-4 space-y-3 pb-6" onKeyDown={event => {
+      if (event.key === 'Escape' && !event.defaultPrevented && spotlightToken) {
+        event.stopPropagation();
+        clearSpotlight();
+      }
+    }}>
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <Map className="h-6 w-6 text-primary shrink-0" />
@@ -233,6 +249,7 @@ export default function BattleMap() {
                 cursor: isDm ? 'grab' : 'default',
                 touchAction: 'none',
                 opacity: hidden ? 0.5 : 1,
+                zIndex: spotlightToken?.id === token.id ? 1 : undefined,
               }}
               onPointerDown={isDm ? (e) => handlePointerDown(e, token) : undefined}
               role="img"
@@ -246,7 +263,9 @@ export default function BattleMap() {
                   height: 32,
                   backgroundColor: color,
                   borderColor: hidden ? '#888' : 'white',
-                  boxShadow: `0 0 6px ${color}80`,
+                  boxShadow: spotlightToken?.id === token.id
+                    ? '0 0 0 3px var(--color-primary), 0 0 12px var(--color-primary)'
+                    : `0 0 6px ${color}80`,
                 }}
                 title={`${token.entity_name}${combat.hp ? ` — HP: ${combat.hp.current}/${combat.hp.max}` : combat.healthStatus ? ` — Health: ${combat.healthStatus}` : ''}`}
               >
@@ -273,7 +292,7 @@ export default function BattleMap() {
               </div>
               {/* Name label */}
               <div
-                className="absolute top-full mt-0.5 left-1/2 -translate-x-1/2 text-[8px] text-white font-semibold whitespace-nowrap bg-black/60 px-1 rounded pointer-events-none"
+                className={`absolute top-full mt-0.5 left-1/2 -translate-x-1/2 text-[8px] text-white font-semibold whitespace-nowrap px-1 rounded pointer-events-none ${spotlightToken?.id === token.id ? 'bg-black' : 'bg-black/60'}`}
               >
                 {token.entity_name.split(' ')[0]}
               </div>
@@ -285,7 +304,7 @@ export default function BattleMap() {
       {/* Token legend */}
       {visibleTokens.length > 0 && (
         <section aria-label="Token legend" className="space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-display">Token legend</h2>
             <Popover open={showLegendHelp} onOpenChange={setShowLegendHelp}>
               <PopoverTrigger asChild>
@@ -299,19 +318,30 @@ export default function BattleMap() {
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowLegendHelp(false)}>Close legend help</Button>
               </PopoverContent>
             </Popover>
+            {spotlightToken && (
+              <Button type="button" variant="outline" size="sm" className="min-h-11 text-xs" onClick={clearSpotlight}>
+                Clear spotlight
+              </Button>
+            )}
           </div>
+          <p className="text-xs text-muted-foreground">Select a name to spotlight its token. Press Escape to clear.</p>
           <div className="flex flex-wrap gap-2">
             {visibleTokens.map(token => {
               const combat = getCombatData(token);
               const hpPct  = combat.hp ? Math.max(0, Math.min(1, combat.hp.current / combat.hp.max)) : null;
               const color  = TOKEN_COLORS[token.entity_type] ?? TOKEN_COLORS.monster;
               return (
-                <div
+                <button
                   key={token.id}
-                  className="flex items-center gap-1.5 text-xs bg-secondary/30 border border-border/20 rounded px-2 py-1"
+                  type="button"
+                  ref={spotlightToken?.id === token.id ? spotlightTriggerRef : undefined}
+                  aria-pressed={spotlightToken?.id === token.id}
+                  onClick={() => setSpotlight(spotlightToken?.id === token.id ? null : { mapId: mapState.id, tokenId: token.id })}
+                  className="flex min-h-11 max-w-full flex-wrap items-center gap-1.5 rounded border border-border/20 bg-secondary/30 px-3 py-2 text-left text-xs transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary aria-pressed:border-primary aria-pressed:bg-primary/10"
                 >
+                  <span className="sr-only">Spotlight </span>
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                  <span className="font-display">{token.entity_name}</span>
+                  <span className="break-words font-display">{token.entity_name}</span>
                   {combat.hp && (
                     <span className="text-[10px] text-muted-foreground tabular-nums">
                       {combat.hp.current}/{combat.hp.max}
@@ -337,7 +367,7 @@ export default function BattleMap() {
                       {Math.round(hpPct * 100)}%
                     </span>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>

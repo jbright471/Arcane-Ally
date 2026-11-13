@@ -4,6 +4,16 @@ All notable changes to the **Arcane Ally** project will be documented in this fi
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## November 13, 2026 — local candidate
+
+- Fixed character-card keyboard event ownership so nested Inspector, History and options actions do not trigger surrounding navigation or selection.
+- Restored the missing read-only DM Inspector endpoint using resolved stat values and source breakdowns, with no session creation during reads.
+- Added keyboard/touch legend spotlight for already-visible tokens, with temporary stacking, clear/Escape behavior and invalidated-selection cleanup. Spotlight sends no map mutation and changes no access rules.
+- Added condition-removal and same-PC zero-HP/recovery snapshot coverage; existing health/condition runtime logic needed no repair.
+- Updated vulnerable dependency resolutions, removed unused client resolver/validation dependencies, and added bounded dependency regression tests. Backend image installation now uses the committed lockfile through `npm ci`.
+- Added scoped TypeScript/TSX lint, CI audit gates, and isolated server-test database settings. Prepared exact deployment-policy additions; installed controller and running services remain unchanged.
+- Local candidate only; see [verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md) and [dependency evidence](docs/DEPENDENCY_MAINTENANCE_2026-11-13.md). No schema, authentication or permission-policy change.
+
 ## October 22, 2026 product polish
 
 - Added named non-modal Rules Sage controls, scoped Escape dismissal, and launcher focus restoration while preserving messages and drafts.
