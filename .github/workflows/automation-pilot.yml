@@ -38,7 +38,6 @@ jobs:
     name: Server tests
     runs-on: ubuntu-latest
     env:
-      DB_PATH: ${{ runner.temp }}/arcane-ally-${{ github.run_id }}-${{ github.run_attempt }}.db
       DISABLE_SCHEDULED_JOBS: 'true'
     defaults:
       run:
@@ -54,3 +53,5 @@ jobs:
       - run: npm audit --omit=dev --audit-level=moderate
       - run: npm audit --audit-level=high
       - run: npm test -- --maxWorkers=1
+        env:
+          DB_PATH: ${{ runner.temp }}/arcane-ally-${{ github.run_id }}-${{ github.run_attempt }}.db
