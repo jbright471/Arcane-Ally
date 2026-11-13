@@ -6,17 +6,17 @@
 
 A high-performance, self-hosted companion application for D&D 5e. Real-time party management, AI-powered content generation, and a full DM command center — all running on your local hardware.
 
-## November 13 update — local candidate
+## November 13 update
 
-The candidate fixes nested character-card keyboard actions, restores the missing read-only DM Inspector, adds a local token spotlight for overlapping tokens, and protects condition removal and zero-HP recovery with regression tests. Dependency maintenance resolves the current client/server audit findings; scoped TypeScript lint and dependency checks now run in CI configuration.
+The update fixes nested character-card keyboard actions, restores the missing read-only DM Inspector, adds a local token spotlight for overlapping tokens, and protects condition removal and zero-HP recovery with regression tests. Dependency maintenance resolves the current client/server audit findings; scoped TypeScript lint and dependency checks run in CI.
 
-This work is locally implemented and verified, with publication and deployment pending. The running application remains the October 22 release below. See [verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md), [dependency maintenance](docs/DEPENDENCY_MAINTENANCE_2026-11-13.md), and [TypeScript lint scope](docs/CLIENT_LINT_SCOPE.md).
+Published through PR #8 and deployed on Bastet as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`. See the [deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-11-13.md), [verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md), [dependency maintenance](docs/DEPENDENCY_MAINTENANCE_2026-11-13.md), and [TypeScript lint scope](docs/CLIENT_LINT_SCOPE.md).
 
 ## October 22 product polish
 
 Rules Sage now has named controls, keyboard dismissal, and focus restoration without losing messages or drafts. Codex search has an explicit accessible name and search semantics. Battlemap can display server-supplied broad health labels when exact HP is absent, with accessible token descriptions and contextual legend help.
 
-These changes are deployed on Bastet as `417ae5e4ef2ebe42ed5ddc827e7405b9bf3532e7`. They change no server code, schema, dependency, or permission policy. See [implementation verification](docs/PRODUCT_POLISH_VERIFICATION_2026-10-22.md) and the [deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-10-22.md) for checks, live browser evidence, rollback, and outstanding dependency advisories.
+These changes first shipped on Bastet as `417ae5e4ef2ebe42ed5ddc827e7405b9bf3532e7` and remain in the current release. That October update changed no server code, schema, dependency, or permission policy. Its [implementation verification](docs/PRODUCT_POLISH_VERIFICATION_2026-10-22.md) and [deployment receipt](docs/DEPLOYMENT_RECEIPT_2026-10-22.md) are historical; November maintenance above supersedes its dependency findings.
 
 ## October battlemap improvements
 

@@ -1,6 +1,6 @@
 # Deployment operations
 
-Current verified live application release: `417ae5e4ef2ebe42ed5ddc827e7405b9bf3532e7`, deployed October 22 Eastern time. See the [October 22 deployment receipt](DEPLOYMENT_RECEIPT_2026-10-22.md) for GitHub checks, production browser tests, health, backup, rollback, and outstanding dependency advisories. Later documentation-only commits do not change the running application revision. The [October 5 receipt](DEPLOYMENT_RECEIPT_2026-10-05.md) remains historical.
+Current verified live application release: `aaeb9848e72f3f23266531bd1884d7c7362f5ace`, deployed November 13 Eastern time. See the [November 13 receipt](DEPLOYMENT_RECEIPT_2026-11-13.md) for GitHub checks, installed dependency versions, production browser tests, health, backup and rollback. Later documentation-only commits do not change the running application revision. October receipts remain historical.
 
 ## Ownership and source
 
@@ -41,7 +41,7 @@ Pass the **currently deployed** full SHA, not the desired old SHA:
 ssh bastet@192.168.50.209 /home/bastet/homelab/arcane-ally/deployment/arcane-ally-deploy.sh rollback CURRENT_FULL_SHA
 ```
 
-The controller finds the matching manifest and restores the previous Compose references/image/frontend. It verifies health and revision labels. It does not automatically restore the database. This product release has no schema or dependency changes. Preserve the checked database backup for operator-directed recovery if needed.
+The controller finds the matching manifest and restores the previous Compose references/image/frontend. It verifies health and revision labels. It does not automatically restore the database. The November release updates dependencies without a schema migration. Preserve the checked database backup for operator-directed recovery if needed.
 
 ## September 17 release preparation
 
@@ -73,4 +73,4 @@ The policy suite includes 23 cases, including negative checks for adjacent unrev
 - Local candidate: `C:/Users/brigh/Documents/Arcana Ally/arcane-ally-update-20261113`, branch `implementation/product-briefs-20261113`, based on published documentation HEAD `1e87eb4513d06bd6742617dc13373c1a06970b06`. It is not the deployed application.
 - The controller candidate adds exact runtime paths `server/package.json`, `server/package-lock.json`, `client/package-lock.json`, and `server/routes/characters.js`; each must trigger an image rebuild. It also adds the test-only dependency/Inspector regression files and `client/eslint.config.js` as non-runtime tooling. Adjacent unreviewed paths remain rejected.
 - Retain the installed controller as a dated backup before any authorized installation. Validate candidate syntax/path policy, compare the exact controller diff, and preserve all existing revision, staging, backup, health and rollback gates. The installed controller is unchanged by this local work.
-- Publication, GitHub execution, installed-controller checks and any eventual controller plan/deployment remain separate release steps. See [local verification](PRODUCT_UPDATE_VERIFICATION_2026-11-13.md) and [dependency maintenance](DEPENDENCY_MAINTENANCE_2026-11-13.md).
+- The preceding bullets record preparation before rollout. You then authorized Bastet deployment. PR #8 passed both jobs, the reviewed controller was backed up/installed and passed syntax/31 policy cases, and exact-revision plan/build/staging/backup/health gates succeeded. Live revision is `aaeb9848e72f3f23266531bd1884d7c7362f5ace`; installed controller hash is `bb121decabec5185ffd603ba29fd95c553ee8a9d62d900742cbb2f763f4c77cf`. See the [deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13.md).
