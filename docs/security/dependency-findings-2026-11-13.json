@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0",
+  "audit": {
+    "mode": "patch",
+    "target": "Arcane Ally November 13 local update: selected dependency maintenance",
+    "commit": null,
+    "generated_at": "2026-11-13T18:16:37+00:00",
+    "release_decision": "CONDITIONAL",
+    "limitations": [
+      "This records selected dependency maintenance, not a full application security audit.",
+      "No production exploit testing, publication, controller installation or deployment was performed.",
+      "Final local Node 20 Alpine image build and isolated no-mount runtime health/native SQLite checks passed; Bastet exact-revision gates remain part of the authorized release.",
+      "The affected package inventory is confirmed; app-specific exploitability is not inferred from advisory severity."
+    ]
+  },
+  "findings": [
+    {
+      "id": "VC-15-001",
+      "baseline_control": "VC-15",
+      "title": "Known affected runtime dependency versions were locked",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        {
+          "path": "server/package-lock.json"
+        },
+        {
+          "path": "client/package.json"
+        },
+        {
+          "path": "client/package-lock.json"
+        }
+      ],
+      "root_cause": "The starting locks retained affected proxy-addr, Engine.IO, Multer, qs, body-parser and Zod versions.",
+      "impact": "The packages include availability and trusted-proxy defects with configuration-dependent applicability. No application-wide exploitability claim is made.",
+      "recommended_fix": "Use compatible patched resolutions, remove unused client resolver/validation dependencies, install from reviewed lockfiles and run regression checks plus fresh audits.",
+      "safe_reproduction": "Four of six bounded package behavior tests fail with the original installed server libraries and pass with the candidate. No production service or campaign was used.",
+      "regression_test_required": true,
+      "regression_test_evidence": "server/test/dependencySecurity.test.js: six passing synthetic package/loopback cases; both candidate production audits report zero findings.",
+      "secret_rotation_required": false,
+      "limitations": [
+        "The production deployment still uses its previous dependency graph until a separately authorized release."
+      ]
+    },
+    {
+      "id": "VC-15-002",
+      "baseline_control": "VC-15",
+      "title": "Known affected build and development dependency resolutions",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        {
+          "path": "client/package-lock.json"
+        },
+        {
+          "path": "server/package-lock.json"
+        }
+      ],
+      "root_cause": "The starting tooling graphs included affected Vite, Vitest, glob-matcher and other transitive versions; the new parser also required a scoped matcher correction.",
+      "impact": "Tooling can process unsafe input in the affected upstream use cases. App endpoint reachability is not established by a development dependency alert.",
+      "recommended_fix": "Apply compatible tooling updates and narrowly scoped minimatch 11.0.8 overrides, retain older API consumers unchanged, verify the actual consumers, and add CI audit gates.",
+      "regression_test_required": true,
+      "regression_test_evidence": "Client tests/build/lint; twenty glob cases for each overridden consumer; TypeScript project matching, real server ESLint and Nodemon synthetic-child smoke; both full candidate audits report zero findings.",
+      "secret_rotation_required": false,
+      "limitations": [
+        "The compatibility probes cover this application's inspected consumers, not all consumers of minimatch major 11."
+      ]
+    }
+  ]
+}

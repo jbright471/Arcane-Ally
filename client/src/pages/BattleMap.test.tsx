@@ -181,6 +181,137 @@ describe('BattleMap', () => {
     expect(socket.emit).not.toHaveBeenCalled();
   });
 
+  it.each(['empty', 'omitted', 'removed'] as const)('clears ended conditions from the token and legend when the next snapshot is %s', next => {
+    projectedMap();
+    Object.assign(game.state.initiativeState[0], { ac: 15, conditions: ['Prone'] });
+    const { rerender } = render(<BattleMap />);
+    expect(screen.getByRole('img', { name: 'Projected foe, health Bloodied, armor class 15, conditions Prone' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Condition: Prone')).toBeInTheDocument();
+
+    const entry = { ...game.state.initiativeState[0], conditions: [] };
+    if (next === 'omitted') delete entry.conditions;
+    game.state.initiativeState = next === 'removed' ? [] : [entry];
+    rerender(<BattleMap />);
+
+    expect(screen.queryByLabelText('Condition: Prone')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /conditions Prone/ })).not.toBeInTheDocument();
+    if (next === 'removed') {
+      expect(screen.getByRole('img', { name: 'Projected foe' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Armor class 15')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Health:/)).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByRole('img', { name: 'Projected foe, health Bloodied, armor class 15' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Armor class 15')).toBeInTheDocument();
+      expect(screen.getByLabelText('Health: Bloodied')).toBeInTheDocument();
+    }
+    expect(screen.queryByText('Hidden sentinel')).not.toBeInTheDocument();
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the same PC token and legend in sync through zero HP and recovery without replacing numeric HP with a status', () => {
+    projectedMap('Dead');
+    Object.assign(game.state.mapState.tokens[0], { entity_type: 'pc', entity_id: 'pc-4' });
+    Object.assign(game.state.initiativeState[0], {
+      entity_type: 'pc', character_id: 4, instance_id: null, current_hp: 12, max_hp: 20,
+    });
+    const { rerender } = render(<BattleMap />);
+    const legend = screen.getByRole('region', { name: 'Token legend' });
+
+    for (const currentHp of [12, 0, 7]) {
+      game.state.initiativeState = [{ ...game.state.initiativeState[0], current_hp: currentHp }];
+      rerender(<BattleMap />);
+      expect(screen.getByRole('img', { name: 'Projected foe' }).querySelector('[title]'))
+        .toHaveAttribute('title', `Projected foe — HP: ${currentHp}/20`);
+      expect(within(legend).getByText(`${currentHp}/20`)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Health:/)).not.toBeInTheDocument();
+      expect(legend.textContent).not.toMatch(/\d+%|77|88/);
+    }
+    expect(screen.queryByText('Hidden sentinel')).not.toBeInTheDocument();
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('updates status-only PC snapshots and clears health when its matching entry disappears without borrowing another combatant', () => {
+    projectedMap('Healthy');
+    Object.assign(game.state.mapState.tokens[0], { entity_type: 'pc', entity_id: 'pc-4' });
+    Object.assign(game.state.initiativeState[0], { entity_type: 'pc', character_id: 4, instance_id: null });
+    const matching = { ...game.state.initiativeState[0] };
+    const unrelated = { ...game.state.initiativeState[0], id: 9, character_id: 9, current_hp: 99, max_hp: 100 };
+    const { rerender } = render(<BattleMap />);
+    const legend = screen.getByRole('region', { name: 'Token legend' });
+
+    for (const status of ['Healthy', 'Dead', 'Bloodied']) {
+      game.state.initiativeState = [unrelated, { ...matching, hp_status: status }];
+      rerender(<BattleMap />);
+      expect(screen.getByRole('img', { name: `Projected foe, health ${status}` }).querySelector('[title]'))
+        .toHaveAttribute('title', `Projected foe — Health: ${status}`);
+      expect(within(legend).getByLabelText(`Health: ${status}`)).toBeInTheDocument();
+      expect(legend.textContent).not.toMatch(/\d+\s*\/\s*\d+|\d+%|77|88/);
+    }
+
+    game.state.initiativeState = [unrelated];
+    rerender(<BattleMap />);
+    expect(screen.getByRole('img', { name: 'Projected foe' }).querySelector('[title]'))
+      .toHaveAttribute('title', 'Projected foe');
+    expect(screen.queryByLabelText(/^Health:/)).not.toBeInTheDocument();
+    expect(legend.textContent).not.toMatch(/Healthy|Dead|Bloodied|99|100/);
+    expect(screen.queryByText('Hidden sentinel')).not.toBeInTheDocument();
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('spotlights either overlapping visible token from its legend without moving it, and clears by button or Escape', () => {
+    projectedMap();
+    game.state.mapState.tokens.push({ ...game.state.mapState.tokens[0], id: 4, entity_id: 'm-other', entity_name: 'Other foe' });
+    const initialTokens = structuredClone(game.state.mapState.tokens);
+    render(<BattleMap />);
+    const first = screen.getByRole('button', { name: /^Spotlight Projected foe/ });
+    const second = screen.getByRole('button', { name: /^Spotlight Other foe/ });
+
+    fireEvent.click(first);
+    expect(first).toHaveAttribute('aria-pressed', 'true');
+    expect(second).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('img', { name: 'Projected foe, health Bloodied' })).toHaveStyle({ zIndex: '1' });
+    fireEvent.click(second);
+    expect(first).toHaveAttribute('aria-pressed', 'false');
+    expect(second).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('img', { name: 'Other foe' })).toHaveStyle({ zIndex: '1' });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear spotlight' }));
+    expect(second).toHaveFocus();
+    expect(second).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(first);
+    fireEvent.keyDown(first, { key: 'Escape' });
+    expect(first).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('button', { name: 'Clear spotlight' })).not.toBeInTheDocument();
+    expect(game.state.mapState.tokens).toEqual(initialTokens);
+    expect(screen.queryByText('Hidden sentinel')).not.toBeInTheDocument();
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(['removed', 'hidden', 'different map'] as const)('forgets a spotlight when its token becomes unavailable: %s', next => {
+    projectedMap();
+    const initialMap = structuredClone(game.state.mapState);
+    const { rerender } = render(<BattleMap />);
+    fireEvent.click(screen.getByRole('button', { name: /^Spotlight Projected foe/ }));
+
+    game.state.mapState = {
+      ...initialMap,
+      id: next === 'different map' ? 8 : initialMap.id,
+      tokens: next === 'removed' ? [] : initialMap.tokens.map((token: { id: number }) => next === 'hidden' && token.id === 2 ? { ...token, is_hidden: 1 } : token),
+    };
+    rerender(<BattleMap />);
+    expect(screen.queryByRole('button', { name: 'Clear spotlight' })).not.toBeInTheDocument();
+    game.state.mapState = initialMap;
+    rerender(<BattleMap />);
+    expect(screen.getByRole('button', { name: /^Spotlight Projected foe/ })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('img', { name: 'Projected foe, health Bloodied' })).not.toHaveStyle({ zIndex: '1' });
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('offers generic, dismissible legend help without fetching or changing the map', async () => {
     projectedMap();
     render(<BattleMap />);

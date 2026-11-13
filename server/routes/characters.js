@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { getResolvedCharacterState } = require('../lib/rulesIntegration');
 
 // Helper: get full party state
 function getAllCharacters() {
@@ -14,6 +15,44 @@ router.get('/', (req, res) => {
         res.json(characters);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Existing /api/characters authorization protects this read-only DM view.
+router.get('/:id/combat-inspector', (req, res) => {
+    const characterId = Number(req.params.id);
+    if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(characterId)) {
+        return res.status(404).json({ error: 'Character not found' });
+    }
+    try {
+        // Keep the existence checks and resolver in one read snapshot. The
+        // resolver normally creates a missing session, so never call it unless
+        // that row exists in the same snapshot; opening the inspector writes nothing.
+        const result = db.transaction(() => {
+            if (!db.prepare('SELECT id FROM characters WHERE id = ?').get(characterId)) {
+                return { status: 404, body: { error: 'Character not found' } };
+            }
+            if (!db.prepare('SELECT character_id FROM session_states WHERE character_id = ?').get(characterId)) {
+                return { status: 409, body: { error: 'Character session state unavailable' } };
+            }
+            const resolved = getResolvedCharacterState(db, characterId);
+            const abilityScores = Object.fromEntries(Object.entries(resolved.abilityScores).map(([stat, final]) => [stat, {
+                final,
+                modifier: resolved.abilityModifiers[stat],
+                breakdown: resolved.abilityScoresBreakdown[stat] || [],
+            }]));
+            return { status: 200, body: {
+                characterId: String(resolved.id),
+                name: resolved.name,
+                ac: { finalAC: resolved.ac, breakdown: resolved.acBreakdown },
+                abilityScores,
+                activeConditions: resolved.conditions,
+                activeBuffs: resolved.buffs,
+            } };
+        })();
+        res.status(result.status).json(result.body);
+    } catch {
+        res.status(500).json({ error: 'Unable to inspect character state' });
     }
 });
 

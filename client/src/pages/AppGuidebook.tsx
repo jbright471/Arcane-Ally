@@ -749,6 +749,7 @@ When a map is active, defense chips show Armor Class and conditions only when th
 - A label does not reveal an HP total or percentage. Missing or unrecognized health information is not treated as Healthy.
 - Choose **About this legend** beside **Token legend** for an explanation of the values supplied to your view. A missing AC, condition, or health badge does not establish that the value is empty or hidden.
 - Close the help with **Close legend help**, **Escape**, or a click outside it. This help does not change tokens, campaign settings, or access permissions.
+- Select a name in the legend to spotlight that token, including one covered by another token. Use **Enter**, **Space**, or a tap. Select it again, choose **Clear spotlight**, or press **Escape** to clear it. Spotlight stays on your screen and does not move tokens or reveal private details.
 
 ### Preview a DungeonDraft / UVTT File
 

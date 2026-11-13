@@ -6,6 +6,12 @@
 
 A high-performance, self-hosted companion application for D&D 5e. Real-time party management, AI-powered content generation, and a full DM command center — all running on your local hardware.
 
+## November 13 update — local candidate
+
+The candidate fixes nested character-card keyboard actions, restores the missing read-only DM Inspector, adds a local token spotlight for overlapping tokens, and protects condition removal and zero-HP recovery with regression tests. Dependency maintenance resolves the current client/server audit findings; scoped TypeScript lint and dependency checks now run in CI configuration.
+
+This work is locally implemented and verified, with publication and deployment pending. The running application remains the October 22 release below. See [verification](docs/PRODUCT_UPDATE_VERIFICATION_2026-11-13.md), [dependency maintenance](docs/DEPENDENCY_MAINTENANCE_2026-11-13.md), and [TypeScript lint scope](docs/CLIENT_LINT_SCOPE.md).
+
 ## October 22 product polish
 
 Rules Sage now has named controls, keyboard dismissal, and focus restoration without losing messages or drafts. Codex search has an explicit accessible name and search semantics. Battlemap can display server-supplied broad health labels when exact HP is absent, with accessible token descriptions and contextual legend help.
