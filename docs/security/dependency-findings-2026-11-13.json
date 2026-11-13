@@ -3,15 +3,16 @@
   "audit": {
     "mode": "patch",
     "target": "Arcane Ally November 13 local update: selected dependency maintenance",
-    "commit": null,
-    "generated_at": "2026-11-13T18:16:37+00:00",
-    "release_decision": "CONDITIONAL",
+    "commit": "aaeb9848e72f3f23266531bd1884d7c7362f5ace",
+    "generated_at": "2026-11-13T18:46:21+00:00",
+    "release_decision": "READY",
     "limitations": [
-      "This records selected dependency maintenance, not a full application security audit.",
-      "No production exploit testing, publication, controller installation or deployment was performed.",
-      "Final local Node 20 Alpine image build and isolated no-mount runtime health/native SQLite checks passed; Bastet exact-revision gates remain part of the authorized release.",
-      "The affected package inventory is confirmed; app-specific exploitability is not inferred from advisory severity."
-    ]
+      "Readiness applies to the selected dependency maintenance and inspected artifact, not a full application security audit.",
+      "No production exploit testing was performed; public smoke checks were signed out and read-only.",
+      "Exact-revision Bastet build, copied-database preflight, backup, installed package read-back and post-deployment checks passed.",
+      "Affected package inventory was confirmed; app-specific exploitability was not inferred from advisory severity."
+    ],
+    "artifact": "Bastet backend image sha256:c4e89f58f880ca941f2b05ed0995ba5bc2b71a8d8d956e0b21a1412934dfddcf"
   },
   "findings": [
     {
@@ -40,7 +41,7 @@
       "regression_test_evidence": "server/test/dependencySecurity.test.js: six passing synthetic package/loopback cases; both candidate production audits report zero findings.",
       "secret_rotation_required": false,
       "limitations": [
-        "The production deployment still uses its previous dependency graph until a separately authorized release."
+        "Patched runtime versions were verified in production on November 13, 2026; no application-wide security assessment is claimed."
       ]
     },
     {

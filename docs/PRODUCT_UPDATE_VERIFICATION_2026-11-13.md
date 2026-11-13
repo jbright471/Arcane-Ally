@@ -1,6 +1,6 @@
 # November 13 product update — implementation verification
 
-- **Status:** Local implementation and verification passed. Publication and the authorized Bastet rollout are the next release steps; this record alone is not a deployment receipt.
+- **Status:** Implemented, published through PR #8 and deployed on Bastet as `aaeb9848e72f3f23266531bd1884d7c7362f5ace`. The [deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13.md) records GitHub checks, controller, production, backup and rollback evidence. This document retains the local/synthetic acceptance details.
 - **Scope:** The worthwhile unfinished recommendations from the ten October 23–November 13 product briefs, plus the missing Inspector endpoint reproduced during the actual app walkthrough.
 - **Source:** `arcane-ally-update-20261113`, branch `implementation/product-briefs-20261113`, based on published baseline `1e87eb4513d06bd6742617dc13373c1a06970b06`.
 - **Production preflight read-back:** Existing Bastet controller returned `417ae5e4ef2ebe42ed5ddc827e7405b9bf3532e7`, frontend/backend running, backend healthy. Installed controller SHA-256 was `83e226d1bb5fa1c75df4b7d5b05897f2130c4ade647085f5a805c0110ab92d01` before any release change.
@@ -67,5 +67,5 @@ Synthetic/static screenshot evidence, visually reviewed:
 
 - No schema or role-policy change. No production authentication or campaign mutation was used for local acceptance.
 - This is focused dependency and product verification, not a full security audit, penetration test, performance study, screen-reader user test, voice/importer/AI evaluation or live multiplayer acceptance.
-- GitHub execution, exact target revision, installed-controller verification, copied-database preflight, checked backup, live health/labels, read-only route checks and rollback evidence must be recorded when the authorized Bastet rollout completes.
+- GitHub execution, exact target revision, installed-controller verification, copied-database preflight, checked backup, live health/labels, read-only route checks and rollback evidence are recorded in the [completed deployment receipt](DEPLOYMENT_RECEIPT_2026-11-13.md).
 - Use the existing controller and `projects-stack`; never launch a competing production Compose stack. Rollback restores service references, not the database. See [deployment operations](DEPLOYMENT.md).
